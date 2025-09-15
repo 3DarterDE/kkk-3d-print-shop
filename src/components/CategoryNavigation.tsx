@@ -1,0 +1,257 @@
+"use client";
+
+import { useState, useEffect } from 'react';
+import Link from 'next/link';
+import { useRouter } from 'next/navigation';
+
+interface Category {
+  _id: string;
+  name: string;
+  slug: string;
+  description?: string;
+  subcategories?: Category[];
+}
+
+interface CategoryNavigationProps {
+  className?: string;
+}
+
+export default function CategoryNavigation({ className = "" }: CategoryNavigationProps) {
+  const [categories, setCategories] = useState<Category[]>([]);
+  const [isVisible, setIsVisible] = useState(true);
+  const [isHovered, setIsHovered] = useState(false);
+  const [hoveredCategory, setHoveredCategory] = useState<string | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const router = useRouter();
+
+
+  // Fetch categories
+  useEffect(() => {
+    const fetchCategories = async () => {
+      try {
+        const response = await fetch('/api/shop/categories');
+        
+        if (response.ok) {
+          const data = await response.json();
+          const categoriesArray = Array.isArray(data.categories) ? data.categories : [];
+          setCategories(categoriesArray);
+        } else {
+          console.error('Failed to fetch categories:', response.status);
+          setCategories([]);
+        }
+      } catch (error) {
+        console.error('Error fetching categories:', error);
+        setCategories([]);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    fetchCategories();
+  }, []);
+
+  // Handle scroll visibility
+  useEffect(() => {
+    let lastScrollY = window.scrollY;
+    let ticking = false;
+
+    const updateScrollDirection = () => {
+      const scrollY = window.scrollY;
+      const direction = scrollY > lastScrollY ? 'down' : 'up';
+      
+      if (scrollY > 100) {
+        setIsVisible(false);
+      } else {
+        setIsVisible(true);
+      }
+      
+      lastScrollY = scrollY > 0 ? scrollY : 0;
+      ticking = false;
+    };
+
+    const onScroll = () => {
+      if (!ticking) {
+        requestAnimationFrame(updateScrollDirection);
+        ticking = true;
+      }
+    };
+
+    window.addEventListener('scroll', onScroll);
+    return () => window.removeEventListener('scroll', onScroll);
+  }, []);
+
+  const handleCategoryClick = (category: Category) => {
+    router.push(`/shop?category=${category.slug}`);
+    setIsHovered(false);
+    setHoveredCategory(null);
+  };
+
+  const handleSubcategoryClick = (subcategory: Category, parentCategory: Category) => {
+    router.push(`/shop?category=${parentCategory.slug}&subcategory=${subcategory.slug}`);
+    setIsHovered(false);
+    setHoveredCategory(null);
+  };
+
+
+
+  return (
+    <div className={`sticky top-16 z-30 bg-white border-b border-gray-200 transition-opacity duration-300 ${!isVisible ? 'opacity-0' : 'opacity-100'} ${className}`}>
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div className="flex items-center justify-between">
+          {/* Left side - Categories dropdown */}
+          <div className="relative">
+            <button
+              onMouseEnter={() => !isLoading && setIsHovered(true)}
+              onMouseLeave={() => {
+                // Delay to allow mouse to move to dropdown
+                setTimeout(() => {
+                  if (!document.querySelector('.category-dropdown:hover')) {
+                    setIsHovered(false);
+                    setHoveredCategory(null);
+                  }
+                }, 100);
+              }}
+              className="flex items-center gap-2 py-3 px-4 text-gray-700 hover:text-gray-900 hover:bg-gray-50 rounded-md transition-colors"
+            >
+              <span className="font-medium">Alle Kategorien</span>
+              <svg 
+                className={`w-4 h-4 transition-transform ${isHovered ? 'rotate-180' : ''}`} 
+                fill="none" 
+                stroke="currentColor" 
+                viewBox="0 0 24 24"
+              >
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+              </svg>
+            </button>
+
+            {/* Dropdown menu */}
+          {isHovered && !isLoading && (
+            <div 
+              className="category-dropdown absolute top-full left-0 w-96 bg-white border border-gray-200 rounded-md shadow-xl z-50 opacity-100 mt-1"
+              onMouseEnter={() => setIsHovered(true)}
+              onMouseLeave={() => {
+                setIsHovered(false);
+                setHoveredCategory(null);
+              }}
+            >
+              <div className="flex">
+                {/* Categories list */}
+                <div className="w-1/2 min-w-48 border-r border-gray-200">
+                  <div className="p-2">
+                    <h3 className="text-sm font-semibold text-gray-900 px-3 py-2 border-b border-gray-100">
+                      Kategorien
+                    </h3>
+                    <div className="max-h-96 overflow-y-auto">
+                      {/* Alle Produkte Option */}
+                      <button
+                        onClick={() => router.push('/shop')}
+                        className="w-full text-left px-3 py-2 text-sm hover:bg-gray-50 rounded-md transition-colors font-medium text-blue-600"
+                      >
+                        Alle Produkte
+                      </button>
+                      
+                      {categories && categories.length > 0 ? categories.map((category) => (
+                        <button
+                          key={category._id}
+                          onMouseEnter={() => setHoveredCategory(category._id)}
+                          onClick={() => handleCategoryClick(category)}
+                          className={`w-full text-left px-3 py-2 text-sm hover:bg-gray-50 rounded-md transition-colors ${
+                            hoveredCategory === category._id ? 'bg-gray-50' : ''
+                          }`}
+                        >
+                          <div className="flex items-center justify-between">
+                            <span className="text-gray-700">{category.name}</span>
+                            {category.subcategories && category.subcategories.length > 0 && (
+                              <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                              </svg>
+                            )}
+                          </div>
+                        </button>
+                      )) : (
+                        <div className="p-4 text-center text-gray-500">
+                          <p className="text-sm">Kategorien werden geladen...</p>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Subcategories panel */}
+                {hoveredCategory && (
+                  <div className="flex-1 p-2">
+                    <div className="max-h-96 overflow-y-auto">
+                      {(() => {
+                        const category = categories.find(cat => cat._id === hoveredCategory);
+                        if (!category || !category.subcategories || category.subcategories.length === 0) {
+                          return (
+                            <div className="p-4 text-center text-gray-500">
+                              <p className="text-sm">Keine Unterkategorien verfügbar</p>
+                            </div>
+                          );
+                        }
+                        
+                        return (
+                          <>
+                            <h3 className="text-sm font-semibold text-gray-900 px-3 py-2 border-b border-gray-100">
+                              {category.name} - Unterkategorien
+                            </h3>
+                            <div className="grid grid-cols-1 gap-1">
+                              {category.subcategories.map((subcategory) => (
+                                <button
+                                  key={subcategory._id}
+                                  onClick={() => handleSubcategoryClick(subcategory, category)}
+                                  className="text-left px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 rounded-md transition-colors"
+                                >
+                                  {subcategory.name}
+                                </button>
+                              ))}
+                            </div>
+                          </>
+                        );
+                      })()}
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+          </div>
+
+          {/* Right side - Special filters */}
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => router.push('/shop?filter=topseller')}
+              className="flex items-center gap-1 py-2 px-3 text-sm text-gray-700 hover:text-blue-600 hover:bg-blue-50 rounded-md transition-colors"
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.197-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.784-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z" />
+              </svg>
+              <span className="font-medium">Top Seller</span>
+            </button>
+
+            <button
+              onClick={() => router.push('/shop?filter=sale')}
+              className="flex items-center gap-1 py-2 px-3 text-sm text-gray-700 hover:text-red-600 hover:bg-red-50 rounded-md transition-colors"
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z" />
+              </svg>
+              <span className="font-medium">Sale</span>
+            </button>
+
+            <button
+              onClick={() => router.push('/shop?filter=neu')}
+              className="flex items-center gap-1 py-2 px-3 text-sm text-gray-700 hover:text-green-600 hover:bg-green-50 rounded-md transition-colors"
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+              </svg>
+              <span className="font-medium">Neu</span>
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}

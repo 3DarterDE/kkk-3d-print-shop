@@ -86,11 +86,12 @@ export function generateSrcSet(imageUrl: string): string {
  * @param context - The context where the image will be displayed
  * @returns The recommended image size
  */
-export function getContextualImageSize(context: 'shop-listing' | 'product-detail' | 'mobile' | 'thumbnail'): ImageSize {
+export function getContextualImageSize(context: 'shop-listing' | 'product-detail' | 'mobile' | 'thumbnail' | 'search-result'): ImageSize {
   switch (context) {
     case 'shop-listing':
     case 'thumbnail':
-      return 'thumb'; // 400x400 for shop listings
+    case 'search-result':
+      return 'thumb'; // 400x400 for shop listings and search results
     case 'product-detail':
       return 'main'; // 800x800 for product detail pages
     case 'mobile':

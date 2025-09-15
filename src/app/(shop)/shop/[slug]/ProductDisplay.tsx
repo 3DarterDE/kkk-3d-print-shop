@@ -147,30 +147,6 @@ export default function ProductDisplay({ product, descriptionHtml, recommendedPr
 
   return (
     <div className="max-w-7xl mx-auto px-4 py-10">
-      {/* Breadcrumb Navigation */}
-      <nav className="mb-8">
-        <div className="flex items-center space-x-2 text-sm text-gray-500">
-          <a href="/" className="hover:text-gray-700 transition-colors">Home</a>
-          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-          </svg>
-          <a href="/shop" className="hover:text-gray-700 transition-colors">Shop</a>
-          {category && (
-            <>
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-              </svg>
-              <a href={`/shop?category=${category.slug}`} className="hover:text-gray-700 transition-colors">
-                {category.name}
-              </a>
-            </>
-          )}
-          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-          </svg>
-          <span className="text-gray-900 font-medium">{product.title}</span>
-        </div>
-      </nav>
 
       <div className="grid grid-cols-12 gap-8">
         {/* Left: Thumbnail Images */}

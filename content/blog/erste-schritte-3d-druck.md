@@ -1,9 +1,9 @@
 ---
-title: Erste Schritte im 3D-Druck
+title: Erste Schritte im Dart-Sport
 date: 2025-09-06
-excerpt: Ein schneller Überblick über Materialien, Düsen und Layerhöhe.
+excerpt: Ein schneller Überblick über Dartpfeile, Boards und Grundtechniken.
 ---
 
-Willkommen im Blog! Hier teile ich Tipps rund um 3D-Druckteile, Materialien und Einstellungen.
+Willkommen im Blog! Hier teile ich Tipps rund um Dart-Ausrüstung, Wurftechnik und Spielstrategien.
 
 

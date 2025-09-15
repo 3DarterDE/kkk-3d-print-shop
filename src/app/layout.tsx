@@ -2,6 +2,8 @@ import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import Navbar from "@/components/Navbar";
+import CategoryNavigation from "@/components/CategoryNavigation";
+import Breadcrumb from "@/components/Breadcrumb";
 import Footer from "@/components/Footer";
 import CartValidationProvider from "../components/CartValidationProvider";
 
@@ -46,6 +48,7 @@ export default function RootLayout({
       >
         <CartValidationProvider>
           <Navbar />
+          <CategoryNavigation />
           <main className="pt-16">{children}</main>
           <Footer />
         </CartValidationProvider>

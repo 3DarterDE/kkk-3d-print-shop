@@ -34,6 +34,15 @@ export default function CategoryTree({ categories, selectedCategory, selectedSub
     router.push(url);
   };
 
+  // Safety check for categories
+  if (!categories || !Array.isArray(categories)) {
+    return (
+      <nav className="space-y-2">
+        <div className="text-sm text-gray-500">Kategorien werden geladen...</div>
+      </nav>
+    );
+  }
+
   return (
     <nav className="space-y-2">
       <button

@@ -869,13 +869,14 @@ export default function AdminPage() {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(categoryData),
         });
+        
+        if (!response.ok) {
+          const errorData = await response.json();
+          alert(`Failed to save category: ${errorData.error}`);
+          return;
+        }
+        
         createdCategory = await response.json();
-      }
-      
-      if (!response.ok) {
-        const errorData = await response.json();
-        alert(`Failed to save category: ${errorData.error}`);
-        return;
       }
       
       // Create subcategories if any

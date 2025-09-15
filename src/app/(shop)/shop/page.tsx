@@ -1,9 +1,9 @@
 "use client";
 
 import Link from "next/link";
-import CategoryTree from "@/components/CategoryTree";
 import ProductCard from "@/components/ProductCard";
 import ManufacturerFilter from "@/components/ManufacturerFilter";
+import Breadcrumb from "@/components/Breadcrumb";
 import { getOptimizedImageUrl, getContextualImageSize } from "@/lib/image-utils";
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
@@ -30,7 +30,8 @@ async function fetchCategories(): Promise<Category[]> {
       return [];
     }
     
-    return await response.json();
+    const data = await response.json();
+    return Array.isArray(data.categories) ? data.categories : [];
   } catch (error) {
     console.error('Failed to fetch categories:', error);
     return [];
@@ -39,15 +40,14 @@ async function fetchCategories(): Promise<Category[]> {
 
 
 
-export default function ShopPage({ searchParams }: { searchParams: Promise<{ category?: string; subcategory?: string }> }) {
+export default function ShopPage({ searchParams }: { searchParams: Promise<{ category?: string; subcategory?: string; search?: string; filter?: string }> }) {
   const router = useRouter();
   const [allProducts, setAllProducts] = useState<any[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
   const [selectedManufacturers, setSelectedManufacturers] = useState<string[]>([]);
-  const [resolvedSearchParams, setResolvedSearchParams] = useState<{ category?: string; subcategory?: string }>({});
+  const [resolvedSearchParams, setResolvedSearchParams] = useState<{ category?: string; subcategory?: string; search?: string; filter?: string }>({});
   const [loading, setLoading] = useState(true);
   const [sortBy, setSortBy] = useState<'default' | 'newest' | 'oldest' | 'price-low' | 'price-high' | 'name-asc' | 'name-desc'>('default');
-  const [topSellerPage, setTopSellerPage] = useState(0);
   const [categoryTopSellerPage, setCategoryTopSellerPage] = useState(0);
   const [searchQuery, setSearchQuery] = useState('');
   const [priceRange, setPriceRange] = useState<{ min: number; max: number }>({ min: 0, max: 1000 });
@@ -61,6 +61,8 @@ export default function ShopPage({ searchParams }: { searchParams: Promise<{ cat
         const params = {
           category: urlParams.get('category') || undefined,
           subcategory: urlParams.get('subcategory') || undefined,
+          search: urlParams.get('search') || undefined,
+          filter: urlParams.get('filter') || undefined,
         };
         console.log('Resolved search params from URL:', params);
         setResolvedSearchParams(params);
@@ -89,6 +91,8 @@ export default function ShopPage({ searchParams }: { searchParams: Promise<{ cat
         const params = {
           category: urlParams.get('category') || undefined,
           subcategory: urlParams.get('subcategory') || undefined,
+          search: urlParams.get('search') || undefined,
+          filter: urlParams.get('filter') || undefined,
         };
         console.log('URL changed, new search params:', params);
         setResolvedSearchParams(params);
@@ -147,9 +151,17 @@ export default function ShopPage({ searchParams }: { searchParams: Promise<{ cat
     loadData();
   }, []);
 
+  // Initialize search query from URL params
+  useEffect(() => {
+    if (resolvedSearchParams.search) {
+      setSearchQuery(resolvedSearchParams.search);
+    }
+  }, [resolvedSearchParams.search]);
+
+
+
   // Reset pagination when category, manufacturer filter, search query, or price range changes
   useEffect(() => {
-    setTopSellerPage(0);
     setCategoryTopSellerPage(0);
   }, [resolvedSearchParams.category, selectedManufacturers, searchQuery, priceRange]);
 
@@ -185,11 +197,20 @@ export default function ShopPage({ searchParams }: { searchParams: Promise<{ cat
       console.log('Filtering by category:', selectedCategory, 'Product category:', p.category, 'Product categoryId:', p.categoryId, 'Product title:', p.title);
     }
     
-    // Search filter
+    // Search filter - search in multiple fields
     if (searchQuery.trim()) {
       const query = searchQuery.toLowerCase().trim();
       const titleMatch = p.title.toLowerCase().includes(query);
-      if (!titleMatch) return false;
+      const descriptionMatch = p.description && p.description.toLowerCase().includes(query);
+      const manufacturerMatch = p.manufacturer && p.manufacturer.toLowerCase().includes(query);
+      const categoryMatch = p.category && p.category.toLowerCase().includes(query);
+      const subcategoryMatch = p.subcategory && p.subcategory.toLowerCase().includes(query);
+      const tagsMatch = p.tags && p.tags.some((tag: string) => tag.toLowerCase().includes(query));
+      
+      // Check if any field matches
+      if (!titleMatch && !descriptionMatch && !manufacturerMatch && !categoryMatch && !subcategoryMatch && !tagsMatch) {
+        return false;
+      }
     }
     
     // Price filter
@@ -228,6 +249,26 @@ export default function ShopPage({ searchParams }: { searchParams: Promise<{ cat
     if (selectedManufacturers.length > 0) {
       if (!p.manufacturer || !selectedManufacturers.includes(p.manufacturer)) {
         return false;
+      }
+    }
+    
+    // Special filters
+    const filter = resolvedSearchParams.filter;
+    if (filter) {
+      switch (filter) {
+        case 'topseller':
+          if (!p.isTopSeller) return false;
+          break;
+        case 'sale':
+          if (!p.isOnSale) return false;
+          break;
+        case 'neu':
+          // Check if product was added within the last 2 weeks
+          const twoWeeksAgo = new Date();
+          twoWeeksAgo.setDate(twoWeeksAgo.getDate() - 14);
+          const productDate = new Date(p.createdAt || p.updatedAt);
+          if (productDate < twoWeeksAgo) return false;
+          break;
       }
     }
     
@@ -283,7 +324,15 @@ export default function ShopPage({ searchParams }: { searchParams: Promise<{ cat
     if (searchQuery.trim()) {
       const query = searchQuery.toLowerCase().trim();
       const titleMatch = p.title.toLowerCase().includes(query);
-      if (!titleMatch) return false;
+      const descriptionMatch = p.description && p.description.toLowerCase().includes(query);
+      const manufacturerMatch = p.manufacturer && p.manufacturer.toLowerCase().includes(query);
+      const categoryMatch = p.category && p.category.toLowerCase().includes(query);
+      const subcategoryMatch = p.subcategory && p.subcategory.toLowerCase().includes(query);
+      const tagsMatch = p.tags && p.tags.some((tag: string) => tag.toLowerCase().includes(query));
+      
+      if (!titleMatch && !descriptionMatch && !manufacturerMatch && !categoryMatch && !subcategoryMatch && !tagsMatch) {
+        return false;
+      }
     }
     
     // If no manufacturers are selected, show all top sellers
@@ -292,8 +341,6 @@ export default function ShopPage({ searchParams }: { searchParams: Promise<{ cat
     // If manufacturers are selected, only show top sellers from selected manufacturers
     return p.manufacturer && selectedManufacturers.includes(p.manufacturer);
   });
-  const topSellers = allTopSellers.slice(topSellerPage * 4, (topSellerPage + 1) * 4);
-  const totalTopSellerPages = Math.ceil(allTopSellers.length / 4);
   
   // Extract category top sellers for display at the top when in category view
   const allCategoryTopSellers = resolvedSearchParams.category 
@@ -334,7 +381,15 @@ export default function ShopPage({ searchParams }: { searchParams: Promise<{ cat
         if (searchQuery.trim()) {
           const query = searchQuery.toLowerCase().trim();
           const titleMatch = p.title.toLowerCase().includes(query);
-          if (!titleMatch) return false;
+          const descriptionMatch = p.description && p.description.toLowerCase().includes(query);
+          const manufacturerMatch = p.manufacturer && p.manufacturer.toLowerCase().includes(query);
+          const categoryMatch = p.category && p.category.toLowerCase().includes(query);
+          const subcategoryMatch = p.subcategory && p.subcategory.toLowerCase().includes(query);
+          const tagsMatch = p.tags && p.tags.some((tag: string) => tag.toLowerCase().includes(query));
+          
+          if (!titleMatch && !descriptionMatch && !manufacturerMatch && !categoryMatch && !subcategoryMatch && !tagsMatch) {
+            return false;
+          }
         }
         
         // If no manufacturers are selected, show all category top sellers
@@ -348,69 +403,37 @@ export default function ShopPage({ searchParams }: { searchParams: Promise<{ cat
   const totalCategoryTopSellerPages = Math.ceil(allCategoryTopSellers.length / 4);
 
   return (
-    <div className="max-w-7xl mx-auto px-4 py-10">
-      <h1 className="text-3xl font-bold mb-6">Shop</h1>
+    <>
+      {/* Breadcrumb - only show if category is selected, positioned sticky under CategoryNavigation */}
+      {resolvedSearchParams.category && <Breadcrumb />}
       
-      {/* Search Bar */}
-      <div className="mb-6">
-        <div className="max-w-md mx-auto xl:mx-0">
-          <div className="relative">
-            <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-              <svg className="h-5 w-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-              </svg>
-            </div>
-            <input
-              type="text"
-              placeholder="Produkte durchsuchen..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="block w-full pl-10 pr-10 py-3 border border-gray-300 rounded-lg leading-5 bg-white placeholder-gray-500 focus:outline-none focus:placeholder-gray-400 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-            />
-            {searchQuery && (
-              <div className="absolute inset-y-0 right-0 pr-3 flex items-center">
-                <button
-                  onClick={() => setSearchQuery('')}
-                  className="text-gray-400 hover:text-gray-600 focus:outline-none"
-                >
-                  <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                  </svg>
-                </button>
-              </div>
-            )}
-          </div>
-          {searchQuery && (
-            <p className="mt-2 text-sm text-gray-600">
-              {filteredProducts.length} Produkt{filteredProducts.length !== 1 ? 'e' : ''} gefunden für "{searchQuery}"
+      <div className="max-w-7xl mx-auto px-4 py-10">
+        {/* Search Results Info */}
+      {searchQuery && (
+        <div className="mb-6">
+          <div className="max-w-md mx-auto xl:mx-0">
+            <p className="text-sm text-gray-600">
+              {filteredProducts.length} Produkt{filteredProducts.length !== 1 ? 'e' : ''} gefunden für "<span className="font-medium">{searchQuery}</span>"
             </p>
-          )}
+          </div>
         </div>
-      </div>
+      )}
 
-      {/* Main Layout: Categories on left, Top Sellers and Products on right */}
-      <div className="flex flex-col xl:flex-row gap-8">
-        {/* Categories Sidebar */}
-        <div className="xl:w-80 flex-shrink-0">
-          <div className="bg-white rounded-lg shadow p-6">
-            <h2 className="text-lg font-semibold mb-4">Kategorien</h2>
-            <CategoryTree 
-              categories={categories}
-              selectedCategory={resolvedSearchParams.category}
-              selectedSubcategory={resolvedSearchParams.subcategory}
-            />
-          </div>
-          
-          <div className="mt-6">
-            <ManufacturerFilter
-              selectedManufacturers={selectedManufacturers}
-              onManufacturerChange={setSelectedManufacturers}
-            />
-          </div>
-          
-          {/* Price Filter */}
-          <div className="mt-6">
-            <div className="bg-white rounded-lg shadow p-6">
+      {/* Main Layout: Filters on left, Products on right */}
+      <div className="flex gap-8">
+        {/* Left Sidebar - Filters */}
+        <div className="w-80 flex-shrink-0">
+          <div className="bg-white rounded-lg shadow p-6 space-y-6">
+            {/* Manufacturer Filter */}
+            <div>
+              <ManufacturerFilter
+                selectedManufacturers={selectedManufacturers}
+                onManufacturerChange={setSelectedManufacturers}
+              />
+            </div>
+            
+            {/* Price Filter */}
+            <div>
               <h2 className="text-lg font-semibold mb-4">Preis</h2>
               <div className="space-y-4">
                 
@@ -537,135 +560,10 @@ export default function ShopPage({ searchParams }: { searchParams: Promise<{ cat
           </div>
         </div>
 
-        {/* Right Side: Top Sellers and Products */}
-        <div className={`flex-1 ${(allTopSellers.length > 0 && !resolvedSearchParams.category) || (allCategoryTopSellers.length > 0 && resolvedSearchParams.category) ? 'space-y-8' : ''}`}>
-          {/* Top Sellers Section */}
-          <div>
-            {/* Global Top Sellers Section */}
-            {allTopSellers.length > 0 && !resolvedSearchParams.category && (
-              <div className="bg-gray-50 rounded-lg p-6">
-                <div className="flex items-center justify-between mb-4">
-                  <h2 className="text-lg font-semibold text-gray-800">Top Seller</h2>
-                  {totalTopSellerPages > 1 && (
-                    <div className="flex items-center space-x-2">
-                      <button
-                        onClick={() => setTopSellerPage(Math.max(0, topSellerPage - 1))}
-                        disabled={topSellerPage === 0}
-                        className="p-2 rounded-full bg-white shadow-sm hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed"
-                      >
-                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-                        </svg>
-                      </button>
-                      <span className="text-sm text-gray-600">
-                        {topSellerPage + 1} / {totalTopSellerPages}
-                      </span>
-                      <button
-                        onClick={() => setTopSellerPage(Math.min(totalTopSellerPages - 1, topSellerPage + 1))}
-                        disabled={topSellerPage >= totalTopSellerPages - 1}
-                        className="p-2 rounded-full bg-white shadow-sm hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed"
-                      >
-                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                        </svg>
-                      </button>
-                    </div>
-                  )}
-                </div>
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-                  {topSellers.map((p: any) => (
-                    <ProductCard 
-                      key={p._id.toString()} 
-                      product={{
-                        _id: p._id.toString(),
-                        slug: p.slug,
-                        title: p.title,
-                        price: p.price,
-                        offerPrice: p.offerPrice,
-                        isOnSale: p.isOnSale,
-                        isTopSeller: true,
-                        inStock: p.inStock,
-                        stockQuantity: p.stockQuantity,
-                        images: p.images || [],
-                        imageSizes: (p.imageSizes || []).map((imgSize: any) => ({
-                          main: imgSize.main,
-                          thumb: imgSize.thumb,
-                          small: imgSize.small
-                        })),
-                        tags: p.tags || [],
-                        variations: p.variations || []
-                      }}
-                    />
-                  ))}
-                </div>
-              </div>
-            )}
-            
-            {/* Category Top Sellers Section */}
-            {allCategoryTopSellers.length > 0 && resolvedSearchParams.category && (
-              <div className="bg-gray-50 rounded-lg p-6">
-                <div className="flex items-center justify-between mb-4">
-                  <h2 className="text-lg font-semibold text-gray-800">
-                    Top Seller in {categories.find(c => c.slug === resolvedSearchParams.category)?.name || 'Kategorie'}
-                  </h2>
-                  {totalCategoryTopSellerPages > 1 && (
-                    <div className="flex items-center space-x-2">
-                      <button
-                        onClick={() => setCategoryTopSellerPage(Math.max(0, categoryTopSellerPage - 1))}
-                        disabled={categoryTopSellerPage === 0}
-                        className="p-2 rounded-full bg-white shadow-sm hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed"
-                      >
-                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-                        </svg>
-                      </button>
-                      <span className="text-sm text-gray-600">
-                        {categoryTopSellerPage + 1} / {totalCategoryTopSellerPages}
-                      </span>
-                      <button
-                        onClick={() => setCategoryTopSellerPage(Math.min(totalCategoryTopSellerPages - 1, categoryTopSellerPage + 1))}
-                        disabled={categoryTopSellerPage >= totalCategoryTopSellerPages - 1}
-                        className="p-2 rounded-full bg-white shadow-sm hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed"
-                      >
-                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                        </svg>
-                      </button>
-                    </div>
-                  )}
-                </div>
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-                  {categoryTopSellers.map((p: any) => (
-                    <ProductCard 
-                      key={p._id.toString()} 
-                      product={{
-                        _id: p._id.toString(),
-                        slug: p.slug,
-                        title: p.title,
-                        price: p.price,
-                        offerPrice: p.offerPrice,
-                        isOnSale: p.isOnSale,
-                        isTopSeller: true,
-                        inStock: p.inStock,
-                        stockQuantity: p.stockQuantity,
-                        images: p.images || [],
-                        imageSizes: (p.imageSizes || []).map((imgSize: any) => ({
-                          main: imgSize.main,
-                          thumb: imgSize.thumb,
-                          small: imgSize.small
-                        })),
-                        tags: p.tags || [],
-                        variations: p.variations || []
-                      }}
-                    />
-                  ))}
-                </div>
-              </div>
-            )}
-          </div>
-
+        {/* Right Side: Products */}
+        <div className="flex-1">
           {/* Products Section */}
-          <div className={allTopSellers.length === 0 && allCategoryTopSellers.length === 0 ? "min-h-[400px]" : ""}>
+          <div className="min-h-[400px]">
         {/* Category Products */}
         <div className="bg-white rounded-lg shadow p-6 h-full">
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-4">
@@ -760,12 +658,10 @@ export default function ShopPage({ searchParams }: { searchParams: Promise<{ cat
             })}
           </div>
         </div>
-        </div>
-        </div>
-    
       </div>
     </div>
+    </div>
+    </div>
+    </>
   );
 }
-
-

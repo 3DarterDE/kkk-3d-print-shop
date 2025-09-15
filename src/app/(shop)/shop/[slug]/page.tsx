@@ -2,6 +2,7 @@ import { fetchProductBySlug, fetchRecommendedProducts } from "@/lib/products";
 import { connectToDatabase } from "@/lib/mongodb";
 import Category from "@/lib/models/Category";
 import JsonLd from "@/components/JsonLd";
+import Breadcrumb from "@/components/Breadcrumb";
 import { notFound } from "next/navigation";
 import { remark } from "remark";
 import remarkHtml from "remark-html";
@@ -23,9 +24,17 @@ export default async function ProductPage({ params }: { params: Promise<{ slug: 
 
   // Load category data for breadcrumb
   let categoryData = null;
+  let subcategoryData = null;
   if (product.categoryId) {
     await connectToDatabase();
     categoryData = await Category.findById(product.categoryId).lean();
+    
+    // Load subcategory data if product has subcategoryIds
+    if (product.subcategoryIds && product.subcategoryIds.length > 0) {
+      // Find subcategory by ID directly
+      const subcategoryId = product.subcategoryIds[0];
+      subcategoryData = await Category.findById(subcategoryId).lean();
+    }
   }
 
   // Serialize MongoDB object to plain object
@@ -135,8 +144,19 @@ export default async function ProductPage({ params }: { params: Promise<{ slug: 
     slug: (categoryData as any).slug
   } : null;
 
+  // Serialize subcategory data
+  const serializedSubcategory = subcategoryData && !Array.isArray(subcategoryData) ? {
+    _id: (subcategoryData as any)._id.toString(),
+    name: (subcategoryData as any).name,
+    slug: (subcategoryData as any).slug
+  } : null;
+
+
   return (
     <>
+      {/* Breadcrumb - show if product has category */}
+      {serializedCategory && <Breadcrumb category={serializedCategory.slug} subcategory={serializedSubcategory?.slug} productName={product.title} />}
+      
       <ProductDisplay 
         product={serializedProduct} 
         descriptionHtml={descriptionHtml} 

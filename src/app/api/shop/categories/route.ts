@@ -43,7 +43,11 @@ export async function GET() {
         parentId: (sub.parentId as any).toString()
       }))
     }));
-    return NextResponse.json(categoriesWithSubcategories);
+    
+    return NextResponse.json({ 
+      categories: categoriesWithSubcategories,
+      total: categoriesWithSubcategories.length 
+    });
   } catch (error) {
     console.error("Failed to fetch categories:", error);
     return NextResponse.json({ error: "Failed to fetch categories" }, { status: 500 });
