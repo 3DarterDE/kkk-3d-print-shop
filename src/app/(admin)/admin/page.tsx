@@ -12,6 +12,12 @@ interface Category {
   sortOrder: number;
   parentId?: string;
   subcategories?: Category[];
+  image?: string;
+  imageSizes?: {
+    main: string;
+    thumb: string;
+    small: string;
+  };
 }
 
 export default function AdminPage() {
@@ -37,7 +43,22 @@ export default function AdminPage() {
   const [categories, setCategories] = useState<Category[]>([]);
   const [showCategoryForm, setShowCategoryForm] = useState(false);
   const [editingCategory, setEditingCategory] = useState<Category | null>(null);
-  const [activeTab, setActiveTab] = useState<'products' | 'categories' | 'manufacturers'>('products');
+  const [activeTab, setActiveTab] = useState<'products' | 'categories' | 'manufacturers' | 'filters'>('products');
+  
+  // Filter state
+  const [filters, setFilters] = useState<Array<{ _id: string; name: string; type: string; options: Array<{ name: string; value: string; sortOrder: number }>; sortOrder: number }>>([]);
+  const [showFilterForm, setShowFilterForm] = useState(false);
+  const [editingFilter, setEditingFilter] = useState<{ _id: string; name: string; type: string; options: Array<{ name: string; value: string; sortOrder: number }>; sortOrder: number } | null>(null);
+  const [filterFormData, setFilterFormData] = useState({
+    name: '',
+    type: 'select' as 'text' | 'number' | 'select' | 'multiselect' | 'range',
+    options: [] as Array<{ name: string; value: string; sortOrder: number }>
+  });
+  
+  // Product filter state
+  const [productFilters, setProductFilters] = useState<Array<{ _id: string; productId: string; filterId: string; filterName: string; values: string[] }>>([]);
+  const [selectedProductFilters, setSelectedProductFilters] = useState<Array<{ filterId: string; filterName: string; values: string[] }>>([]);
+  
   const [subcategories, setSubcategories] = useState<Array<{ name: string; description: string; sortOrder: number }>>([]);
   const [expandedCategories, setExpandedCategories] = useState<Set<string>>(new Set());
   const [selectedSubcategory, setSelectedSubcategory] = useState<string>('');
@@ -46,6 +67,8 @@ export default function AdminPage() {
   const [selectedCategoryForTopSellers, setSelectedCategoryForTopSellers] = useState<Category | null>(null);
   const [categoryProducts, setCategoryProducts] = useState<any[]>([]);
   const [selectedTopSellers, setSelectedTopSellers] = useState<string[]>([]);
+  const [categoryImage, setCategoryImage] = useState<File | null>(null);
+  const [categoryImagePreview, setCategoryImagePreview] = useState<string | null>(null);
   const [variations, setVariations] = useState<Array<{
   name: string;
   options: Array<{
@@ -55,7 +78,7 @@ export default function AdminPage() {
     stockQuantity: number;
   }>;
   }>>([]);
-  const [activeModalTab, setActiveModalTab] = useState<'basic' | 'description' | 'media' | 'properties' | 'recommendations' | 'variations'>('basic');
+  const [activeModalTab, setActiveModalTab] = useState<'basic' | 'description' | 'media' | 'properties' | 'recommendations' | 'variations' | 'filters'>('basic');
   const [showSubcategoryDropdown, setShowSubcategoryDropdown] = useState(false);
   
   // Manufacturer state
@@ -89,13 +112,13 @@ export default function AdminPage() {
     isOnSale: false,
     inStock: true,
     stockQuantity: '0',
-    manufacturer: ''
   });
 
   useEffect(() => {
     fetchProducts();
     fetchCategories();
     fetchManufacturers();
+    fetchFilters();
   }, []);
 
   // Reset description content when editing product changes
@@ -168,6 +191,22 @@ export default function AdminPage() {
     }
   };
 
+  const fetchFilters = async () => {
+    try {
+      const response = await fetch("/api/admin/filters");
+      if (response.ok) {
+        const data = await response.json();
+        setFilters(Array.isArray(data) ? data : []);
+      } else {
+        console.error("Failed to fetch filters:", response.status);
+        setFilters([]);
+      }
+    } catch (error) {
+      console.error("Error fetching filters:", error);
+      setFilters([]);
+    }
+  };
+
   const handleDelete = async (id: string) => {
     if (!confirm("Are you sure you want to delete this product?")) return;
     
@@ -179,7 +218,93 @@ export default function AdminPage() {
     }
   };
 
-  const handleEdit = (product: ProductDocument) => {
+  // Filter handlers
+  const handleFilterSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    
+    try {
+      const filterData = {
+        name: filterFormData.name,
+        type: filterFormData.type,
+        options: filterFormData.options,
+        sortOrder: (filters || []).length
+      };
+      
+      let response;
+      if (editingFilter) {
+        response = await fetch(`/api/admin/filters`, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ ...filterData, _id: editingFilter._id }),
+        });
+      } else {
+        response = await fetch("/api/admin/filters", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(filterData),
+        });
+      }
+      
+      if (response.ok) {
+        setShowFilterForm(false);
+        setEditingFilter(null);
+        setFilterFormData({
+          name: '',
+          type: 'select',
+          options: []
+        });
+        fetchFilters();
+      }
+    } catch (error) {
+      console.error("Failed to save filter:", error);
+    }
+  };
+
+  const handleEditFilter = (filter: any) => {
+    setEditingFilter(filter);
+    setFilterFormData({
+      name: filter.name,
+      type: filter.type,
+      options: filter.options || []
+    });
+    setShowFilterForm(true);
+  };
+
+  const handleDeleteFilter = async (id: string) => {
+    if (!confirm("Are you sure you want to delete this filter?")) return;
+    
+    try {
+      await fetch(`/api/admin/filters?id=${id}`, { method: "DELETE" });
+      fetchFilters();
+    } catch (error) {
+      console.error("Failed to delete filter:", error);
+    }
+  };
+
+  const addFilterOption = () => {
+    setFilterFormData(prev => ({
+      ...prev,
+      options: [...prev.options, { name: '', value: '', sortOrder: prev.options.length }]
+    }));
+  };
+
+  const removeFilterOption = (index: number) => {
+    setFilterFormData(prev => ({
+      ...prev,
+      options: prev.options.filter((_, i) => i !== index)
+    }));
+  };
+
+  const updateFilterOption = (index: number, field: 'name' | 'value', value: string) => {
+    setFilterFormData(prev => ({
+      ...prev,
+      options: prev.options.map((option, i) => 
+        i === index ? { ...option, [field]: value } : option
+      )
+    }));
+  };
+
+  const handleEdit = async (product: ProductDocument) => {
     setEditingProduct(product);
     setProperties(product.properties || []);
     setRecommendedProducts(product.recommendedProducts || []);
@@ -198,6 +323,21 @@ export default function AdminPage() {
     setSelectedSubcategory(product.subcategoryId || '');
     setSelectedCategory(product.categoryId || product.category || '');
     
+    // Load product filters
+    try {
+      const response = await fetch(`/api/admin/product-filters?productId=${product._id}`);
+      if (response.ok) {
+        const productFilters = await response.json();
+        setSelectedProductFilters(productFilters.map((pf: any) => ({
+          filterId: pf.filterId,
+          filterName: pf.filterName,
+          values: pf.values
+        })));
+      }
+    } catch (error) {
+      console.error('Failed to load product filters:', error);
+    }
+    
     // Set form data
     setFormData({
       title: product.title || '',
@@ -210,7 +350,6 @@ export default function AdminPage() {
       isOnSale: product.isOnSale || false,
       inStock: product.inStock !== false,
       stockQuantity: product.stockQuantity ? product.stockQuantity.toString() : '0',
-      manufacturer: product.manufacturer || ''
     });
     
     // Reset editor states
@@ -261,8 +400,6 @@ export default function AdminPage() {
       categoryId: formData.category,
       subcategoryId: formData.subcategory || undefined,
       subcategoryIds: formData.subcategories,
-      manufacturer: formData.manufacturer || undefined,
-      manufacturerName: formData.manufacturer ? manufacturers.find(m => m._id === formData.manufacturer)?.name : undefined,
       tags: formData.tags.split(",").map(tag => tag.trim()).filter(tag => tag),
       inStock: formData.inStock,
       stockQuantity: parseInt(formData.stockQuantity) || 0,
@@ -316,11 +453,60 @@ export default function AdminPage() {
         return;
       }
       
+      // Get the product ID from response
+      const responseData = await response.json();
+      const productId = editingProduct ? editingProduct._id : responseData._id;
+      
+      // Save product filters if any are selected
+      if (selectedProductFilters.length > 0) {
+        console.log('Saving product filters:', selectedProductFilters);
+        console.log('Product ID:', productId);
+        
+        // Delete existing product filters first
+        const deleteResponse = await fetch(`/api/admin/product-filters?productId=${productId}`, {
+          method: 'DELETE'
+        });
+        
+        if (deleteResponse.ok) {
+          const deleteData = await deleteResponse.json();
+          console.log('Deleted existing filters:', deleteData);
+        } else {
+          console.error('Failed to delete existing filters:', await deleteResponse.text());
+        }
+        
+        // Save new product filters
+        for (const productFilter of selectedProductFilters) {
+          if (productFilter.values.length > 0) {
+            console.log('Saving filter:', productFilter);
+            const filterResponse = await fetch('/api/admin/product-filters', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                productId: productId,
+                filterId: productFilter.filterId,
+                filterName: productFilter.filterName,
+                values: productFilter.values
+              })
+            });
+            
+            if (filterResponse.ok) {
+              const savedFilter = await filterResponse.json();
+              console.log('Successfully saved filter:', savedFilter);
+            } else {
+              console.error('Failed to save filter:', await filterResponse.text());
+            }
+          }
+        }
+      } else {
+        console.log('No product filters to save');
+      }
+      
       setShowForm(false);
       setEditingProduct(null);
       setUploadedFiles([]);
       setUploadedImageSizes([]);
       setDescriptionContent('');
+      setSelectedProductFilters([]);
       // Reset form data
       setFormData({
         title: '',
@@ -333,7 +519,6 @@ export default function AdminPage() {
         isOnSale: false,
         inStock: true,
         stockQuantity: '0',
-        manufacturer: ''
       });
       fetchProducts();
       
@@ -651,6 +836,7 @@ export default function AdminPage() {
     setDescriptionContent('');
     setSelectedCategory('');
     setSelectedSubcategory('');
+    setSelectedProductFilters([]);
     // Reset form data
     setFormData({
       title: '',
@@ -663,7 +849,6 @@ export default function AdminPage() {
       isOnSale: false,
       inStock: true,
       stockQuantity: '0',
-      manufacturer: ''
     });
     // Reset editor states
     setSelectedFontSize('16px');
@@ -895,10 +1080,17 @@ export default function AdminPage() {
           }
         }
       }
+
+      // Upload category image if provided
+      if (categoryImage && createdCategory) {
+        await uploadCategoryImage(createdCategory._id);
+      }
       
       setShowCategoryForm(false);
       setEditingCategory(null);
       setSubcategories([]);
+      setCategoryImage(null);
+      setCategoryImagePreview(null);
       fetchCategories();
     } catch (error) {
       console.error("Failed to save category:", error);
@@ -918,6 +1110,63 @@ export default function AdminPage() {
 
   const addSubcategory = () => {
     setSubcategories([...subcategories, { name: '', description: '', sortOrder: subcategories.length }]);
+  };
+
+  // Category Image Upload Functions
+  const handleCategoryImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      setCategoryImage(file);
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        setCategoryImagePreview(e.target?.result as string);
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
+  const uploadCategoryImage = async (categoryId: string) => {
+    if (!categoryImage) return null;
+
+    const formData = new FormData();
+    formData.append('image', categoryImage);
+    formData.append('categoryId', categoryId);
+
+    try {
+      const response = await fetch('/api/admin/categories/upload-image', {
+        method: 'POST',
+        body: formData,
+      });
+
+      if (response.ok) {
+        const result = await response.json();
+        return result;
+      } else {
+        console.error('Failed to upload category image');
+        return null;
+      }
+    } catch (error) {
+      console.error('Error uploading category image:', error);
+      return null;
+    }
+  };
+
+  const deleteCategoryImage = async (categoryId: string) => {
+    try {
+      const response = await fetch(`/api/admin/categories/delete-image?categoryId=${categoryId}`, {
+        method: 'DELETE',
+      });
+
+      if (response.ok) {
+        return true;
+      } else {
+        console.error('Failed to delete category image');
+        return false;
+      }
+    } catch (error) {
+      console.error('Error deleting category image:', error);
+      return false;
+    }
   };
 
   const removeSubcategory = (index: number) => {
@@ -1032,6 +1281,10 @@ export default function AdminPage() {
     if (!confirm("Are you sure you want to delete this category?")) return;
     
     try {
+      // First delete the category images
+      await deleteCategoryImage(id);
+      
+      // Then delete the category
       const response = await fetch(`/api/admin/categories/${id}`, { method: "DELETE" });
       if (!response.ok) {
         const errorData = await response.json();
@@ -1208,7 +1461,6 @@ export default function AdminPage() {
                   isOnSale: false,
                   inStock: true,
                   stockQuantity: '0',
-                  manufacturer: ''
                 });
                 setShowForm(true);
               }}
@@ -1234,6 +1486,22 @@ export default function AdminPage() {
               className="bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700"
             >
               Add New Manufacturer
+            </button>
+          )}
+          {activeTab === 'filters' && (
+            <button
+              onClick={() => {
+                setEditingFilter(null);
+                setFilterFormData({
+                  name: '',
+                  type: 'select',
+                  options: []
+                });
+                setShowFilterForm(true);
+              }}
+              className="bg-orange-600 text-white px-4 py-2 rounded hover:bg-orange-700"
+            >
+              Add New Filter
             </button>
           )}
         </div>
@@ -1272,6 +1540,16 @@ export default function AdminPage() {
               }`}
             >
               Hersteller
+            </button>
+            <button
+              onClick={() => setActiveTab('filters')}
+              className={`py-2 px-1 border-b-2 font-medium text-sm ${
+                activeTab === 'filters'
+                  ? 'border-blue-500 text-blue-600'
+                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+              }`}
+            >
+              Filteroptionen
             </button>
           </nav>
         </div>
@@ -1716,6 +1994,68 @@ export default function AdminPage() {
         </div>
       )}
 
+      {/* Filters Table */}
+      {activeTab === 'filters' && (
+        <div className="bg-white rounded-lg shadow overflow-hidden">
+          {(filters || []).length > 0 ? (
+            <table className="min-w-full divide-y divide-gray-200">
+              <thead className="bg-gray-50">
+                <tr>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Name
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Type
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Options
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Actions
+                  </th>
+                </tr>
+              </thead>
+              <tbody className="bg-white divide-y divide-gray-200">
+                {(filters || []).map((filter, index) => (
+                  <tr key={filter._id} className="hover:bg-gray-50">
+                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                      {filter.name}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                      <span className="inline-flex px-2 py-1 text-xs font-semibold rounded-full bg-blue-100 text-blue-800">
+                        {filter.type}
+                      </span>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                      {filter.options.length} options
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                      <button
+                        onClick={() => handleEditFilter(filter)}
+                        className="text-blue-600 hover:text-blue-900 mr-3"
+                      >
+                        Edit
+                      </button>
+                      <button
+                        onClick={() => handleDeleteFilter(filter._id)}
+                        className="text-red-600 hover:text-red-900"
+                      >
+                        Delete
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          ) : (
+            <div className="p-8 text-center text-gray-500">
+              <p className="text-lg font-medium mb-2">Keine Filter vorhanden</p>
+              <p className="text-sm">Erstellen Sie Ihren ersten Filter mit dem "Add New Filter" Button.</p>
+            </div>
+          )}
+        </div>
+      )}
+
       {/* Product Form Modal */}
       {showForm && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
@@ -1726,7 +2066,7 @@ export default function AdminPage() {
             {/* Modal Header */}
             <div className="flex justify-between items-center p-6 border-b border-gray-200">
               <h2 className="text-2xl font-bold">
-                {editingProduct ? "Edit Product" : "Add New Product"}
+                {editingProduct ? "Produkt bearbeiten" : "Neues Produkt"}
               </h2>
               <button
                 type="button"
@@ -1747,8 +2087,9 @@ export default function AdminPage() {
                   { id: 'description', name: 'Beschreibung', icon: '📄' },
                   { id: 'media', name: 'Medien', icon: '🖼️' },
                   { id: 'properties', name: 'Eigenschaften', icon: '⚙️' },
-                  { id: 'recommendations', name: 'Empfehlungen', icon: '⭐' },
-                  { id: 'variations', name: 'Variationen', icon: '🔄' }
+                  { id: 'variations', name: 'Variationen', icon: '🔄' },
+                  { id: 'filters', name: 'Filter', icon: '🔍' },
+                  { id: 'recommendations', name: 'Empfehlungen', icon: '⭐' }
                 ].map((tab) => (
                   <button
                     key={tab.id}
@@ -1959,26 +2300,6 @@ export default function AdminPage() {
                       />
                     </div>
 
-                    {/* Manufacturer Selection */}
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">
-                        Hersteller
-                      </label>
-                      <select
-                        name="manufacturer"
-                        value={formData.manufacturer || ''}
-                        onChange={(e) => setFormData({...formData, manufacturer: e.target.value})}
-                        className="w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                      >
-                        <option value="">Kein Hersteller</option>
-                        {manufacturers.map((manufacturer) => (
-                          <option key={manufacturer._id} value={manufacturer._id}>
-                            {manufacturer.name}
-                          </option>
-                        ))}
-                      </select>
-                      <p className="text-xs text-gray-500 mt-1">Wählen Sie einen Hersteller aus oder lassen Sie das Feld leer</p>
-                    </div>
                   </div>
                 )}
 
@@ -2453,6 +2774,117 @@ export default function AdminPage() {
                     )}
                   </div>
                 )}
+
+                {/* Filters Tab */}
+                {activeModalTab === 'filters' && (
+                  <div className="space-y-6">
+                    <h3 className="text-lg font-semibold text-gray-900 mb-4">Produktfilter</h3>
+                    
+                    {/* Available Filters */}
+                    <div className="space-y-4">
+                      {(filters || []).map((filter) => (
+                        <div key={filter._id} className="border border-gray-200 rounded-lg p-4">
+                          <div className="flex items-center justify-between mb-3">
+                            <label className="flex items-center">
+                              <input
+                                type="checkbox"
+                                checked={selectedProductFilters.some(pf => pf.filterId === filter._id)}
+                                onChange={(e) => {
+                                  if (e.target.checked) {
+                                    setSelectedProductFilters(prev => [
+                                      ...prev,
+                                      { filterId: filter._id, filterName: filter.name, values: [] }
+                                    ]);
+                                  } else {
+                                    setSelectedProductFilters(prev => 
+                                      prev.filter(pf => pf.filterId !== filter._id)
+                                    );
+                                  }
+                                }}
+                                className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded mr-3"
+                              />
+                              <span className="text-sm font-medium text-gray-900">{filter.name}</span>
+                            </label>
+                            <span className="text-xs text-gray-500">{filter.type}</span>
+                          </div>
+                          
+                          {/* Filter Options */}
+                          {selectedProductFilters.some(pf => pf.filterId === filter._id) && (
+                            <div className="mt-3 pl-7">
+                              {filter.type === 'select' || filter.type === 'multiselect' ? (
+                                <div className="space-y-2">
+                                  {filter.options.map((option) => (
+                                    <label key={option.value} className="flex items-center">
+                                      <input
+                                        type={filter.type === 'multiselect' ? 'checkbox' : 'radio'}
+                                        name={`product-filter-${filter._id}`}
+                                        value={option.value}
+                                        checked={selectedProductFilters
+                                          .find(pf => pf.filterId === filter._id)
+                                          ?.values.includes(option.value) || false}
+                                        onChange={(e) => {
+                                          const productFilter = selectedProductFilters.find(pf => pf.filterId === filter._id);
+                                          if (!productFilter) return;
+                                          
+                                          let newValues: string[];
+                                          if (filter.type === 'multiselect') {
+                                            if (e.target.checked) {
+                                              newValues = [...productFilter.values, option.value];
+                                            } else {
+                                              newValues = productFilter.values.filter(v => v !== option.value);
+                                            }
+                                          } else {
+                                            newValues = e.target.checked ? [option.value] : [];
+                                          }
+                                          
+                                          setSelectedProductFilters(prev => 
+                                            prev.map(pf => 
+                                              pf.filterId === filter._id 
+                                                ? { ...pf, values: newValues }
+                                                : pf
+                                            )
+                                          );
+                                        }}
+                                        className="h-3 w-3 text-blue-600 focus:ring-blue-500 border-gray-300 rounded mr-2"
+                                      />
+                                      <span className="text-xs text-gray-700">{option.name}</span>
+                                    </label>
+                                  ))}
+                                </div>
+                              ) : (
+                                <input
+                                  type={filter.type === 'number' ? 'number' : 'text'}
+                                  placeholder={`${filter.name} eingeben...`}
+                                  value={selectedProductFilters
+                                    .find(pf => pf.filterId === filter._id)
+                                    ?.values[0] || ''}
+                                  onChange={(e) => {
+                                    const newValues = e.target.value ? [e.target.value] : [];
+                                    setSelectedProductFilters(prev => 
+                                      prev.map(pf => 
+                                        pf.filterId === filter._id 
+                                          ? { ...pf, values: newValues }
+                                          : pf
+                                      )
+                                    );
+                                  }}
+                                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+                                />
+                              )}
+                            </div>
+                          )}
+                        </div>
+                      ))}
+                      
+                      {(filters || []).length === 0 && (
+                        <div className="text-center py-8 text-gray-500">
+                          <p>Keine Filter verfügbar.</p>
+                          <p className="text-sm">Erstellen Sie zunächst Filter im Tab "Filteroptionen".</p>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
               </div>
 
               {/* Modal Footer */}
@@ -2529,6 +2961,60 @@ export default function AdminPage() {
                     defaultValue={editingCategory?.description || ""}
                     className="w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
                   />
+                </div>
+
+                {/* Category Image Upload */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Kategorie-Bild
+                  </label>
+                  <div className="space-y-4">
+                    <input
+                      type="file"
+                      accept="image/*"
+                      onChange={handleCategoryImageChange}
+                      className="w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    />
+                    {categoryImagePreview && (
+                      <div className="mt-2">
+                        <img
+                          src={categoryImagePreview}
+                          alt="Preview"
+                          className="w-32 h-32 object-cover rounded-md border border-gray-300"
+                        />
+                      </div>
+                    )}
+                    {editingCategory?.image && !categoryImagePreview && (
+                      <div className="mt-2">
+                        <div className="flex items-center justify-between mb-2">
+                          <p className="text-sm text-gray-600">Aktuelles Bild:</p>
+                          <button
+                            type="button"
+                            onClick={async () => {
+                              if (editingCategory?._id) {
+                                const success = await deleteCategoryImage(editingCategory._id);
+                                if (success) {
+                                  // Refresh categories to update the UI
+                                  fetchCategories();
+                                  // Clear the editing category to refresh the form
+                                  const updatedCategory = { ...editingCategory, image: undefined, imageSizes: undefined };
+                                  setEditingCategory(updatedCategory);
+                                }
+                              }
+                            }}
+                            className="text-red-600 hover:text-red-800 text-sm font-medium"
+                          >
+                            Bild löschen
+                          </button>
+                        </div>
+                        <img
+                          src={editingCategory.image}
+                          alt="Current"
+                          className="w-32 h-32 object-cover rounded-md border border-gray-300"
+                        />
+                      </div>
+                    )}
+                  </div>
                 </div>
 
 
@@ -2698,6 +3184,128 @@ export default function AdminPage() {
         </div>
       )}
 
+      {/* Filter Form Modal */}
+      {showFilterForm && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div 
+            className="bg-white rounded-lg shadow-2xl border border-gray-200 w-full max-w-2xl max-h-[90vh] overflow-y-auto"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <form onSubmit={handleFilterSubmit} className="p-6">
+              <div className="flex justify-between items-center mb-6">
+                <h2 className="text-2xl font-bold">
+                  {editingFilter ? "Edit Filter" : "Add New Filter"}
+                </h2>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowFilterForm(false);
+                    setEditingFilter(null);
+                  }}
+                  className="text-gray-400 hover:text-gray-600"
+                >
+                  <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
+
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Filter Name *
+                  </label>
+                  <input
+                    type="text"
+                    value={filterFormData.name}
+                    onChange={(e) => setFilterFormData(prev => ({ ...prev, name: e.target.value }))}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    required
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Filter Type *
+                  </label>
+                  <select
+                    value={filterFormData.type}
+                    onChange={(e) => setFilterFormData(prev => ({ ...prev, type: e.target.value as any }))}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  >
+                    <option value="select">Select (Dropdown)</option>
+                    <option value="multiselect">Multi-Select</option>
+                    <option value="text">Text Input</option>
+                    <option value="number">Number Input</option>
+                    <option value="range">Range Slider</option>
+                  </select>
+                </div>
+
+                {(filterFormData.type === 'select' || filterFormData.type === 'multiselect') && (
+                  <div>
+                    <div className="flex justify-between items-center mb-2">
+                      <label className="block text-sm font-medium text-gray-700">
+                        Filter Options *
+                      </label>
+                      <button
+                        type="button"
+                        onClick={addFilterOption}
+                        className="text-blue-600 hover:text-blue-800 text-sm"
+                      >
+                        + Add Option
+                      </button>
+                    </div>
+                    <div className="space-y-2">
+                      {filterFormData.options.map((option, index) => (
+                        <div key={index} className="flex space-x-2">
+                          <input
+                            type="text"
+                            placeholder="Option (z.B. 19g, 20g, 21g)"
+                            value={option.name}
+                            onChange={(e) => {
+                              const value = e.target.value;
+                              updateFilterOption(index, 'name', value);
+                              updateFilterOption(index, 'value', value); // Set both name and value to the same
+                            }}
+                            className="flex-1 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => removeFilterOption(index)}
+                            className="text-red-600 hover:text-red-800 px-2"
+                          >
+                            ×
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              <div className="flex justify-end space-x-3 mt-6">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowFilterForm(false);
+                    setEditingFilter(null);
+                  }}
+                  className="px-4 py-2 text-gray-700 bg-gray-200 rounded-md hover:bg-gray-300"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="px-4 py-2 bg-orange-600 text-white rounded-md hover:bg-orange-700"
+                >
+                  {editingFilter ? "Update Filter" : "Create Filter"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
       {/* Top Seller Modal */}
       {showTopSellerModal && selectedCategoryForTopSellers && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
@@ -2801,6 +3409,7 @@ export default function AdminPage() {
           </div>
         </div>
       )}
+
     </div>
   );
 }

@@ -10,6 +10,12 @@ interface Category {
   slug: string;
   description?: string;
   subcategories?: Category[];
+  image?: string;
+  imageSizes?: {
+    main: string;
+    thumb: string;
+    small: string;
+  };
 }
 
 interface CategoryNavigationProps {
@@ -127,7 +133,7 @@ export default function CategoryNavigation({ className = "" }: CategoryNavigatio
             {/* Dropdown menu */}
           {isHovered && !isLoading && (
             <div 
-              className="category-dropdown absolute top-full left-0 w-96 bg-white border border-gray-200 rounded-md shadow-xl z-50 opacity-100 mt-1"
+              className="category-dropdown fixed top-28 left-0 right-0 bg-white border border-gray-200 rounded-md shadow-xl z-50 opacity-100"
               onMouseEnter={() => setIsHovered(true)}
               onMouseLeave={() => {
                 setIsHovered(false);
@@ -136,16 +142,16 @@ export default function CategoryNavigation({ className = "" }: CategoryNavigatio
             >
               <div className="flex">
                 {/* Categories list */}
-                <div className="w-1/2 min-w-48 border-r border-gray-200">
-                  <div className="p-2">
-                    <h3 className="text-sm font-semibold text-gray-900 px-3 py-2 border-b border-gray-100">
+                <div className="w-150 border-r border-gray-200">
+                  <div className="p-4 pl-16">
+                    <h3 className="text-base font-semibold text-gray-900 px-3 py-3 border-b border-gray-100">
                       Kategorien
                     </h3>
-                    <div className="max-h-96 overflow-y-auto">
+                    <div className="max-h-[500px] overflow-y-auto">
                       {/* Alle Produkte Option */}
                       <button
                         onClick={() => router.push('/shop')}
-                        className="w-full text-left px-3 py-2 text-sm hover:bg-gray-50 rounded-md transition-colors font-medium text-blue-600"
+                        className="w-full text-left px-4 py-3 text-base hover:bg-gray-50 rounded-md transition-colors font-semibold text-blue-600"
                       >
                         Alle Produkte
                       </button>
@@ -155,12 +161,21 @@ export default function CategoryNavigation({ className = "" }: CategoryNavigatio
                           key={category._id}
                           onMouseEnter={() => setHoveredCategory(category._id)}
                           onClick={() => handleCategoryClick(category)}
-                          className={`w-full text-left px-3 py-2 text-sm hover:bg-gray-50 rounded-md transition-colors ${
+                          className={`w-full text-left px-4 py-4 text-base hover:bg-gray-50 rounded-md transition-colors ${
                             hoveredCategory === category._id ? 'bg-gray-50' : ''
                           }`}
                         >
                           <div className="flex items-center justify-between">
-                            <span className="text-gray-700">{category.name}</span>
+                            <div className="flex items-center gap-3">
+                              {category.imageSizes?.small && (
+                                <img
+                                  src={category.imageSizes.small}
+                                  alt={category.name}
+                                  className="w-8 h-8 object-cover rounded"
+                                />
+                              )}
+                              <span className="text-gray-700 text-base font-medium">{category.name}</span>
+                            </div>
                             {category.subcategories && category.subcategories.length > 0 && (
                               <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
@@ -179,8 +194,8 @@ export default function CategoryNavigation({ className = "" }: CategoryNavigatio
 
                 {/* Subcategories panel */}
                 {hoveredCategory && (
-                  <div className="flex-1 p-2">
-                    <div className="max-h-96 overflow-y-auto">
+                  <div className="w-150 p-4">
+                    <div className="max-h-[400px] overflow-y-auto">
                       {(() => {
                         const category = categories.find(cat => cat._id === hoveredCategory);
                         if (!category || !category.subcategories || category.subcategories.length === 0) {
@@ -193,7 +208,7 @@ export default function CategoryNavigation({ className = "" }: CategoryNavigatio
                         
                         return (
                           <>
-                            <h3 className="text-sm font-semibold text-gray-900 px-3 py-2 border-b border-gray-100">
+                            <h3 className="text-base font-semibold text-gray-900 px-3 py-3 border-b border-gray-100">
                               {category.name} - Unterkategorien
                             </h3>
                             <div className="grid grid-cols-1 gap-1">
@@ -201,9 +216,18 @@ export default function CategoryNavigation({ className = "" }: CategoryNavigatio
                                 <button
                                   key={subcategory._id}
                                   onClick={() => handleSubcategoryClick(subcategory, category)}
-                                  className="text-left px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 rounded-md transition-colors"
+                                  className="text-left px-4 py-3 text-sm text-gray-700 hover:bg-gray-50 rounded-md transition-colors"
                                 >
-                                  {subcategory.name}
+                                  <div className="flex items-center gap-3">
+                                    {subcategory.imageSizes?.small && (
+                                      <img
+                                        src={subcategory.imageSizes.small}
+                                        alt={subcategory.name}
+                                        className="w-6 h-6 object-cover rounded"
+                                      />
+                                    )}
+                                    <span className="text-sm font-medium">{subcategory.name}</span>
+                                  </div>
                                 </button>
                               ))}
                             </div>

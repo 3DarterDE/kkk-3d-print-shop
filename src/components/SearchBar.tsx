@@ -17,7 +17,7 @@ interface SearchResult {
   inStock?: boolean;
   stockQuantity?: number;
   images?: string[];
-  imageSizes?: Array<{ main: string; thumb: string; small: string }>;
+  imageSizes?: { main: string; thumb: string; small: string };
   tags?: string[];
   manufacturer?: string;
   category?: string;
@@ -247,12 +247,7 @@ export default function SearchBar({
                         <div className="flex-shrink-0 w-12 h-12 bg-gray-100 rounded-lg overflow-hidden">
                           {product.images && product.images.length > 0 ? (
                             <img
-                              src={getOptimizedImageUrl(
-                                product.images[0], 
-                                getContextualImageSize('search-result'), 
-                                product.imageSizes, 
-                                0
-                              )}
+                              src={product.imageSizes?.thumb || product.images[0]}
                               alt={product.title}
                               className="w-full h-full object-cover"
                             />
@@ -319,11 +314,19 @@ export default function SearchBar({
                           (results.length + index) === selectedIndex ? 'bg-blue-50' : ''
                         }`}
                       >
-                        {/* Category Icon */}
-                        <div className="flex-shrink-0 w-12 h-12 bg-green-100 rounded-lg flex items-center justify-center">
-                          <svg className="w-6 h-6 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
-                          </svg>
+                        {/* Category Image */}
+                        <div className="flex-shrink-0 w-12 h-12 bg-green-100 rounded-lg flex items-center justify-center overflow-hidden">
+                          {category.imageSizes?.thumb ? (
+                            <img
+                              src={category.imageSizes.thumb}
+                              alt={category.name}
+                              className="w-full h-full object-cover"
+                            />
+                          ) : (
+                            <svg className="w-6 h-6 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
+                            </svg>
+                          )}
                         </div>
 
                         {/* Category Info */}

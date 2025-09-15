@@ -14,7 +14,7 @@ export async function GET() {
     // Get ALL categories first
     const allCategories = await Category.find({ isActive: true })
       .sort({ sortOrder: 1, name: 1 })
-      .select('name slug description _id parentId')
+      .select('name slug description _id parentId image imageSizes')
       .lean();
     
     // Get parent categories (parentId is null)

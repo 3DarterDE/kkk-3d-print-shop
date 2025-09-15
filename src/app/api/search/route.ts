@@ -38,7 +38,9 @@ export async function GET(request: NextRequest) {
         { name: { $regex: searchRegex } },
         { description: { $regex: searchRegex } }
       ]
-    }).lean();
+    })
+    .select('name slug description _id parentId image imageSizes')
+    .lean();
 
     // Get products that belong to matching categories
     const categoryIds = categorySearch.map(cat => cat._id);
@@ -175,6 +177,7 @@ export async function GET(request: NextRequest) {
       slug: category.slug,
       name: category.name,
       description: category.description,
+      imageSizes: category.imageSizes,
       type: 'category'
     }));
 

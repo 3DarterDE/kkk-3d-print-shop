@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import ProductCard from "@/components/ProductCard";
-import ManufacturerFilter from "@/components/ManufacturerFilter";
+import DynamicFilters from "@/components/DynamicFilters";
 import Breadcrumb from "@/components/Breadcrumb";
 import { getOptimizedImageUrl, getContextualImageSize } from "@/lib/image-utils";
 import { useState, useEffect } from "react";
@@ -44,13 +44,40 @@ export default function ShopPage({ searchParams }: { searchParams: Promise<{ cat
   const router = useRouter();
   const [allProducts, setAllProducts] = useState<any[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
-  const [selectedManufacturers, setSelectedManufacturers] = useState<string[]>([]);
   const [resolvedSearchParams, setResolvedSearchParams] = useState<{ category?: string; subcategory?: string; search?: string; filter?: string }>({});
   const [loading, setLoading] = useState(true);
   const [sortBy, setSortBy] = useState<'default' | 'newest' | 'oldest' | 'price-low' | 'price-high' | 'name-asc' | 'name-desc'>('default');
   const [categoryTopSellerPage, setCategoryTopSellerPage] = useState(0);
   const [searchQuery, setSearchQuery] = useState('');
   const [priceRange, setPriceRange] = useState<{ min: number; max: number }>({ min: 0, max: 1000 });
+  const [selectedDynamicFilters, setSelectedDynamicFilters] = useState<Record<string, string[]>>({});
+  const [productFilters, setProductFilters] = useState<Record<string, any[]>>({});
+
+  // Load product filters for all products
+  const loadProductFilters = async (products: any[]) => {
+    try {
+      const productIds = products.map(p => p._id);
+      const response = await fetch('/api/admin/product-filters');
+      if (response.ok) {
+        const allProductFilters = await response.json();
+        
+        // Group filters by product ID
+        const filtersByProduct: Record<string, any[]> = {};
+        allProductFilters.forEach((pf: any) => {
+          if (productIds.includes(pf.productId)) {
+            if (!filtersByProduct[pf.productId]) {
+              filtersByProduct[pf.productId] = [];
+            }
+            filtersByProduct[pf.productId].push(pf);
+          }
+        });
+        
+        setProductFilters(filtersByProduct);
+      }
+    } catch (error) {
+      console.error('Failed to load product filters:', error);
+    }
+  };
 
   // Resolve search params using both methods
   useEffect(() => {
@@ -136,6 +163,9 @@ export default function ShopPage({ searchParams }: { searchParams: Promise<{ cat
         setAllProducts(products);
         setCategories(cats);
         
+        // Load product filters
+        await loadProductFilters(products);
+        
         // Initialize price range based on all products
         const calculatedRange = calculatePriceRange(products);
         setPriceRange(calculatedRange);
@@ -160,10 +190,15 @@ export default function ShopPage({ searchParams }: { searchParams: Promise<{ cat
 
 
 
-  // Reset pagination when category, manufacturer filter, search query, or price range changes
+  // Reset pagination when category, search query, price range, or dynamic filters change
   useEffect(() => {
     setCategoryTopSellerPage(0);
-  }, [resolvedSearchParams.category, selectedManufacturers, searchQuery, priceRange]);
+  }, [resolvedSearchParams.category, searchQuery, priceRange, selectedDynamicFilters]);
+
+  // Reset dynamic filters when category changes
+  useEffect(() => {
+    setSelectedDynamicFilters({});
+  }, [resolvedSearchParams.category]);
 
 
 
@@ -187,15 +222,13 @@ export default function ShopPage({ searchParams }: { searchParams: Promise<{ cat
     return { min: roundedMin, max: roundedMax };
   };
 
+  // Debug logging for selected filters
+  console.log('Selected Dynamic Filters:', selectedDynamicFilters);
+
   // Filter products by category, subcategory, manufacturer, and search query
   const filteredProducts = allProducts.filter((p: any) => {
     const selectedCategory = resolvedSearchParams.category;
     const selectedSubcategory = resolvedSearchParams.subcategory;
-    
-    // Debug logging
-    if (selectedCategory) {
-      console.log('Filtering by category:', selectedCategory, 'Product category:', p.category, 'Product categoryId:', p.categoryId, 'Product title:', p.title);
-    }
     
     // Search filter - search in multiple fields
     if (searchQuery.trim()) {
@@ -222,7 +255,6 @@ export default function ShopPage({ searchParams }: { searchParams: Promise<{ cat
     // Category filter
     if (selectedCategory) {
       const category = categories.find(c => c.slug === selectedCategory);
-      console.log('Looking for category with slug:', selectedCategory, 'Found category:', category);
       if (!category) return false;
       
       // If subcategory is specified, filter by subcategoryId or subcategoryIds
@@ -239,16 +271,25 @@ export default function ShopPage({ searchParams }: { searchParams: Promise<{ cat
           p.subcategoryId === sub._id || (p.subcategoryIds && p.subcategoryIds.includes(sub._id))
         );
         
-        console.log(`Product ${p.title}: categoryId=${p.categoryId}, category._id=${category._id}, isDirectMatch=${isDirectCategoryMatch}, isSubMatch=${isSubcategoryMatch}`);
-        
         if (!isDirectCategoryMatch && !isSubcategoryMatch) return false;
       }
     }
     
-    // Manufacturer filter
-    if (selectedManufacturers.length > 0) {
-      if (!p.manufacturer || !selectedManufacturers.includes(p.manufacturer)) {
-        return false;
+    // Dynamic filters - MULTISELECT ONLY
+    for (const [filterId, filterValues] of Object.entries(selectedDynamicFilters)) {
+      if (filterValues && filterValues.length > 0) {
+        const productFilterList = productFilters[p._id] || [];
+        
+        // Multiselect filter: OR logic - product needs to have at least one of the selected values
+        const hasMatchingFilter = productFilterList.some((pf: any) => {
+          if (pf.filterId !== filterId) return false;
+          return pf.values.some((value: string) => filterValues.includes(value));
+        });
+        
+        
+        if (!hasMatchingFilter) {
+          return false;
+        }
       }
     }
     
@@ -335,11 +376,7 @@ export default function ShopPage({ searchParams }: { searchParams: Promise<{ cat
       }
     }
     
-    // If no manufacturers are selected, show all top sellers
-    if (selectedManufacturers.length === 0) return true;
-    
-    // If manufacturers are selected, only show top sellers from selected manufacturers
-    return p.manufacturer && selectedManufacturers.includes(p.manufacturer);
+    return true;
   });
   
   // Extract category top sellers for display at the top when in category view
@@ -392,11 +429,7 @@ export default function ShopPage({ searchParams }: { searchParams: Promise<{ cat
           }
         }
         
-        // If no manufacturers are selected, show all category top sellers
-        if (selectedManufacturers.length === 0) return true;
-        
-        // If manufacturers are selected, only show category top sellers from selected manufacturers
-        return p.manufacturer && selectedManufacturers.includes(p.manufacturer);
+        return true;
       })
     : [];
   const categoryTopSellers = allCategoryTopSellers.slice(categoryTopSellerPage * 4, (categoryTopSellerPage + 1) * 4);
@@ -424,14 +457,6 @@ export default function ShopPage({ searchParams }: { searchParams: Promise<{ cat
         {/* Left Sidebar - Filters */}
         <div className="w-80 flex-shrink-0">
           <div className="bg-white rounded-lg shadow p-6 space-y-6">
-            {/* Manufacturer Filter */}
-            <div>
-              <ManufacturerFilter
-                selectedManufacturers={selectedManufacturers}
-                onManufacturerChange={setSelectedManufacturers}
-              />
-            </div>
-            
             {/* Price Filter */}
             <div>
               <h2 className="text-lg font-semibold mb-4">Preis</h2>
@@ -557,6 +582,22 @@ export default function ShopPage({ searchParams }: { searchParams: Promise<{ cat
                 </button>
               </div>
             </div>
+            
+            {/* Dynamic Filters */}
+            <DynamicFilters
+              categoryId={categories.find(c => c.slug === resolvedSearchParams.category)?._id}
+              selectedFilters={selectedDynamicFilters}
+              onFilterChange={(filterId, values) => {
+                setSelectedDynamicFilters(prev => ({
+                  ...prev,
+                  [filterId]: values
+                }));
+              }}
+              productFilters={productFilters}
+              allProducts={allProducts}
+              currentCategoryProducts={filteredProducts}
+            />
+            
           </div>
         </div>
 
@@ -574,11 +615,6 @@ export default function ShopPage({ searchParams }: { searchParams: Promise<{ cat
                   ? categories.find(c => c.slug === resolvedSearchParams.category)?.name || 'Kategorie'
                   : 'Alle Produkte'
               }
-              {selectedManufacturers.length > 0 && (
-                <span className="text-sm font-normal text-gray-600 ml-2">
-                  (gefiltert nach {selectedManufacturers.length} Hersteller{selectedManufacturers.length > 1 ? 'n' : ''})
-                </span>
-              )}
             </h2>
             
             {/* Sort Dropdown */}

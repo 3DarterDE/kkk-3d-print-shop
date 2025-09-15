@@ -9,6 +9,12 @@ export interface CategoryDocument extends Document {
   parentId?: string;
   subcategories?: CategoryDocument[];
   topSellerProducts?: string[]; // Array of product IDs
+  image?: string; // Main image URL
+  imageSizes?: {
+    main: string;
+    thumb: string;
+    small: string;
+  };
   createdAt: Date;
   updatedAt: Date;
 }
@@ -21,7 +27,13 @@ const CategorySchema = new Schema<CategoryDocument>(
     isActive: { type: Boolean, default: true },
     sortOrder: { type: Number, default: 0 },
     parentId: { type: Schema.Types.ObjectId, ref: 'Category', default: null },
-    topSellerProducts: { type: [String], default: [] }
+    topSellerProducts: { type: [String], default: [] },
+    image: { type: String },
+    imageSizes: {
+      main: { type: String },
+      thumb: { type: String },
+      small: { type: String }
+    }
   },
   { timestamps: true, strict: false, versionKey: false }
 );
