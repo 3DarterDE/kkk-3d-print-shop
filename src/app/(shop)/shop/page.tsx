@@ -52,6 +52,8 @@ export default function ShopPage({ searchParams }: { searchParams: Promise<{ cat
   const [priceRange, setPriceRange] = useState<{ min: number; max: number }>({ min: 0, max: 1000 });
   const [selectedDynamicFilters, setSelectedDynamicFilters] = useState<Record<string, string[]>>({});
   const [productFilters, setProductFilters] = useState<Record<string, any[]>>({});
+  const [allFilters, setAllFilters] = useState<any[]>([]);
+  const [isPriceFilterModified, setIsPriceFilterModified] = useState(false);
 
   // Load product filters for all products
   const loadProductFilters = async (products: any[]) => {
@@ -76,6 +78,19 @@ export default function ShopPage({ searchParams }: { searchParams: Promise<{ cat
       }
     } catch (error) {
       console.error('Failed to load product filters:', error);
+    }
+  };
+
+  // Load all filters
+  const loadAllFilters = async () => {
+    try {
+      const response = await fetch('/api/shop/filters');
+      if (response.ok) {
+        const filters = await response.json();
+        setAllFilters(Array.isArray(filters) ? filters : []);
+      }
+    } catch (error) {
+      console.error('Failed to load filters:', error);
     }
   };
 
@@ -163,8 +178,11 @@ export default function ShopPage({ searchParams }: { searchParams: Promise<{ cat
         setAllProducts(products);
         setCategories(cats);
         
-        // Load product filters
-        await loadProductFilters(products);
+        // Load product filters and all filters
+        await Promise.all([
+          loadProductFilters(products),
+          loadAllFilters()
+        ]);
         
         // Initialize price range based on all products
         const calculatedRange = calculatePriceRange(products);
@@ -275,20 +293,41 @@ export default function ShopPage({ searchParams }: { searchParams: Promise<{ cat
       }
     }
     
-    // Dynamic filters - MULTISELECT ONLY
+    // Dynamic filters - Handle different filter types
     for (const [filterId, filterValues] of Object.entries(selectedDynamicFilters)) {
       if (filterValues && filterValues.length > 0) {
         const productFilterList = productFilters[p._id] || [];
+        const productFilter = productFilterList.find((pf: any) => pf.filterId === filterId);
         
-        // Multiselect filter: OR logic - product needs to have at least one of the selected values
-        const hasMatchingFilter = productFilterList.some((pf: any) => {
-          if (pf.filterId !== filterId) return false;
-          return pf.values.some((value: string) => filterValues.includes(value));
-        });
+        if (!productFilter) {
+          return false; // Product doesn't have this filter at all
+        }
         
+        // Get filter type from allFilters
+        const filterType = allFilters.find(f => f._id === filterId)?.type;
         
-        if (!hasMatchingFilter) {
-          return false;
+        if (filterType === 'range') {
+          // Range filter: check if any product value falls within the selected range
+          const minValue = parseFloat(filterValues[0]);
+          const maxValue = parseFloat(filterValues[1]);
+          
+          const hasValueInRange = productFilter.values.some((value: string) => {
+            const numValue = parseFloat(value);
+            return !isNaN(numValue) && numValue >= minValue && numValue <= maxValue;
+          });
+          
+          if (!hasValueInRange) {
+            return false;
+          }
+        } else {
+          // Multiselect filter: AND logic - product needs to have ALL selected values
+          const hasAllValues = filterValues.every((selectedValue: string) => 
+            productFilter.values.includes(selectedValue)
+          );
+          
+          if (!hasAllValues) {
+            return false;
+          }
         }
       }
     }
@@ -503,6 +542,7 @@ export default function ShopPage({ searchParams }: { searchParams: Promise<{ cat
                               ...prev,
                               min: Math.min(newValue, prev.max - 100)
                             }));
+                            setIsPriceFilterModified(true);
                           };
                           
                           const handleMouseUp = () => {
@@ -543,6 +583,7 @@ export default function ShopPage({ searchParams }: { searchParams: Promise<{ cat
                               ...prev,
                               max: Math.max(newValue, prev.min + 100)
                             }));
+                            setIsPriceFilterModified(true);
                           };
                           
                           const handleMouseUp = () => {
@@ -575,6 +616,7 @@ export default function ShopPage({ searchParams }: { searchParams: Promise<{ cat
                   onClick={() => {
                     const range = calculatePriceRange(allProducts);
                     setPriceRange(range);
+                    setIsPriceFilterModified(false);
                   }}
                   className="w-full px-3 py-2 text-sm text-blue-600 hover:text-blue-800 border border-blue-200 rounded-md hover:bg-blue-50 transition-colors"
                 >
@@ -596,6 +638,7 @@ export default function ShopPage({ searchParams }: { searchParams: Promise<{ cat
               productFilters={productFilters}
               allProducts={allProducts}
               currentCategoryProducts={filteredProducts}
+              priceRange={priceRange}
             />
             
           </div>
@@ -608,14 +651,111 @@ export default function ShopPage({ searchParams }: { searchParams: Promise<{ cat
         {/* Category Products */}
         <div className="bg-white rounded-lg shadow p-6 h-full">
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-4">
-            <h2 className="text-xl font-semibold mb-2 sm:mb-0">
-              {resolvedSearchParams.subcategory 
-                ? categories.find(c => c.slug === resolvedSearchParams.category)?.subcategories?.find(s => s.slug === resolvedSearchParams.subcategory)?.name || 'Unterkategorie'
-                : resolvedSearchParams.category 
-                  ? categories.find(c => c.slug === resolvedSearchParams.category)?.name || 'Kategorie'
-                  : 'Alle Produkte'
-              }
-            </h2>
+            <div className="flex flex-col space-y-2 mb-2 sm:mb-0">
+              <h2 className="text-xl font-semibold">
+                {resolvedSearchParams.subcategory 
+                  ? categories.find(c => c.slug === resolvedSearchParams.category)?.subcategories?.find(s => s.slug === resolvedSearchParams.subcategory)?.name || 'Unterkategorie'
+                  : resolvedSearchParams.category 
+                    ? categories.find(c => c.slug === resolvedSearchParams.category)?.name || 'Kategorie'
+                    : ''
+                }
+              </h2>
+              
+              {/* Active Filter Buttons */}
+              <div className="flex flex-wrap gap-2">
+                {/* Dynamic Filter Buttons */}
+                {Object.entries(selectedDynamicFilters).map(([filterId, values]) => {
+                  if (!values || values.length === 0) return null;
+                  
+                  const filter = allFilters.find(f => f._id === filterId);
+                  if (!filter) return null;
+                  
+                  if (filter.type === 'range') {
+                    // Range filter button
+                    const minValue = parseFloat(values[0]);
+                    const maxValue = parseFloat(values[1]);
+                    return (
+                      <div
+                        key={`${filterId}-range`}
+                        className="inline-flex items-center px-3 py-1 rounded-full text-sm bg-blue-100 text-blue-800 border border-blue-200"
+                      >
+                        <span className="mr-2">{filter.name}: {minValue} - {maxValue}</span>
+                        <button
+                          onClick={() => {
+                            setSelectedDynamicFilters(prev => {
+                              const newFilters = { ...prev };
+                              delete newFilters[filterId];
+                              return newFilters;
+                            });
+                          }}
+                          className="ml-1 hover:text-red-600 transition-colors"
+                        >
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                          </svg>
+                        </button>
+                      </div>
+                    );
+                  } else {
+                    // Multiselect filter buttons
+                    return values.map((value) => {
+                      const option = filter.options?.find((opt: any) => opt.value === value);
+                      return (
+                        <div
+                          key={`${filterId}-${value}`}
+                          className="inline-flex items-center px-3 py-1 rounded-full text-sm bg-blue-100 text-blue-800 border border-blue-200"
+                        >
+                          <span className="mr-2">{filter.name}: {option?.name || value}</span>
+                          <button
+                            onClick={() => {
+                              const newValues = values.filter(v => v !== value);
+                              if (newValues.length === 0) {
+                                // Remove filter completely if no values left
+                                setSelectedDynamicFilters(prev => {
+                                  const newFilters = { ...prev };
+                                  delete newFilters[filterId];
+                                  return newFilters;
+                                });
+                              } else {
+                                // Update filter with remaining values
+                                setSelectedDynamicFilters(prev => ({
+                                  ...prev,
+                                  [filterId]: newValues
+                                }));
+                              }
+                            }}
+                            className="ml-1 hover:text-red-600 transition-colors"
+                          >
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                            </svg>
+                          </button>
+                        </div>
+                      );
+                    });
+                  }
+                })}
+                
+                {/* Price Range Filter Button */}
+                {isPriceFilterModified && (
+                  <div className="inline-flex items-center px-3 py-1 rounded-full text-sm bg-blue-100 text-blue-800 border border-blue-200">
+                    <span className="mr-2">Preis: {(priceRange.min / 100).toFixed(0)}€ - {(priceRange.max / 100).toFixed(0)}€</span>
+                    <button
+                      onClick={() => {
+                        const range = calculatePriceRange(allProducts);
+                        setPriceRange(range);
+                        setIsPriceFilterModified(false);
+                      }}
+                      className="ml-1 hover:text-red-600 transition-colors"
+                    >
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                      </svg>
+                    </button>
+                  </div>
+                )}
+              </div>
+            </div>
             
             {/* Sort Dropdown */}
             <div className="flex items-center space-x-2">

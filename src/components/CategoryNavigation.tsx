@@ -28,11 +28,19 @@ export default function CategoryNavigation({ className = "" }: CategoryNavigatio
   const [isHovered, setIsHovered] = useState(false);
   const [hoveredCategory, setHoveredCategory] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [isMounted, setIsMounted] = useState(false);
   const router = useRouter();
 
 
+  // Set mounted state
+  useEffect(() => {
+    setIsMounted(true);
+  }, []);
+
   // Fetch categories
   useEffect(() => {
+    if (!isMounted) return;
+    
     const fetchCategories = async () => {
       try {
         const response = await fetch('/api/shop/categories');
@@ -54,10 +62,12 @@ export default function CategoryNavigation({ className = "" }: CategoryNavigatio
     };
 
     fetchCategories();
-  }, []);
+  }, [isMounted]);
 
   // Handle scroll visibility
   useEffect(() => {
+    if (!isMounted) return;
+    
     let lastScrollY = window.scrollY;
     let ticking = false;
 
@@ -84,7 +94,7 @@ export default function CategoryNavigation({ className = "" }: CategoryNavigatio
 
     window.addEventListener('scroll', onScroll);
     return () => window.removeEventListener('scroll', onScroll);
-  }, []);
+  }, [isMounted]);
 
   const handleCategoryClick = (category: Category) => {
     router.push(`/shop?category=${category.slug}`);
@@ -100,9 +110,39 @@ export default function CategoryNavigation({ className = "" }: CategoryNavigatio
 
 
 
+  if (!isMounted) {
+    return (
+      <div className={`sticky top-16 z-30 bg-white border-b border-gray-200 transition-opacity duration-300 ${className}`}>
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-4">
+          <div className="flex items-center justify-between">
+            <div className="relative">
+              <button className="flex items-center gap-2 py-3 text-gray-700 hover:text-gray-900 hover:bg-gray-50 rounded-md transition-colors">
+                <span className="font-medium">Alle Kategorien</span>
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                </svg>
+              </button>
+            </div>
+            <div className="flex items-center gap-2">
+              <button className="flex items-center gap-1 py-2 px-3 text-sm text-gray-700 hover:text-blue-600 hover:bg-blue-50 rounded-md transition-colors">
+                <span className="font-medium">Top Seller</span>
+              </button>
+              <button className="flex items-center gap-1 py-2 px-3 text-sm text-gray-700 hover:text-red-600 hover:bg-red-50 rounded-md transition-colors">
+                <span className="font-medium">Sale</span>
+              </button>
+              <button className="flex items-center gap-1 py-2 px-3 text-sm text-gray-700 hover:text-green-600 hover:bg-green-50 rounded-md transition-colors">
+                <span className="font-medium">Neu</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className={`sticky top-16 z-30 bg-white border-b border-gray-200 transition-opacity duration-300 ${!isVisible ? 'opacity-0' : 'opacity-100'} ${className}`}>
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-4">
         <div className="flex items-center justify-between">
           {/* Left side - Categories dropdown */}
           <div className="relative">
@@ -117,7 +157,7 @@ export default function CategoryNavigation({ className = "" }: CategoryNavigatio
                   }
                 }, 100);
               }}
-              className="flex items-center gap-2 py-3 px-4 text-gray-700 hover:text-gray-900 hover:bg-gray-50 rounded-md transition-colors"
+              className="flex items-center gap-2 py-3 text-gray-700 hover:text-gray-900 hover:bg-gray-50 rounded-md transition-colors"
             >
               <span className="font-medium">Alle Kategorien</span>
               <svg 
@@ -133,7 +173,7 @@ export default function CategoryNavigation({ className = "" }: CategoryNavigatio
             {/* Dropdown menu */}
           {isHovered && !isLoading && (
             <div 
-              className="category-dropdown fixed top-28 left-0 right-0 bg-white border border-gray-200 rounded-md shadow-xl z-50 opacity-100"
+              className="category-dropdown absolute top-full left-0 bg-white border border-gray-200 rounded-md shadow-xl z-50 opacity-100 min-w-[600px]"
               onMouseEnter={() => setIsHovered(true)}
               onMouseLeave={() => {
                 setIsHovered(false);
@@ -141,104 +181,103 @@ export default function CategoryNavigation({ className = "" }: CategoryNavigatio
               }}
             >
               <div className="flex">
-                {/* Categories list */}
-                <div className="w-150 border-r border-gray-200">
-                  <div className="p-4 pl-16">
-                    <h3 className="text-base font-semibold text-gray-900 px-3 py-3 border-b border-gray-100">
-                      Kategorien
-                    </h3>
-                    <div className="max-h-[500px] overflow-y-auto">
-                      {/* Alle Produkte Option */}
-                      <button
-                        onClick={() => router.push('/shop')}
-                        className="w-full text-left px-4 py-3 text-base hover:bg-gray-50 rounded-md transition-colors font-semibold text-blue-600"
-                      >
-                        Alle Produkte
-                      </button>
-                      
-                      {categories && categories.length > 0 ? categories.map((category) => (
-                        <button
-                          key={category._id}
-                          onMouseEnter={() => setHoveredCategory(category._id)}
-                          onClick={() => handleCategoryClick(category)}
-                          className={`w-full text-left px-4 py-4 text-base hover:bg-gray-50 rounded-md transition-colors ${
-                            hoveredCategory === category._id ? 'bg-gray-50' : ''
-                          }`}
-                        >
-                          <div className="flex items-center justify-between">
-                            <div className="flex items-center gap-3">
-                              {category.imageSizes?.small && (
-                                <img
-                                  src={category.imageSizes.small}
-                                  alt={category.name}
-                                  className="w-8 h-8 object-cover rounded"
-                                />
-                              )}
-                              <span className="text-gray-700 text-base font-medium">{category.name}</span>
-                            </div>
-                            {category.subcategories && category.subcategories.length > 0 && (
-                              <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                              </svg>
-                            )}
-                          </div>
-                        </button>
-                      )) : (
-                        <div className="p-4 text-center text-gray-500">
-                          <p className="text-sm">Kategorien werden geladen...</p>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                </div>
+                {/* Categories list - 300px fixed width */}
+                <div className="w-[300px] border-r border-gray-200">
 
-                {/* Subcategories panel */}
-                {hoveredCategory && (
-                  <div className="w-150 p-4">
-                    <div className="max-h-[400px] overflow-y-auto">
-                      {(() => {
-                        const category = categories.find(cat => cat._id === hoveredCategory);
-                        if (!category || !category.subcategories || category.subcategories.length === 0) {
-                          return (
-                            <div className="p-4 text-center text-gray-500">
-                              <p className="text-sm">Keine Unterkategorien verfügbar</p>
-                            </div>
-                          );
-                        }
+                      <h3 className="text-lg font-semibold text-gray-900 px-3 py-4 border-b border-gray-100">
+                        Kategorien
+                      </h3>
+                      <div className="max-h-[500px] overflow-y-auto">
+                        {/* Alle Produkte Option */}
+                        <button
+                          onClick={() => router.push('/shop')}
+                          className="w-full text-left px-4 py-3 text-base hover:bg-gray-50 rounded-md transition-colors font-semibold text-blue-600"
+                        >
+                          Alle Produkte
+                        </button>
                         
-                        return (
-                          <>
-                            <h3 className="text-base font-semibold text-gray-900 px-3 py-3 border-b border-gray-100">
-                              {category.name} - Unterkategorien
-                            </h3>
-                            <div className="grid grid-cols-1 gap-1">
-                              {category.subcategories.map((subcategory) => (
-                                <button
-                                  key={subcategory._id}
-                                  onClick={() => handleSubcategoryClick(subcategory, category)}
-                                  className="text-left px-4 py-3 text-sm text-gray-700 hover:bg-gray-50 rounded-md transition-colors"
-                                >
-                                  <div className="flex items-center gap-3">
-                                    {subcategory.imageSizes?.small && (
-                                      <img
-                                        src={subcategory.imageSizes.small}
-                                        alt={subcategory.name}
-                                        className="w-6 h-6 object-cover rounded"
-                                      />
-                                    )}
-                                    <span className="text-sm font-medium">{subcategory.name}</span>
-                                  </div>
-                                </button>
-                              ))}
+                        {categories && categories.length > 0 ? categories.map((category) => (
+                          <button
+                            key={category._id}
+                            onMouseEnter={() => setHoveredCategory(category._id)}
+                            onClick={() => handleCategoryClick(category)}
+                            className={`w-full text-left px-4 py-2 text-base hover:bg-gray-50 rounded-md transition-colors ${
+                              hoveredCategory === category._id ? 'bg-gray-50' : ''
+                            }`}
+                          >
+                            <div className="flex items-center justify-between">
+                              <div className="flex items-center gap-3">
+                                {category.imageSizes?.small && (
+                                  <img
+                                    src={category.imageSizes.small}
+                                    alt={category.name}
+                                    className="w-8 h-8 object-cover rounded"
+                                  />
+                                )}
+                                <span className="text-gray-700 text-base font-medium">{category.name}</span>
+                              </div>
+                              {category.subcategories && category.subcategories.length > 0 && (
+                                <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                                </svg>
+                              )}
                             </div>
-                          </>
-                        );
-                      })()}
-                    </div>
+                          </button>
+                        )) : (
+                          <div className="p-4 text-center text-gray-500">
+                            <p className="text-sm">Kategorien werden geladen...</p>
+                          </div>
+                        )}
+                      </div>
                   </div>
-                )}
+
+                  {/* Subcategories panel - takes remaining space */}
+                  {hoveredCategory && (
+                    <div className="w-[300px] p-6">
+                      <div className="max-h-[500px] overflow-y-auto">
+                        {(() => {
+                          const category = categories.find(cat => cat._id === hoveredCategory);
+                          if (!category || !category.subcategories || category.subcategories.length === 0) {
+                            return (
+                              <div className="p-4 text-center text-gray-500">
+                                <p className="text-sm">Keine Unterkategorien verfügbar</p>
+                              </div>
+                            );
+                          }
+                          
+                          return (
+                            <>
+                              <h3 className="text-lg font-semibold text-gray-900 px-3 py-4 border-b border-gray-100">
+                                {category.name} - Unterkategorien
+                              </h3>
+                              <div className="grid grid-cols-1 gap-1">
+                                {category.subcategories.map((subcategory) => (
+                                  <button
+                                    key={subcategory._id}
+                                    onClick={() => handleSubcategoryClick(subcategory, category)}
+                                    className="text-left px-4 py-3 text-sm text-gray-700 hover:bg-gray-50 rounded-md transition-colors"
+                                  >
+                                    <div className="flex items-center gap-3">
+                                      {subcategory.imageSizes?.small && (
+                                        <img
+                                          src={subcategory.imageSizes.small}
+                                          alt={subcategory.name}
+                                          className="w-6 h-6 object-cover rounded"
+                                        />
+                                      )}
+                                      <span className="text-sm font-medium">{subcategory.name}</span>
+                                    </div>
+                                  </button>
+                                ))}
+                              </div>
+                            </>
+                          );
+                        })()}
+                      </div>
+                    </div>
+                  )}
+                </div>
               </div>
-            </div>
           )}
           </div>
 

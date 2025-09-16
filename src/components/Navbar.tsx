@@ -28,7 +28,7 @@ export default function Navbar() {
           : "bg-white/90 backdrop-blur-sm shadow-md border-b border-blue-200/30"
       }`}
     >
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-4">
         <div className="h-16 flex items-center justify-between">
           {/* Logo Section - bleibt unverändert */}
           <Link 
