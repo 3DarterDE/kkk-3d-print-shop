@@ -48,7 +48,44 @@ export default function SearchBar({
   const [isLoading, setIsLoading] = useState(false);
   const [showDropdown, setShowDropdown] = useState(false);
   const [selectedIndex, setSelectedIndex] = useState(-1);
+  const [currentPlaceholders, setCurrentPlaceholders] = useState<string[]>([]);
   const router = useRouter();
+
+  // Liste mit vielen Suchbegriffen
+  const searchTerms = [
+    "Dartpfeile", "Boards", "Dartboards", "Steeldarts", "Softdarts", 
+    "Surrounds", "Autodarts", "Kameras", "LED", 
+    "Luke Humphries", "Luke Littler", "Michael van Gerwen", "Stephen Bunting", 
+    "James Wade", "Jonny Clayton", "Gerwyn Price", "Chris Dobey", "Rob Cross", 
+    "Damon Heta", "Josh Rock", "Gary Anderson", "Ross Smith", "Dave Chisnall", 
+    "Danny Noppert", "Peter Wright", "Martin Schindler", "Gian van Veen", 
+    "Mike De Decker", "Ryan Searle", "Michael Smith", "Dimitri Van den Bergh", 
+    "Nathan Aspinall", "Ryan Joyce", "Jermaine Wattimena", "Joe Cullen", 
+    "Daryl Gurney", "Andrew Gilding", "Ritchie Edhouse", "Ricardo Pietreczko", 
+    "Luke Woodhouse", "Dirk van Duijvenbode",
+    "Winmau", "Target", "Unicorn", "Harrows", "Red Dragon", "Shot!", "Bull’s", 
+    "Mission", "Loxley", "Cosmo Darts", "One80", "Datadart", "Designa", "Bottelsen", "Pentathlon"
+    ];
+
+  // Funktion zum zufälligen Auswählen von 3 Suchbegriffen
+  const getRandomPlaceholders = () => {
+    const shuffled = [...searchTerms].sort(() => 0.5 - Math.random());
+    return shuffled.slice(0, 3);
+  };
+
+  // Initiale Platzhalter setzen
+  useEffect(() => {
+    setCurrentPlaceholders(getRandomPlaceholders());
+  }, []);
+
+  // Platzhalter alle 4 Sekunden wechseln
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setCurrentPlaceholders(getRandomPlaceholders());
+    }, 4000);
+
+    return () => clearInterval(interval);
+  }, []);
   
   const searchRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -254,7 +291,7 @@ export default function SearchBar({
         <input
           ref={inputRef}
           type="text"
-          placeholder={placeholder}
+          placeholder={currentPlaceholders.length > 0 ? currentPlaceholders.join(', ') : placeholder}
           value={query}
           onChange={handleInputChange}
           onKeyDown={handleKeyDown}

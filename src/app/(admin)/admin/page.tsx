@@ -46,13 +46,13 @@ export default function AdminPage() {
   const [activeTab, setActiveTab] = useState<'products' | 'categories' | 'manufacturers' | 'filters'>('products');
   
   // Filter state
-  const [filters, setFilters] = useState<Array<{ _id: string; name: string; type: string; options: Array<{ name: string; value: string; sortOrder: number }>; sortOrder: number }>>([]);
+  const [filters, setFilters] = useState<Array<{ _id: string; name: string; type: string; options: Array<{ name: string; value: string; sortOrder: number; color?: string }>; sortOrder: number }>>([]);
   const [showFilterForm, setShowFilterForm] = useState(false);
-  const [editingFilter, setEditingFilter] = useState<{ _id: string; name: string; type: string; options: Array<{ name: string; value: string; sortOrder: number }>; sortOrder: number } | null>(null);
+  const [editingFilter, setEditingFilter] = useState<{ _id: string; name: string; type: string; options: Array<{ name: string; value: string; sortOrder: number; color?: string }>; sortOrder: number } | null>(null);
   const [filterFormData, setFilterFormData] = useState({
     name: '',
-    type: 'select' as 'text' | 'number' | 'select' | 'multiselect' | 'range',
-    options: [] as Array<{ name: string; value: string; sortOrder: number }>
+    type: 'select' as 'text' | 'number' | 'select' | 'multiselect' | 'range' | 'color',
+    options: [] as Array<{ name: string; value: string; sortOrder: number; color?: string }>
   });
   
   // Product filter state
@@ -230,6 +230,8 @@ export default function AdminPage() {
         sortOrder: (filters || []).length
       };
       
+      console.log('Saving filter data:', filterData);
+      
       let response;
       if (editingFilter) {
         response = await fetch(`/api/admin/filters`, {
@@ -284,7 +286,12 @@ export default function AdminPage() {
   const addFilterOption = () => {
     setFilterFormData(prev => ({
       ...prev,
-      options: [...prev.options, { name: '', value: '', sortOrder: prev.options.length }]
+      options: [...prev.options, { 
+        name: '', 
+        value: '', 
+        sortOrder: prev.options.length,
+        color: filterFormData.type === 'color' ? '#000000' : undefined
+      }]
     }));
   };
 
@@ -295,7 +302,7 @@ export default function AdminPage() {
     }));
   };
 
-  const updateFilterOption = (index: number, field: 'name' | 'value', value: string) => {
+  const updateFilterOption = (index: number, field: 'name' | 'value' | 'color', value: string) => {
     setFilterFormData(prev => ({
       ...prev,
       options: prev.options.map((option, i) => 
@@ -2851,6 +2858,47 @@ export default function AdminPage() {
                                     </label>
                                   ))}
                                 </div>
+                              ) : filter.type === 'color' ? (
+                                <div className="flex flex-wrap gap-2">
+                                  {filter.options.map((option) => {
+                                    const isSelected = selectedProductFilters
+                                      .find(pf => pf.filterId === filter._id)
+                                      ?.values.includes(option.value) || false;
+                                    
+                                    return (
+                                      <button
+                                        key={option.value}
+                                        type="button"
+                                        onClick={() => {
+                                          const productFilter = selectedProductFilters.find(pf => pf.filterId === filter._id);
+                                          if (!productFilter) return;
+                                          
+                                          let newValues: string[];
+                                          if (isSelected) {
+                                            newValues = productFilter.values.filter(v => v !== option.value);
+                                          } else {
+                                            newValues = [...productFilter.values, option.value];
+                                          }
+                                          
+                                          setSelectedProductFilters(prev =>
+                                            prev.map(pf =>
+                                              pf.filterId === filter._id
+                                                ? { ...pf, values: newValues }
+                                                : pf
+                                            )
+                                          );
+                                        }}
+                                        className={`w-8 h-8 rounded-full border-2 transition-all hover:scale-110 ${
+                                          isSelected
+                                            ? 'border-gray-800 shadow-lg'
+                                            : 'border-gray-300 hover:border-gray-500'
+                                        }`}
+                                        style={{ backgroundColor: option.color || '#000000' }}
+                                        title={`${option.name} ${isSelected ? '(ausgewählt)' : '(auswählen)'}`}
+                                      />
+                                    );
+                                  })}
+                                </div>
                               ) : (
                                 <input
                                   type={filter.type === 'number' ? 'number' : 'text'}
@@ -3235,13 +3283,14 @@ export default function AdminPage() {
                   >
                     <option value="select">Select (Dropdown)</option>
                     <option value="multiselect">Multi-Select</option>
+                    <option value="color">Color</option>
                     <option value="text">Text Input</option>
                     <option value="number">Number Input</option>
                     <option value="range">Range Slider</option>
                   </select>
                 </div>
 
-                {(filterFormData.type === 'select' || filterFormData.type === 'multiselect') && (
+                {(filterFormData.type === 'select' || filterFormData.type === 'multiselect' || filterFormData.type === 'color') && (
                   <div>
                     <div className="flex justify-between items-center mb-2">
                       <label className="block text-sm font-medium text-gray-700">
@@ -3269,6 +3318,14 @@ export default function AdminPage() {
                             }}
                             className="flex-1 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                           />
+                          {filterFormData.type === 'color' && (
+                            <input
+                              type="color"
+                              value={option.color || '#000000'}
+                              onChange={(e) => updateFilterOption(index, 'color', e.target.value)}
+                              className="w-12 h-10 border border-gray-300 rounded-md cursor-pointer"
+                            />
+                          )}
                           <button
                             type="button"
                             onClick={() => removeFilterOption(index)}

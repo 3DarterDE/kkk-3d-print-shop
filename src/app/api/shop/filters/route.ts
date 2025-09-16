@@ -15,14 +15,20 @@ export async function GET(request: NextRequest) {
       options: [{
         name: String,
         value: String,
-        sortOrder: Number
+        sortOrder: Number,
+        color: String
       }],
       sortOrder: Number,
       createdAt: Date,
       updatedAt: Date
     });
     
-    const FilterModel = mongoose.models.Filter || mongoose.model('Filter', FilterSchema);
+    // Force schema update by deleting the existing model
+    if (mongoose.models.Filter) {
+      delete mongoose.models.Filter;
+    }
+    
+    const FilterModel = mongoose.model('Filter', FilterSchema);
     
     // For now, just return all filters
     // TODO: Implement category-based filtering when product filters are set up

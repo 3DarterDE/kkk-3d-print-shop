@@ -3,12 +3,13 @@ export interface FilterOption {
   name: string;
   value: string;
   sortOrder: number;
+  color?: string; // Hex color code for color filters
 }
 
 export interface Filter {
   _id?: string;
   name: string;
-  type: 'text' | 'number' | 'select' | 'multiselect' | 'range';
+  type: 'text' | 'number' | 'select' | 'multiselect' | 'range' | 'color';
   options: FilterOption[];
   sortOrder: number;
   createdAt?: Date;

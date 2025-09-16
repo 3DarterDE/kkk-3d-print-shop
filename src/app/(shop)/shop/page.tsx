@@ -54,6 +54,9 @@ export default function ShopPage({ searchParams }: { searchParams: Promise<{ cat
   const [productFilters, setProductFilters] = useState<Record<string, any[]>>({});
   const [allFilters, setAllFilters] = useState<any[]>([]);
   const [isPriceFilterModified, setIsPriceFilterModified] = useState(false);
+  const [showTopSellers, setShowTopSellers] = useState(false);
+  const [showSaleItems, setShowSaleItems] = useState(false);
+  const [showAvailableOnly, setShowAvailableOnly] = useState(false);
 
   // Load product filters for all products
   const loadProductFilters = async (products: any[]) => {
@@ -236,6 +239,23 @@ export default function ShopPage({ searchParams }: { searchParams: Promise<{ cat
     return product.isOnSale && product.offerPrice ? product.offerPrice : product.price;
   };
 
+  // Helper function to check if product or any of its variations are available
+  const isProductAvailable = (product: any) => {
+    // Check main product stock
+    if (product.inStock) return true;
+    
+    // Check if any variation is available
+    if (product.variations && product.variations.length > 0) {
+      return product.variations.some((variation: any) => 
+        variation.options && variation.options.some((option: any) => 
+          option.inStock === true || (option.stockQuantity && option.stockQuantity > 0)
+        )
+      );
+    }
+    
+    return false;
+  };
+
   // Calculate price range from all products
   const calculatePriceRange = (products: any[]) => {
     if (products.length === 0) return { min: 0, max: 1000 };
@@ -378,6 +398,11 @@ export default function ShopPage({ searchParams }: { searchParams: Promise<{ cat
           break;
       }
     }
+    
+    // Additional filter checkboxes
+    if (showTopSellers && !p.isTopSeller) return false;
+    if (showSaleItems && !p.isOnSale) return false;
+    if (showAvailableOnly && !isProductAvailable(p)) return false;
     
     return true;
   });
@@ -726,8 +751,8 @@ export default function ShopPage({ searchParams }: { searchParams: Promise<{ cat
 
   return (
     <>
-      {/* Breadcrumb - only show if category is selected, positioned sticky under CategoryNavigation */}
-      {resolvedSearchParams.category && <Breadcrumb />}
+      {/* Breadcrumb - show if category or filter is selected, positioned sticky under CategoryNavigation */}
+      {(resolvedSearchParams.category || resolvedSearchParams.filter) && <Breadcrumb />}
       
       <div className="max-w-7xl mx-auto px-4 py-10">
         {/* Search Results Info - only show if there are products or if we're not in a category */}
@@ -745,10 +770,10 @@ export default function ShopPage({ searchParams }: { searchParams: Promise<{ cat
       <div className="flex">
         {/* Left Sidebar - Filters */}
         <div className="w-80 flex-shrink-0 pr-8">
-          <div className="space-y-6">
+          <div className="space-y-4">
             {/* Price Filter */}
             <div>
-              <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center justify-between mb-3">
                 <h2 className="text-lg font-semibold">Preis</h2>
                 {isPriceFilterModified && (
                   <button
@@ -763,12 +788,12 @@ export default function ShopPage({ searchParams }: { searchParams: Promise<{ cat
                   </button>
                 )}
               </div>
-              <div className="space-y-4">
+              <div className="space-y-3">
                 
-                <div className="space-y-4">
+                <div className="space-y-3">
                   {/* Range Slider Container */}
                   <div className="relative">
-                    <div className="relative h-2 bg-gray-200 rounded-lg">
+                    <div className="relative h-2 bg-gray-200 rounded-lg mx-2">
                       {/* Active range track */}
                       <div 
                         className="absolute h-2 bg-blue-500 rounded-lg"
@@ -801,12 +826,20 @@ export default function ShopPage({ searchParams }: { searchParams: Promise<{ cat
                             const deltaPercent = (deltaX / rect.width) * 100;
                             const deltaValue = (deltaPercent / 100) * range;
                             const newValue = Math.max(minPrice, Math.min(maxPrice, startValue + deltaValue));
+                            const clampedValue = Math.min(newValue, priceRange.max - 100);
                             
-                            setPriceRange(prev => ({
-                              ...prev,
-                              min: Math.min(newValue, prev.max - 100)
-                            }));
-                            setIsPriceFilterModified(true);
+                            // Check if values are back to original range - if so, reset filter
+                            if (clampedValue === minPrice && priceRange.max === maxPrice) {
+                              const originalRange = calculatePriceRange(allProducts);
+                              setPriceRange(originalRange);
+                              setIsPriceFilterModified(false);
+                            } else {
+                              setPriceRange(prev => ({
+                                ...prev,
+                                min: clampedValue
+                              }));
+                              setIsPriceFilterModified(true);
+                            }
                           };
                           
                           const handleMouseUp = () => {
@@ -842,12 +875,20 @@ export default function ShopPage({ searchParams }: { searchParams: Promise<{ cat
                             const deltaPercent = (deltaX / rect.width) * 100;
                             const deltaValue = (deltaPercent / 100) * range;
                             const newValue = Math.max(minPrice, Math.min(maxPrice, startValue + deltaValue));
+                            const clampedValue = Math.max(newValue, priceRange.min + 100);
                             
-                            setPriceRange(prev => ({
-                              ...prev,
-                              max: Math.max(newValue, prev.min + 100)
-                            }));
-                            setIsPriceFilterModified(true);
+                            // Check if values are back to original range - if so, reset filter
+                            if (priceRange.min === minPrice && clampedValue === maxPrice) {
+                              const originalRange = calculatePriceRange(allProducts);
+                              setPriceRange(originalRange);
+                              setIsPriceFilterModified(false);
+                            } else {
+                              setPriceRange(prev => ({
+                                ...prev,
+                                max: clampedValue
+                              }));
+                              setIsPriceFilterModified(true);
+                            }
                           };
                           
                           const handleMouseUp = () => {
@@ -862,7 +903,7 @@ export default function ShopPage({ searchParams }: { searchParams: Promise<{ cat
                     </div>
                     
                     {/* Min/Max labels */}
-                    <div className="flex justify-between text-xs text-gray-500 mt-2">
+                    <div className="flex justify-between text-xs text-gray-500 mt-2 mx-2">
                       <span>{(calculatePriceRange(allProducts).min / 100).toFixed(0)} €</span>
                       <span>{(calculatePriceRange(allProducts).max / 100).toFixed(0)} €</span>
                     </div>
@@ -877,7 +918,7 @@ export default function ShopPage({ searchParams }: { searchParams: Promise<{ cat
                 </div>
                 
                 {/* Trennstrich */}
-                <div className="border-b border-gray-200 mt-6"></div>
+                <div className="border-b border-gray-200 mt-4"></div>
               </div>
             </div>
             
@@ -896,6 +937,111 @@ export default function ShopPage({ searchParams }: { searchParams: Promise<{ cat
               currentCategoryProducts={filteredProducts}
               priceRange={priceRange}
             />
+            
+            {/* Top Seller Filter - only show if there are top sellers in current category */}
+            {filteredProducts.some(p => p.isTopSeller) && (
+            <div>
+              <div className="flex items-center justify-between mb-3">
+                <h2 className="text-lg font-semibold">Top Seller</h2>
+                {showTopSellers && (
+                  <button
+                    onClick={() => setShowTopSellers(false)}
+                    className="text-sm text-blue-600 hover:text-blue-800 hover:underline transition-colors"
+                  >
+                    Filter zurücksetzen
+                  </button>
+                )}
+              </div>
+              <div className="space-y-2">
+                <label className="flex items-center">
+                  <input
+                    type="checkbox"
+                    checked={showTopSellers}
+                    onChange={(e) => setShowTopSellers(e.target.checked)}
+                    className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                  />
+                  <span className="ml-1 text-sm text-gray-700 flex items-center justify-between w-full">
+                    <span>Nur Top Seller anzeigen</span>
+                    <span className="text-xs text-gray-500 bg-gray-100 w-6 h-6 rounded-full flex items-center justify-center">
+                      {filteredProducts.filter(p => p.isTopSeller).length}
+                    </span>
+                  </span>
+                </label>
+              </div>
+              
+              {/* Trennstrich */}
+              <div className="border-b border-gray-200 mt-4"></div>
+            </div>
+            )}
+            
+            {/* Sale Filter - only show if there are sale items in current category */}
+            {filteredProducts.some(p => p.isOnSale) && (
+            <div>
+              <div className="flex items-center justify-between mb-3">
+                <h2 className="text-lg font-semibold">Sale</h2>
+                {showSaleItems && (
+                  <button
+                    onClick={() => setShowSaleItems(false)}
+                    className="text-sm text-blue-600 hover:text-blue-800 hover:underline transition-colors"
+                  >
+                    Filter zurücksetzen
+                  </button>
+                )}
+              </div>
+              <div className="space-y-2">
+                <label className="flex items-center">
+                  <input
+                    type="checkbox"
+                    checked={showSaleItems}
+                    onChange={(e) => setShowSaleItems(e.target.checked)}
+                    className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                  />
+                  <span className="ml-1 text-sm text-gray-700 flex items-center justify-between w-full">
+                    <span>Im Angebot</span>
+                    <span className="text-xs text-gray-500 bg-gray-100 w-6 h-6 rounded-full flex items-center justify-center">
+                      {filteredProducts.filter(p => p.isOnSale).length}
+                    </span>
+                  </span>
+                </label>
+              </div>
+              
+              {/* Trennstrich */}
+              <div className="border-b border-gray-200 mt-4"></div>
+            </div>
+            )}
+            
+            {/* Verfügbar Filter - only show if there are available items in current category */}
+            {filteredProducts.some(p => isProductAvailable(p)) && (
+            <div>
+              <div className="flex items-center justify-between mb-3">
+                <h2 className="text-lg font-semibold">Verfügbar</h2>
+                {showAvailableOnly && (
+                  <button
+                    onClick={() => setShowAvailableOnly(false)}
+                    className="text-sm text-blue-600 hover:text-blue-800 hover:underline transition-colors"
+                  >
+                    Filter zurücksetzen
+                  </button>
+                )}
+              </div>
+              <div className="space-y-2">
+                <label className="flex items-center">
+                  <input
+                    type="checkbox"
+                    checked={showAvailableOnly}
+                    onChange={(e) => setShowAvailableOnly(e.target.checked)}
+                    className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                  />
+                  <span className="ml-1 text-sm text-gray-700 flex items-center justify-between w-full">
+                    <span>Auf Lager</span>
+                    <span className="text-xs text-gray-500 bg-gray-100 w-6 h-6 rounded-full flex items-center justify-center">
+                      {filteredProducts.filter(p => isProductAvailable(p)).length}
+                    </span>
+                  </span>
+                </label>
+              </div>
+            </div>
+            )}
             
           </div>
         </div>
@@ -947,7 +1093,7 @@ export default function ShopPage({ searchParams }: { searchParams: Promise<{ cat
                       </div>
                     );
                   } else {
-                    // Multiselect filter buttons
+                    // Multiselect and color filter buttons
                     return values.map((value) => {
                       const option = filter.options?.find((opt: any) => opt.value === value);
                       return (
@@ -955,7 +1101,16 @@ export default function ShopPage({ searchParams }: { searchParams: Promise<{ cat
                           key={`${filterId}-${value}`}
                           className="inline-flex items-center px-3 py-1 rounded-full text-sm bg-blue-100 text-blue-800 border border-blue-200"
                         >
-                          <span className="mr-2">{filter.name}: {option?.name || value}</span>
+                          <div className="flex items-center mr-2">
+                            {filter.type === 'color' && option?.color ? (
+                              <div 
+                                className="w-1 h-1 rounded-full border border-gray-300"
+                                style={{ backgroundColor: option.color }}
+                              />
+                            ) : (
+                              <span>{filter.name}: {option?.name || value}</span>
+                            )}
+                          </div>
                           <button
                             onClick={() => {
                               const newValues = values.filter(v => v !== value);
@@ -996,6 +1151,51 @@ export default function ShopPage({ searchParams }: { searchParams: Promise<{ cat
                         setPriceRange(range);
                         setIsPriceFilterModified(false);
                       }}
+                      className="ml-1 hover:text-red-600 transition-colors"
+                    >
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                      </svg>
+                    </button>
+                  </div>
+                )}
+                
+                {/* Top Seller Filter Button */}
+                {showTopSellers && (
+                  <div className="inline-flex items-center px-3 py-1 rounded-full text-sm bg-blue-100 text-blue-800 border border-blue-200">
+                    <span className="mr-2">Top Seller</span>
+                    <button
+                      onClick={() => setShowTopSellers(false)}
+                      className="ml-1 hover:text-red-600 transition-colors"
+                    >
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                      </svg>
+                    </button>
+                  </div>
+                )}
+                
+                {/* Sale Filter Button */}
+                {showSaleItems && (
+                  <div className="inline-flex items-center px-3 py-1 rounded-full text-sm bg-blue-100 text-blue-800 border border-blue-200">
+                    <span className="mr-2">Sale</span>
+                    <button
+                      onClick={() => setShowSaleItems(false)}
+                      className="ml-1 hover:text-red-600 transition-colors"
+                    >
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                      </svg>
+                    </button>
+                  </div>
+                )}
+                
+                {/* Verfügbar Filter Button */}
+                {showAvailableOnly && (
+                  <div className="inline-flex items-center px-3 py-1 rounded-full text-sm bg-blue-100 text-blue-800 border border-blue-200">
+                    <span className="mr-2">Verfügbar</span>
+                    <button
+                      onClick={() => setShowAvailableOnly(false)}
                       className="ml-1 hover:text-red-600 transition-colors"
                     >
                       <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">

@@ -14,15 +14,23 @@ export async function GET() {
       options: [{
         name: String,
         value: String,
-        sortOrder: Number
+        sortOrder: Number,
+        color: String
       }],
       sortOrder: Number,
       createdAt: Date,
       updatedAt: Date
     });
     
-    const FilterModel = mongoose.models.Filter || mongoose.model('Filter', FilterSchema);
+    // Force schema update by deleting the existing model
+    if (mongoose.models.Filter) {
+      delete mongoose.models.Filter;
+    }
+    
+    const FilterModel = mongoose.model('Filter', FilterSchema);
     const filters = await FilterModel.find({}).sort({ sortOrder: 1 });
+    
+    console.log('Returning filters:', JSON.stringify(filters, null, 2));
     
     return NextResponse.json(filters);
   } catch (error) {
@@ -36,20 +44,28 @@ export async function POST(request: NextRequest) {
     await connectToDatabase();
     const data = await request.json();
     
+    console.log('Received filter data:', JSON.stringify(data, null, 2));
+    
     const FilterSchema = new mongoose.Schema({
       name: String,
       type: String,
       options: [{
         name: String,
         value: String,
-        sortOrder: Number
+        sortOrder: Number,
+        color: String
       }],
       sortOrder: Number,
       createdAt: Date,
       updatedAt: Date
     });
     
-    const FilterModel = mongoose.models.Filter || mongoose.model('Filter', FilterSchema);
+    // Force schema update by deleting the existing model
+    if (mongoose.models.Filter) {
+      delete mongoose.models.Filter;
+    }
+    
+    const FilterModel = mongoose.model('Filter', FilterSchema);
     
     const filter = new FilterModel({
       ...data,
@@ -77,14 +93,20 @@ export async function PUT(request: NextRequest) {
       options: [{
         name: String,
         value: String,
-        sortOrder: Number
+        sortOrder: Number,
+        color: String
       }],
       sortOrder: Number,
       createdAt: Date,
       updatedAt: Date
     });
     
-    const FilterModel = mongoose.models.Filter || mongoose.model('Filter', FilterSchema);
+    // Force schema update by deleting the existing model
+    if (mongoose.models.Filter) {
+      delete mongoose.models.Filter;
+    }
+    
+    const FilterModel = mongoose.model('Filter', FilterSchema);
     
     const result = await FilterModel.findByIdAndUpdate(
       _id,
@@ -119,14 +141,20 @@ export async function DELETE(request: NextRequest) {
       options: [{
         name: String,
         value: String,
-        sortOrder: Number
+        sortOrder: Number,
+        color: String
       }],
       sortOrder: Number,
       createdAt: Date,
       updatedAt: Date
     });
     
-    const FilterModel = mongoose.models.Filter || mongoose.model('Filter', FilterSchema);
+    // Force schema update by deleting the existing model
+    if (mongoose.models.Filter) {
+      delete mongoose.models.Filter;
+    }
+    
+    const FilterModel = mongoose.model('Filter', FilterSchema);
     
     // Also delete all product filters that use this filter
     const ProductFilterSchema = new mongoose.Schema({

@@ -71,24 +71,10 @@ export default function DynamicFilters({
 
     // Add a small delay to prevent flicker
     const timeoutId = setTimeout(() => {
-      if (categoryId) {
-        // For specific categories, only show filters if we have products AND product filters loaded
-        if (currentCategoryProducts.length > 0 && Object.keys(productFilters).length > 0) {
-          // Filter to only show filters that are used in this specific category
-          const relevantFilters = allFilters.filter((filter: Filter) => {
-            // Check if any product in THIS category has this filter
-            return currentCategoryProducts.some(product => {
-              const productFilterList = productFilters[product._id] || [];
-              return productFilterList.some(pf => pf.filterId === filter._id?.toString());
-            });
-          });
-          setFilters(relevantFilters);
-        } else {
-          // Don't show any filters if we don't have products or product filters yet
-          setFilters([]);
-        }
-      } else if (!categoryId && currentCategoryProducts.length > 0) {
-        // For search results or "all products", only show filters used by current products
+      // Always use currentCategoryProducts to determine which filters to show
+      // This works for categories, search results, special filters (topseller, sale, neu), etc.
+      if (currentCategoryProducts.length > 0 && Object.keys(productFilters).length > 0) {
+        // Filter to only show filters that are used by the current products
         const relevantFilters = allFilters.filter((filter: Filter) => {
           // Check if any product in current results has this filter
           return currentCategoryProducts.some(product => {
@@ -98,7 +84,7 @@ export default function DynamicFilters({
         });
         setFilters(relevantFilters);
       } else {
-        // No products or no category
+        // Don't show any filters if we don't have products or product filters yet
         setFilters([]);
       }
     }, 100); // 100ms delay to prevent flicker
@@ -228,10 +214,10 @@ export default function DynamicFilters({
         const hasActiveFilter = (selectedFilters[filter._id!] || []).length > 0;
         
         return (
-          <div key={filter._id} className="border-b border-gray-200 pb-6">
+          <div key={filter._id} className="border-b border-gray-200 pb-4">
             <button
               onClick={() => toggleFilter(filter._id!)}
-              className="flex items-center justify-between w-full text-left mb-4 hover:text-blue-600 transition-colors"
+              className="flex items-center justify-between w-full text-left mb-3 hover:text-blue-600 transition-colors"
             >
               <h3 className="text-lg font-semibold">{filter.name}</h3>
               <div className="flex items-center space-x-2">
@@ -255,12 +241,13 @@ export default function DynamicFilters({
               <div className="filter-content">
           
           {filter.type === 'select' && (
-            <div className="space-y-2">
+            <div className="space-y-1">
               {filter.options
                 .map((option) => ({
                   ...option,
                   productCount: getProductCountForOption(filter._id!, option.value)
                 }))
+                .filter((option) => option.productCount > 0)
                 .map((option) => (
                 <label key={option.value} className="flex items-center">
                   <input
@@ -282,9 +269,9 @@ export default function DynamicFilters({
                     }}
                     className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
                   />
-                  <span className="ml-2 text-sm text-gray-700 flex items-center justify-between w-full">
+                  <span className="ml-1 text-sm text-gray-700 flex items-center justify-between w-full">
                     <span>{option.name}</span>
-                    <span className="text-xs text-gray-500 bg-gray-100 px-2 py-1 rounded-full">
+                    <span className="text-xs text-gray-500 bg-gray-100 w-6 h-6 rounded-full flex items-center justify-center">
                       {getProductCountForOption(filter._id!, option.value)}
                     </span>
                   </span>
@@ -294,12 +281,13 @@ export default function DynamicFilters({
           )}
           
           {filter.type === 'multiselect' && (
-            <div className="space-y-2">
+            <div className="space-y-1">
               {filter.options
                 .map((option) => ({
                   ...option,
                   productCount: getProductCountForOption(filter._id!, option.value)
                 }))
+                .filter((option) => option.productCount > 0)
                 .map((option) => (
                 <label key={option.value} className="flex items-center">
                   <input
@@ -324,9 +312,9 @@ export default function DynamicFilters({
                     }}
                     className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
                   />
-                  <span className="ml-2 text-sm text-gray-700 flex items-center justify-between w-full">
+                  <span className="ml-1 text-sm text-gray-700 flex items-center justify-between w-full">
                     <span>{option.name}</span>
-                    <span className="text-xs text-gray-500 bg-gray-100 px-2 py-1 rounded-full">
+                    <span className="text-xs text-gray-500 bg-gray-100 w-6 h-6 rounded-full flex items-center justify-center">
                       {getProductCountForOption(filter._id!, option.value)}
                     </span>
                   </span>
@@ -369,10 +357,10 @@ export default function DynamicFilters({
             
             
             return (
-              <div className="space-y-4">
+              <div className="space-y-3">
                 {/* Range Slider Container */}
                 <div className="relative">
-                  <div className="relative h-2 bg-gray-200 rounded-lg">
+                  <div className="relative h-2 bg-gray-200 rounded-lg mx-2">
                     {/* Active range track */}
                     <div 
                       className="absolute h-2 bg-blue-500 rounded-lg"
@@ -405,7 +393,12 @@ export default function DynamicFilters({
                           const newValue = rangeValues.min + (percent / 100) * range;
                           const clampedValue = Math.max(rangeValues.min, Math.min(maxValue - 1, Math.round(newValue)));
                           
-                          onFilterChange(filter._id!, [clampedValue.toString(), maxValue.toString()]);
+                          // Check if values are back to original range - if so, remove filter
+                          if (clampedValue === rangeValues.min && maxValue === rangeValues.max) {
+                            onFilterChange(filter._id!, []);
+                          } else {
+                            onFilterChange(filter._id!, [clampedValue.toString(), maxValue.toString()]);
+                          }
                         };
                         
                         const handleMouseUp = () => {
@@ -441,7 +434,12 @@ export default function DynamicFilters({
                           const newValue = rangeValues.min + (percent / 100) * range;
                           const clampedValue = Math.max(minValue + 1, Math.min(rangeValues.max, Math.round(newValue)));
                           
-                          onFilterChange(filter._id!, [minValue.toString(), clampedValue.toString()]);
+                          // Check if values are back to original range - if so, remove filter
+                          if (minValue === rangeValues.min && clampedValue === rangeValues.max) {
+                            onFilterChange(filter._id!, []);
+                          } else {
+                            onFilterChange(filter._id!, [minValue.toString(), clampedValue.toString()]);
+                          }
                         };
                         
                         const handleMouseUp = () => {
@@ -456,7 +454,7 @@ export default function DynamicFilters({
                   </div>
                   
                   {/* Min/Max labels */}
-                  <div className="flex justify-between text-xs text-gray-500 mt-2">
+                  <div className="flex justify-between text-xs text-gray-500 mt-2 mx-2">
                     <span>{rangeValues.min.toFixed(0)}</span>
                     <span>{rangeValues.max.toFixed(0)}</span>
                   </div>
@@ -471,6 +469,48 @@ export default function DynamicFilters({
               </div>
             );
           })()}
+
+          {filter.type === 'color' && (
+            <div className="flex flex-wrap gap-2">
+              {filter.options
+                .map((option) => ({
+                  ...option,
+                  productCount: getProductCountForOption(filter._id!, option.value)
+                }))
+                .filter((option) => option.productCount > 0)
+                .map((option) => {
+                  const isSelected = (selectedFilters[filter._id!] || []).includes(option.value);
+                  return (
+                    <button
+                      key={option.value}
+                      onClick={() => {
+                        const currentValues = selectedFilters[filter._id!] || [];
+                        const newValues = isSelected
+                          ? currentValues.filter(v => v !== option.value)
+                          : [...currentValues, option.value];
+                        console.log('Color Filter Change:', {
+                          filterId: filter._id,
+                          filterName: filter.name,
+                          optionValue: option.value,
+                          isSelected,
+                          currentValues,
+                          newValues,
+                          allSelectedFilters: selectedFilters
+                        });
+                        onFilterChange(filter._id!, newValues);
+                      }}
+                      className={`w-6 h-6 rounded-full border-2 transition-all hover:scale-110 ${
+                        isSelected 
+                          ? 'border-gray-800 shadow-lg' 
+                          : 'border-gray-300 hover:border-gray-500'
+                      }`}
+                      style={{ backgroundColor: option.color || '#000000' }}
+                      title={`${option.name} (${getProductCountForOption(filter._id!, option.value)})`}
+                    />
+                  );
+                })}
+            </div>
+          )}
 
                 {/* Clear filter button */}
                 {(selectedFilters[filter._id!] || []).length > 0 && (

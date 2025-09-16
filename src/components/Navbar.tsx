@@ -73,7 +73,6 @@ export default function Navbar() {
             {/* Search Bar */}
             <div className="hidden lg:block flex-1 max-w-md mx-8">
               <SearchBar 
-                placeholder="Luke Littler, , Boards..."
                 maxResults={6}
               />
             </div>
