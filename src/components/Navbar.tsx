@@ -11,8 +11,10 @@ export default function Navbar() {
   const count = useCartStore((s) => s.items.reduce((n, i) => n + i.quantity, 0));
   const [isScrolled, setIsScrolled] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const [isMounted, setIsMounted] = useState(false);
 
   useEffect(() => {
+    setIsMounted(true);
     const handleScroll = () => {
       setIsScrolled(window.scrollY > 10);
     };
@@ -23,7 +25,7 @@ export default function Navbar() {
   return (
     <header 
       className={`fixed top-0 left-0 right-0 z-50 transition-all duration-300 ${
-        isScrolled 
+        isMounted && isScrolled 
           ? "bg-white/95 backdrop-blur-md shadow-lg border-b border-blue-200/50" 
           : "bg-white/90 backdrop-blur-sm shadow-md border-b border-blue-200/30"
       }`}

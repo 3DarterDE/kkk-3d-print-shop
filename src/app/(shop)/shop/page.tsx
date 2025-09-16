@@ -492,13 +492,27 @@ export default function ShopPage({ searchParams }: { searchParams: Promise<{ cat
       )}
 
       {/* Main Layout: Filters on left, Products on right */}
-      <div className="flex gap-8">
+      <div className="flex">
         {/* Left Sidebar - Filters */}
-        <div className="w-80 flex-shrink-0">
-          <div className="bg-white rounded-lg shadow p-6 space-y-6">
+        <div className="w-80 flex-shrink-0 pr-8">
+          <div className="space-y-6">
             {/* Price Filter */}
             <div>
-              <h2 className="text-lg font-semibold mb-4">Preis</h2>
+              <div className="flex items-center justify-between mb-4">
+                <h2 className="text-lg font-semibold">Preis</h2>
+                {isPriceFilterModified && (
+                  <button
+                    onClick={() => {
+                      const range = calculatePriceRange(allProducts);
+                      setPriceRange(range);
+                      setIsPriceFilterModified(false);
+                    }}
+                    className="text-sm text-blue-600 hover:text-blue-800 hover:underline transition-colors"
+                  >
+                    Filter zurücksetzen
+                  </button>
+                )}
+              </div>
               <div className="space-y-4">
                 
                 <div className="space-y-4">
@@ -605,23 +619,15 @@ export default function ShopPage({ searchParams }: { searchParams: Promise<{ cat
                   </div>
                   
                   {/* Current selection display */}
-                  <div className="text-center text-sm text-gray-600">
+                  <div className="text-center text-sm text-gray-600 mt-2">
                     <span className="font-medium">{(priceRange.min / 100).toFixed(0)} €</span>
                     <span className="mx-2">-</span>
                     <span className="font-medium">{(priceRange.max / 100).toFixed(0)} €</span>
                   </div>
                 </div>
                 
-                <button
-                  onClick={() => {
-                    const range = calculatePriceRange(allProducts);
-                    setPriceRange(range);
-                    setIsPriceFilterModified(false);
-                  }}
-                  className="w-full px-3 py-2 text-sm text-blue-600 hover:text-blue-800 border border-blue-200 rounded-md hover:bg-blue-50 transition-colors"
-                >
-                  Filter zurücksetzen
-                </button>
+                {/* Trennstrich */}
+                <div className="border-b border-gray-200 mt-6"></div>
               </div>
             </div>
             
@@ -644,23 +650,17 @@ export default function ShopPage({ searchParams }: { searchParams: Promise<{ cat
           </div>
         </div>
 
+        {/* Trennstrich */}
+        <div className="w-px bg-gray-200 flex-shrink-0"></div>
+
         {/* Right Side: Products */}
-        <div className="flex-1">
+        <div className="flex-1 pl-8">
           {/* Products Section */}
           <div className="min-h-[400px]">
         {/* Category Products */}
-        <div className="bg-white rounded-lg shadow p-6 h-full">
+        <div className="h-full">
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-4">
             <div className="flex flex-col space-y-2 mb-2 sm:mb-0">
-              <h2 className="text-xl font-semibold">
-                {resolvedSearchParams.subcategory 
-                  ? categories.find(c => c.slug === resolvedSearchParams.category)?.subcategories?.find(s => s.slug === resolvedSearchParams.subcategory)?.name || 'Unterkategorie'
-                  : resolvedSearchParams.category 
-                    ? categories.find(c => c.slug === resolvedSearchParams.category)?.name || 'Kategorie'
-                    : ''
-                }
-              </h2>
-              
               {/* Active Filter Buttons */}
               <div className="flex flex-wrap gap-2">
                 {/* Dynamic Filter Buttons */}

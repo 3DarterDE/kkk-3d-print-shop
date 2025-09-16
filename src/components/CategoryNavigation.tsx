@@ -28,18 +28,12 @@ export default function CategoryNavigation({ className = "" }: CategoryNavigatio
   const [isHovered, setIsHovered] = useState(false);
   const [hoveredCategory, setHoveredCategory] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
-  const [isMounted, setIsMounted] = useState(false);
   const router = useRouter();
 
 
-  // Set mounted state
-  useEffect(() => {
-    setIsMounted(true);
-  }, []);
 
   // Fetch categories
   useEffect(() => {
-    if (!isMounted) return;
     
     const fetchCategories = async () => {
       try {
@@ -62,11 +56,10 @@ export default function CategoryNavigation({ className = "" }: CategoryNavigatio
     };
 
     fetchCategories();
-  }, [isMounted]);
+  }, []);
 
   // Handle scroll visibility
   useEffect(() => {
-    if (!isMounted) return;
     
     let lastScrollY = window.scrollY;
     let ticking = false;
@@ -94,7 +87,7 @@ export default function CategoryNavigation({ className = "" }: CategoryNavigatio
 
     window.addEventListener('scroll', onScroll);
     return () => window.removeEventListener('scroll', onScroll);
-  }, [isMounted]);
+  }, []);
 
   const handleCategoryClick = (category: Category) => {
     router.push(`/shop?category=${category.slug}`);
@@ -110,35 +103,6 @@ export default function CategoryNavigation({ className = "" }: CategoryNavigatio
 
 
 
-  if (!isMounted) {
-    return (
-      <div className={`sticky top-16 z-30 bg-white border-b border-gray-200 transition-opacity duration-300 ${className}`}>
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-4">
-          <div className="flex items-center justify-between">
-            <div className="relative">
-              <button className="flex items-center gap-2 py-3 text-gray-700 hover:text-gray-900 hover:bg-gray-50 rounded-md transition-colors">
-                <span className="font-medium">Alle Kategorien</span>
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                </svg>
-              </button>
-            </div>
-            <div className="flex items-center gap-2">
-              <button className="flex items-center gap-1 py-2 px-3 text-sm text-gray-700 hover:text-blue-600 hover:bg-blue-50 rounded-md transition-colors">
-                <span className="font-medium">Top Seller</span>
-              </button>
-              <button className="flex items-center gap-1 py-2 px-3 text-sm text-gray-700 hover:text-red-600 hover:bg-red-50 rounded-md transition-colors">
-                <span className="font-medium">Sale</span>
-              </button>
-              <button className="flex items-center gap-1 py-2 px-3 text-sm text-gray-700 hover:text-green-600 hover:bg-green-50 rounded-md transition-colors">
-                <span className="font-medium">Neu</span>
-              </button>
-            </div>
-          </div>
-        </div>
-      </div>
-    );
-  }
 
   return (
     <div className={`sticky top-16 z-30 bg-white border-b border-gray-200 transition-opacity duration-300 ${!isVisible ? 'opacity-0' : 'opacity-100'} ${className}`}>
@@ -233,7 +197,7 @@ export default function CategoryNavigation({ className = "" }: CategoryNavigatio
 
                   {/* Subcategories panel - takes remaining space */}
                   {hoveredCategory && (
-                    <div className="w-[300px] p-6">
+                    <div className="w-[300px]">
                       <div className="max-h-[500px] overflow-y-auto">
                         {(() => {
                           const category = categories.find(cat => cat._id === hoveredCategory);
@@ -248,7 +212,7 @@ export default function CategoryNavigation({ className = "" }: CategoryNavigatio
                           return (
                             <>
                               <h3 className="text-lg font-semibold text-gray-900 px-3 py-4 border-b border-gray-100">
-                                {category.name} - Unterkategorien
+                                {category.name}
                               </h3>
                               <div className="grid grid-cols-1 gap-1">
                                 {category.subcategories.map((subcategory) => (
