@@ -12,8 +12,20 @@ export default function Footer() {
           {/* Logo & Company Info */}
           <ScrollAnimation delay={0}>
           <div className="md:col-span-1">
-            <Link href="/" className="inline-block">
-              <Logo />
+            <Link href="/" className="inline-block group">
+              <div className="flex items-center gap-3 mb-1">
+                <div className="flex items-center mt-2.5 group-hover:drop-shadow-[0_0_8px_rgba(59,130,246,0.6)] transition-all duration-150">
+                  <Logo />
+                </div>
+                <div className="flex flex-col justify-center -mt-3.5">
+                  <span className="font-bold text-xl text-white group-hover:text-shadow-[0_0_8px_rgba(59,130,246,0.6)] transition-all duration-150">
+                    3DarterDE
+                  </span>
+                  <span className="text-sm text-gray-300 -mt-1 group-hover:text-shadow-[0_0_6px_rgba(59,130,246,0.5)] transition-all duration-150">
+                    Dartshop
+                  </span>
+                </div>
+              </div>
             </Link>
             <p className="text-sm text-gray-300 leading-relaxed">
               3DarterDE bietet professionelle Autodarts-Systeme und 3D-Druck auf höchstem Niveau. 
