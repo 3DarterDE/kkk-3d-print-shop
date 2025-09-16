@@ -213,10 +213,21 @@ export default function ShopPage({ searchParams }: { searchParams: Promise<{ cat
     setCategoryTopSellerPage(0);
   }, [resolvedSearchParams.category, searchQuery, priceRange, selectedDynamicFilters]);
 
-  // Reset dynamic filters when category changes
+  // Reset dynamic filters and search query when category changes
   useEffect(() => {
     setSelectedDynamicFilters({});
-  }, [resolvedSearchParams.category]);
+    // Clear search query when navigating to a category or to "all products"
+    if (resolvedSearchParams.category) {
+      setSearchQuery('');
+      // Also clear search from URL to prevent it from persisting
+      const url = new URL(window.location.href);
+      url.searchParams.delete('search');
+      window.history.replaceState({}, '', url.toString());
+    } else if (!resolvedSearchParams.category && !resolvedSearchParams.search) {
+      // Clear search when navigating to "all products" (no category, no search)
+      setSearchQuery('');
+    }
+  }, [resolvedSearchParams.category, resolvedSearchParams.search]);
 
 
 
@@ -243,13 +254,29 @@ export default function ShopPage({ searchParams }: { searchParams: Promise<{ cat
   // Debug logging for selected filters
   console.log('Selected Dynamic Filters:', selectedDynamicFilters);
 
+  // Check if search query matches a category name
+  const isCategorySearch = searchQuery.trim() && categories.some(cat => 
+    cat.name.toLowerCase() === searchQuery.toLowerCase().trim() || 
+    cat.slug.toLowerCase() === searchQuery.toLowerCase().trim()
+  );
+
+  // Get the correct product count for display
+  let getDisplayProductCount = () => {
+    if (isCategorySearch) {
+      // For category search, we need to calculate the count after all filters
+      // This will be updated after primaryProducts is calculated
+      return 0; // Will be updated below
+    }
+    return filteredProducts.length;
+  };
+
   // Filter products by category, subcategory, manufacturer, and search query
   const filteredProducts = allProducts.filter((p: any) => {
     const selectedCategory = resolvedSearchParams.category;
     const selectedSubcategory = resolvedSearchParams.subcategory;
     
-    // Search filter - search in multiple fields
-    if (searchQuery.trim()) {
+    // Search filter - only apply if no category is selected and it's not a category search
+    if (searchQuery.trim() && !selectedCategory && !isCategorySearch) {
       const query = searchQuery.toLowerCase().trim();
       const titleMatch = p.title.toLowerCase().includes(query);
       const descriptionMatch = p.description && p.description.toLowerCase().includes(query);
@@ -258,7 +285,7 @@ export default function ShopPage({ searchParams }: { searchParams: Promise<{ cat
       const subcategoryMatch = p.subcategory && p.subcategory.toLowerCase().includes(query);
       const tagsMatch = p.tags && p.tags.some((tag: string) => tag.toLowerCase().includes(query));
       
-      // Check if any field matches
+      // Check if any field matches (but exclude recommended products)
       if (!titleMatch && !descriptionMatch && !manufacturerMatch && !categoryMatch && !subcategoryMatch && !tagsMatch) {
         return false;
       }
@@ -358,8 +385,230 @@ export default function ShopPage({ searchParams }: { searchParams: Promise<{ cat
   // Debug: Log filtered products count
   console.log(`Filtered products count: ${filteredProducts.length} out of ${allProducts.length} total products`);
 
+  // Separate products into primary matches for search
+  let primaryProducts: any[] = [];
+  
+  if (searchQuery.trim() && !resolvedSearchParams.category && !isCategorySearch) {
+    const query = searchQuery.toLowerCase().trim();
+    
+    // First, check if there's a category with this exact name
+    const matchingCategory = categories.find(cat => 
+      cat.name.toLowerCase() === query || cat.slug.toLowerCase() === query
+    );
+    
+    if (matchingCategory) {
+      // If there's a matching category, show all products from that category
+      console.log('DEBUG - Matching category found:', matchingCategory);
+      console.log('DEBUG - All products before filtering:', allProducts.length);
+      console.log('DEBUG - Filtered products before category filter:', filteredProducts.length);
+      
+      primaryProducts = filteredProducts.filter((p: any) => {
+        const matches = p.categoryId === matchingCategory._id || 
+               p.category === matchingCategory.name ||
+               p.category === matchingCategory.slug ||
+               (matchingCategory.subcategories && matchingCategory.subcategories.some(sub => 
+                 p.subcategoryId === sub._id || 
+                 (p.subcategoryIds && p.subcategoryIds.includes(sub._id))
+               ));
+        
+        if (matches) {
+          console.log('DEBUG - Product matches category:', p.title, {
+            categoryId: p.categoryId,
+            category: p.category,
+            matchingCategoryId: matchingCategory._id,
+            matchingCategoryName: matchingCategory.name,
+            matchingCategorySlug: matchingCategory.slug
+          });
+        }
+        
+        return matches;
+      });
+      
+      console.log('DEBUG - Products after category filter:', primaryProducts.length);
+    } else {
+      // No matching category, use normal search logic
+      filteredProducts.forEach((p: any) => {
+        const titleMatch = p.title.toLowerCase().includes(query);
+        const descriptionMatch = p.description && p.description.toLowerCase().includes(query);
+        const manufacturerMatch = p.manufacturer && p.manufacturer.toLowerCase().includes(query);
+        const categoryMatch = p.category && p.category.toLowerCase().includes(query);
+        const subcategoryMatch = p.subcategory && p.subcategory.toLowerCase().includes(query);
+        const tagsMatch = p.tags && p.tags.some((tag: string) => tag.toLowerCase().includes(query));
+        
+        // Debug logging for "dartpfeil" search
+        if (query === 'dartpfeil' && p.title.toLowerCase().includes('mini-pc')) {
+          console.log('DEBUG - Mini-PC found with dartpfeil search:', {
+            title: p.title,
+            description: p.description,
+            manufacturer: p.manufacturer,
+            category: p.category,
+            subcategory: p.subcategory,
+            tags: p.tags,
+            titleMatch,
+            descriptionMatch,
+            manufacturerMatch,
+            categoryMatch,
+            subcategoryMatch,
+            tagsMatch
+          });
+        }
+        
+        // Primary matches (title, tags, manufacturer, category, subcategory, description)
+        // Include description in primary matches to avoid duplicates
+        const primaryMatch = titleMatch || manufacturerMatch || categoryMatch || subcategoryMatch || tagsMatch || descriptionMatch;
+        
+        // No description-only matches needed since description is now included in primary matches
+        if (primaryMatch) {
+          primaryProducts.push(p);
+        }
+      });
+    }
+  } else if (isCategorySearch) {
+    // If it's a category search, show all products from that category
+    const matchingCategory = categories.find(cat => 
+      cat.name.toLowerCase() === searchQuery.toLowerCase().trim() || 
+      cat.slug.toLowerCase() === searchQuery.toLowerCase().trim()
+    );
+    
+    if (matchingCategory) {
+      console.log('DEBUG - Category search, matching category found:', matchingCategory);
+      console.log('DEBUG - All products before category filter:', allProducts.length);
+      
+      // First filter by category
+      const categoryProducts = allProducts.filter((p: any) => {
+        const matches = p.categoryId === matchingCategory._id || 
+               p.category === matchingCategory.name ||
+               p.category === matchingCategory.slug ||
+               (matchingCategory.subcategories && matchingCategory.subcategories.some(sub => 
+                 p.subcategoryId === sub._id || 
+                 (p.subcategoryIds && p.subcategoryIds.includes(sub._id))
+               ));
+        
+        if (matches) {
+          console.log('DEBUG - Product matches category:', p.title);
+        }
+        
+        return matches;
+      });
+      
+      console.log('DEBUG - Products after category filter:', categoryProducts.length);
+      
+      // Then apply the same filters as filteredProducts (price, dynamic filters, etc.)
+      primaryProducts = categoryProducts.filter((p: any) => {
+        const selectedCategory = resolvedSearchParams.category;
+        const selectedSubcategory = resolvedSearchParams.subcategory;
+        
+        // Price filter
+        const effectivePrice = getEffectivePrice(p);
+        if (effectivePrice < priceRange.min || effectivePrice > priceRange.max) {
+          return false;
+        }
+        
+        // Category filter (should already be applied, but keep for consistency)
+        if (selectedCategory) {
+          const category = categories.find(c => c.slug === selectedCategory);
+          if (!category) return false;
+          
+          if (selectedSubcategory) {
+            const subcategory = category.subcategories?.find(s => s.slug === selectedSubcategory);
+            if (!subcategory) return false;
+            const subcategoryMatch = p.subcategoryId === subcategory._id || (p.subcategoryIds && p.subcategoryIds.includes(subcategory._id));
+            if (!subcategoryMatch) return false;
+          } else {
+            const isDirectCategoryMatch = p.categoryId === category._id || p.category === selectedCategory;
+            const isSubcategoryMatch = category.subcategories?.some(sub => 
+              p.subcategoryId === sub._id || (p.subcategoryIds && p.subcategoryIds.includes(sub._id))
+            );
+            const belongsToCategory = isDirectCategoryMatch || isSubcategoryMatch;
+            if (!belongsToCategory) return false;
+          }
+        }
+        
+        // Manufacturer filter - check URL params directly
+        const urlParams = new URLSearchParams(window.location.search);
+        const manufacturerParam = urlParams.get('manufacturer');
+        if (manufacturerParam) {
+          if (p.manufacturer !== manufacturerParam) return false;
+        }
+        
+        // Dynamic filters - Handle different filter types
+        for (const [filterId, filterValues] of Object.entries(selectedDynamicFilters)) {
+          if (filterValues && filterValues.length > 0) {
+            const productFilterList = productFilters[p._id] || [];
+            const productFilter = productFilterList.find((pf: any) => pf.filterId === filterId);
+            
+            if (!productFilter) {
+              return false; // Product doesn't have this filter at all
+            }
+            
+            // Get filter type from allFilters
+            const filterType = allFilters.find(f => f._id === filterId)?.type;
+            
+            if (filterType === 'range') {
+              // Range filter: check if any product value falls within the selected range
+              const minValue = parseFloat(filterValues[0]);
+              const maxValue = parseFloat(filterValues[1]);
+              
+              const hasValueInRange = productFilter.values.some((value: string) => {
+                const numValue = parseFloat(value);
+                return !isNaN(numValue) && numValue >= minValue && numValue <= maxValue;
+              });
+              
+              if (!hasValueInRange) {
+                return false;
+              }
+            } else {
+              // Multiselect filter: AND logic - product needs to have ALL selected values
+              const hasAllValues = filterValues.every((selectedValue: string) => 
+                productFilter.values.includes(selectedValue)
+              );
+              
+              if (!hasAllValues) {
+                return false;
+              }
+            }
+          }
+        }
+        
+        // Special filters
+        const filter = resolvedSearchParams.filter;
+        if (filter) {
+          switch (filter) {
+            case 'topseller':
+              if (!p.isTopSeller) return false;
+              break;
+            case 'sale':
+              if (!p.isOnSale) return false;
+              break;
+            case 'neu':
+              // Check if product was added within the last 2 weeks
+              const twoWeeksAgo = new Date();
+              twoWeeksAgo.setDate(twoWeeksAgo.getDate() - 14);
+              const productDate = new Date(p.createdAt || p.updatedAt);
+              if (productDate < twoWeeksAgo) return false;
+              break;
+          }
+        }
+        
+        return true;
+      });
+      
+      console.log('DEBUG - Products after all filters:', primaryProducts.length);
+    } else {
+      primaryProducts = filteredProducts;
+    }
+  } else {
+    // If no search query or category is selected, all filtered products are primary
+    primaryProducts = filteredProducts;
+  }
+
+  // Update display count for category search
+  if (isCategorySearch) {
+    getDisplayProductCount = () => primaryProducts.length;
+  }
+
   // Sort products based on selected sort option
-  const sortedProducts = [...filteredProducts].sort((a: any, b: any) => {
+  const sortedPrimaryProducts = [...primaryProducts].sort((a: any, b: any) => {
     switch (sortBy) {
       case 'default':
         return (a.sortOrder || 0) - (b.sortOrder || 0);
@@ -380,6 +629,7 @@ export default function ShopPage({ searchParams }: { searchParams: Promise<{ cat
     }
   });
 
+
   if (loading) {
     return (
       <div className="max-w-7xl mx-auto px-4 py-10">
@@ -394,7 +644,7 @@ export default function ShopPage({ searchParams }: { searchParams: Promise<{ cat
     );
   }
 
-  const products = sortedProducts;
+  const products = [...sortedPrimaryProducts];
 
   // Extract top sellers for display at the top (only if manufacturer filter and search allows them)
   const allTopSellers = allProducts.filter((p: any) => {
@@ -480,12 +730,12 @@ export default function ShopPage({ searchParams }: { searchParams: Promise<{ cat
       {resolvedSearchParams.category && <Breadcrumb />}
       
       <div className="max-w-7xl mx-auto px-4 py-10">
-        {/* Search Results Info */}
-      {searchQuery && (
+        {/* Search Results Info - only show if there are products or if we're not in a category */}
+      {searchQuery && (filteredProducts.length > 0 || !resolvedSearchParams.category) && (
         <div className="mb-6">
           <div className="max-w-md mx-auto xl:mx-0">
             <p className="text-sm text-gray-600">
-              {filteredProducts.length} Produkt{filteredProducts.length !== 1 ? 'e' : ''} gefunden für "<span className="font-medium">{searchQuery}</span>"
+              {getDisplayProductCount()} Produkt{getDisplayProductCount() !== 1 ? 'e' : ''} gefunden für "<span className="font-medium">{searchQuery}</span>"
             </p>
           </div>
         </div>
@@ -779,7 +1029,8 @@ export default function ShopPage({ searchParams }: { searchParams: Promise<{ cat
             </div>
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-              {sortedProducts.map((p: any) => {
+              {/* Primary Products */}
+              {sortedPrimaryProducts.map((p: any) => {
                 // Determine if this product should show as top seller
                 let isTopSeller = false;
                 
@@ -832,6 +1083,7 @@ export default function ShopPage({ searchParams }: { searchParams: Promise<{ cat
                 />
               );
             })}
+            
           </div>
         </div>
       </div>

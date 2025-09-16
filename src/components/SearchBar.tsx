@@ -31,17 +31,20 @@ interface SearchBarProps {
   placeholder?: string;
   showResults?: boolean;
   maxResults?: number;
+  onClear?: () => void;
 }
 
 export default function SearchBar({ 
   className = "", 
   placeholder = "Produkte durchsuchen...",
   showResults = true,
-  maxResults = 8
+  maxResults = 8,
+  onClear
 }: SearchBarProps) {
   const [query, setQuery] = useState('');
   const [results, setResults] = useState<SearchResult[]>([]);
   const [categories, setCategories] = useState<SearchResult[]>([]);
+  const [descriptionProducts, setDescriptionProducts] = useState<SearchResult[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [showDropdown, setShowDropdown] = useState(false);
   const [selectedIndex, setSelectedIndex] = useState(-1);
@@ -50,11 +53,77 @@ export default function SearchBar({
   const searchRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
+  // Listen for external clear signal
+  useEffect(() => {
+    if (onClear) {
+      const handleClear = () => {
+        setQuery('');
+        setResults([]);
+        setCategories([]);
+        setDescriptionProducts([]);
+        setShowDropdown(false);
+        setSelectedIndex(-1);
+      };
+      
+      // Call the clear function when onClear changes
+      handleClear();
+    }
+  }, [onClear]);
+
+  // Initialize search query from URL on mount
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const urlParams = new URLSearchParams(window.location.search);
+      const search = urlParams.get('search');
+      if (search) {
+        setQuery(search);
+      }
+    }
+  }, []);
+
+  // Listen for URL changes to clear search when navigating to categories
+  useEffect(() => {
+    const handleUrlChange = () => {
+      if (typeof window !== 'undefined') {
+        const urlParams = new URLSearchParams(window.location.search);
+        const category = urlParams.get('category');
+        const search = urlParams.get('search');
+        
+        // If we have a category but no search, clear the search bar
+        if (category && !search) {
+          setQuery('');
+          setResults([]);
+          setCategories([]);
+          setDescriptionProducts([]);
+          setShowDropdown(false);
+          setSelectedIndex(-1);
+        } else if (search) {
+          // If we have a search parameter, update the query
+          setQuery(search);
+        }
+      }
+    };
+
+    // Listen for popstate events (back/forward navigation)
+    window.addEventListener('popstate', handleUrlChange);
+    
+    // Also listen for custom navigation events
+    window.addEventListener('pushstate', handleUrlChange);
+    window.addEventListener('replacestate', handleUrlChange);
+
+    return () => {
+      window.removeEventListener('popstate', handleUrlChange);
+      window.removeEventListener('pushstate', handleUrlChange);
+      window.removeEventListener('replacestate', handleUrlChange);
+    };
+  }, []);
+
   // Debounced search
   useEffect(() => {
     if (!query.trim() || query.length < 2) {
       setResults([]);
       setCategories([]);
+      setDescriptionProducts([]);
       setShowDropdown(false);
       return;
     }
@@ -66,12 +135,14 @@ export default function SearchBar({
         const data = await response.json();
         setResults(data.products || []);
         setCategories(data.categories || []);
+        setDescriptionProducts(data.descriptionProducts || []);
         setShowDropdown(true);
         setSelectedIndex(-1);
       } catch (error) {
         console.error('Search error:', error);
         setResults([]);
         setCategories([]);
+        setDescriptionProducts([]);
       } finally {
         setIsLoading(false);
       }
@@ -95,7 +166,7 @@ export default function SearchBar({
 
   // Handle keyboard navigation
   const handleKeyDown = (e: React.KeyboardEvent) => {
-    const totalResults = results.length + categories.length;
+    const totalResults = results.length + categories.length + descriptionProducts.length;
     if (!showDropdown || totalResults === 0) return;
 
     switch (e.key) {
@@ -116,8 +187,10 @@ export default function SearchBar({
         if (selectedIndex >= 0 && selectedIndex < totalResults) {
           if (selectedIndex < results.length) {
             handleProductClick(results[selectedIndex]);
-          } else {
+          } else if (selectedIndex < results.length + categories.length) {
             handleCategoryClick(categories[selectedIndex - results.length]);
+          } else {
+            handleProductClick(descriptionProducts[selectedIndex - results.length - categories.length]);
           }
         } else if (query.trim()) {
           // Navigate to shop with search query
@@ -159,6 +232,7 @@ export default function SearchBar({
     setQuery('');
     setResults([]);
     setCategories([]);
+    setDescriptionProducts([]);
     setShowDropdown(false);
     setSelectedIndex(-1);
     inputRef.current?.focus();
@@ -209,12 +283,12 @@ export default function SearchBar({
       {/* Search Results Dropdown */}
       {showDropdown && showResults && (
         <div className="absolute z-50 w-full mt-1 bg-white rounded-lg shadow-lg border border-gray-200 max-h-96 overflow-y-auto">
-          {(results.length > 0 || categories.length > 0) ? (
+          {(results.length > 0 || categories.length > 0 || descriptionProducts.length > 0) ? (
             <>
               {/* Results Header */}
               <div className="px-4 py-2 bg-gray-50 border-b border-gray-200 rounded-t-lg">
                 <p className="text-sm text-gray-600">
-                  {results.length + categories.length} Ergebnis{(results.length + categories.length) !== 1 ? 'se' : ''} gefunden
+                  {results.length + categories.length + descriptionProducts.length} Ergebnis{(results.length + categories.length + descriptionProducts.length) !== 1 ? 'se' : ''} gefunden
                   {query && (
                     <span className="ml-1">
                       für "<span className="font-medium">{query}</span>"
@@ -347,10 +421,81 @@ export default function SearchBar({
                     ))}
                   </>
                 )}
+
+                {/* Description-only Products Section - "Das könnte Sie auch interessieren" */}
+                {descriptionProducts.length > 0 && (
+                  <>
+                    <div className="px-4 py-2 bg-orange-50 border-b border-orange-100">
+                      <p className="text-xs font-medium text-orange-700 uppercase tracking-wide">
+                        Das könnte Sie auch interessieren ({descriptionProducts.length})
+                      </p>
+                    </div>
+                    {descriptionProducts.map((product, index) => (
+                      <button
+                        key={product._id}
+                        onClick={() => handleProductClick(product)}
+                        className={`w-full px-4 py-3 text-left hover:bg-gray-50 transition-colors flex items-center gap-3 ${
+                          (results.length + categories.length + index) === selectedIndex ? 'bg-blue-50' : ''
+                        }`}
+                      >
+                        {/* Product Image */}
+                        <div className="flex-shrink-0 w-12 h-12 bg-gray-100 rounded-lg overflow-hidden">
+                          {product.images && product.images.length > 0 ? (
+                            <img
+                              src={product.imageSizes?.thumb || product.images[0]}
+                              alt={product.title}
+                              className="w-full h-full object-cover"
+                            />
+                          ) : (
+                            <div className="w-full h-full flex items-center justify-center text-gray-400 text-xs">
+                              No Image
+                            </div>
+                          )}
+                        </div>
+
+                        {/* Product Info */}
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-start justify-between">
+                            <div className="flex-1 min-w-0">
+                              <h3 className="text-sm font-medium text-gray-900 truncate">
+                                {product.title}
+                              </h3>
+                              {product.category && (
+                                <p className="text-xs text-gray-500 mt-0.5">
+                                  {product.category}
+                                </p>
+                              )}
+                            </div>
+                            <div className="flex-shrink-0 ml-2 text-right">
+                              <div className="text-sm font-semibold text-gray-900">
+                                {(getEffectivePrice(product) / 100).toFixed(2)} €
+                              </div>
+                              {product.isOnSale && product.offerPrice && (
+                                <div className="text-xs text-gray-500 line-through">
+                                  {((product.price || 0) / 100).toFixed(2)} €
+                                </div>
+                              )}
+                              {!product.inStock && (
+                                <div className="text-xs text-red-600 font-medium mt-0.5">
+                                  Ausverkauft
+                                </div>
+                              )}
+                              {product.isTopSeller && product.inStock && (
+                                <div className="text-xs text-blue-600 font-medium mt-0.5">
+                                  Top Seller
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      </button>
+                    ))}
+                  </>
+                )}
               </div>
 
               {/* View All Results */}
-              {(results.length >= maxResults || categories.length > 0) && (
+              {(results.length >= maxResults || categories.length > 0 || descriptionProducts.length > 0) && (
                 <div className="px-4 py-2 bg-gray-50 border-t border-gray-200 rounded-b-lg">
                   <button
                     onClick={() => {

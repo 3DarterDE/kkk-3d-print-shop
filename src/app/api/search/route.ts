@@ -18,10 +18,10 @@ export async function GET(request: NextRequest) {
     // Search in multiple fields using MongoDB text search and regex
     const searchRegex = new RegExp(query.trim(), 'i');
     
-    const products = await Product.find({
+    // First, get all products that match in title, tags, manufacturer, category, or subcategory
+    const primaryProducts = await Product.find({
       $or: [
         { title: { $regex: searchRegex } },
-        { description: { $regex: searchRegex } },
         { tags: { $in: [searchRegex] } },
         { manufacturer: { $regex: searchRegex } },
         { category: { $regex: searchRegex } },
@@ -30,6 +30,25 @@ export async function GET(request: NextRequest) {
       // Show all products, including out of stock ones
     })
     .limit(limit)
+    .lean();
+
+    // Then, get products that only match in description (for "Das könnte Sie auch interessieren")
+    const descriptionOnlyProducts = await Product.find({
+      $and: [
+        { description: { $regex: searchRegex } },
+        { 
+          $nor: [
+            { title: { $regex: searchRegex } },
+            { tags: { $in: [searchRegex] } },
+            { manufacturer: { $regex: searchRegex } },
+            { category: { $regex: searchRegex } },
+            { subcategory: { $regex: searchRegex } }
+          ]
+        }
+      ]
+      // Show all products, including out of stock ones
+    })
+    .limit(5) // Limit description-only matches to 5
     .lean();
 
     // Also search in category names if we have category references
@@ -55,14 +74,22 @@ export async function GET(request: NextRequest) {
     .limit(limit)
     .lean();
 
-    // Combine and deduplicate results
-    const allProducts = [...products, ...productsFromCategories];
-    const uniqueProducts = allProducts.filter((product, index, self) => 
+    // Combine and deduplicate primary results (excluding description-only matches)
+    const allPrimaryProducts = [...primaryProducts, ...productsFromCategories];
+    const uniquePrimaryProducts = allPrimaryProducts.filter((product, index, self) => 
       index === self.findIndex(p => (p as any)._id.toString() === (product as any)._id.toString())
     );
 
-    // Sort by relevance with better prioritization
-    const sortedProducts = uniqueProducts.sort((a, b) => {
+    // Get primary product IDs to exclude from description-only results
+    const primaryProductIds = new Set(uniquePrimaryProducts.map(p => (p as any)._id.toString()));
+    
+    // Filter out description-only products that are already in primary results
+    const filteredDescriptionProducts = descriptionOnlyProducts.filter(
+      product => !primaryProductIds.has((product as any)._id.toString())
+    );
+
+    // Sort primary products by relevance with better prioritization
+    const sortedPrimaryProducts = uniquePrimaryProducts.sort((a, b) => {
       const queryLower = query.toLowerCase();
       
       // Calculate match scores for each product
@@ -114,8 +141,8 @@ export async function GET(request: NextRequest) {
       categoryMap.set((cat as any)._id.toString(), cat.name);
     });
 
-    // Format products
-    const formattedProducts = sortedProducts.slice(0, limit).map(product => {
+    // Format primary products
+    const formattedPrimaryProducts = sortedPrimaryProducts.slice(0, limit).map(product => {
       // Get category name from categoryId lookup or fallback to category field
       let categoryName = '';
       if (product.categoryId && categoryMap.has(product.categoryId)) {
@@ -141,6 +168,37 @@ export async function GET(request: NextRequest) {
         category: categoryName,
         subcategory: product.subcategory,
         type: 'product'
+      };
+    });
+
+    // Format description-only products for "Das könnte Sie auch interessieren"
+    const formattedDescriptionProducts = filteredDescriptionProducts.map(product => {
+      // Get category name from categoryId lookup or fallback to category field
+      let categoryName = '';
+      if (product.categoryId && categoryMap.has(product.categoryId)) {
+        categoryName = categoryMap.get(product.categoryId);
+      } else if (typeof product.category === 'string') {
+        categoryName = product.category;
+      }
+      
+      return {
+        _id: (product as any)._id.toString(),
+        slug: product.slug,
+        title: product.title,
+        price: product.price,
+        offerPrice: product.offerPrice,
+        isOnSale: product.isOnSale,
+        isTopSeller: product.isTopSeller,
+        inStock: product.inStock,
+        stockQuantity: product.stockQuantity,
+        images: product.images || [],
+        imageSizes: product.imageSizes || [],
+        tags: product.tags || [],
+        manufacturer: product.manufacturer,
+        category: categoryName,
+        subcategory: product.subcategory,
+        type: 'product',
+        isDescriptionMatch: true // Flag to identify description-only matches
       };
     });
 
@@ -181,12 +239,13 @@ export async function GET(request: NextRequest) {
       type: 'category'
     }));
 
-    // Combine results: products first, then categories
-    const allResults = [...formattedProducts, ...formattedCategories];
+    // Combine results: primary products first, then categories, then description-only products
+    const allResults = [...formattedPrimaryProducts, ...formattedCategories, ...formattedDescriptionProducts];
 
     return NextResponse.json({ 
-      products: formattedProducts,
+      products: formattedPrimaryProducts,
       categories: formattedCategories,
+      descriptionProducts: formattedDescriptionProducts, // New field for "Das könnte Sie auch interessieren"
       allResults: allResults,
       total: allResults.length,
       query: query.trim()

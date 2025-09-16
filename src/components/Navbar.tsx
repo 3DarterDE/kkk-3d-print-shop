@@ -22,15 +22,98 @@ export default function Navbar() {
     return () => window.removeEventListener("scroll", handleScroll);
   }, []);
 
+  // Don't render until mounted to avoid hydration issues
+  if (!isMounted) {
+    return (
+      <header 
+        className="fixed top-0 left-0 right-0 z-50 transition-all duration-300 shadow-md border-b border-blue-200/30"
+        style={{
+          background: 'linear-gradient(135deg, #1E40AF 0%,rgb(52, 120, 230) 10%,rgb(75, 142, 224) 25%,rgb(3, 27, 148) 60%,rgb(15, 3, 83) 100%)',
+          boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06)'
+        }}
+      >
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-4">
+          <div className="h-16 flex items-center justify-between">
+            {/* Logo Section */}
+            <Link 
+              href="/" 
+              className="flex items-center gap-3 group"
+            >
+              <div className="relative group-hover:drop-shadow-[0_0_8px_rgba(173,216,230,0.6)] transition-all duration-150">
+                <Logo variant="navbar" className="mb-0 transition-transform duration-300 group-hover:rotate-12 scale-125" />
+              </div>
+              <div className="flex flex-col -mt-1">
+                <span className="font-bold text-xl text-white group-hover:text-shadow-[0_0_8px_rgba(173,216,230,0.6)] transition-all duration-150">
+                  3DarterDE
+                </span>
+                <span className="text-sm text-white/80 -mt-1 group-hover:text-shadow-[0_0_6px_rgba(173,216,230,0.5)] transition-all duration-150">
+                  Dartshop
+                </span>
+              </div>
+            </Link>
+
+            {/* Desktop Navigation */}
+            <nav className="hidden md:flex items-center space-x-8">
+              {[
+                { href: "/", label: "Startseite" },
+                { href: "/shop", label: "Shop" },
+                { href: "/blog", label: "Blog" },
+                { href: "/kontakt", label: "Kontakt" }
+              ].map((item) => (
+                <Link
+                  key={item.href}
+                  href={item.href}
+                  className="text-white/90 hover:text-white transition-colors duration-200 font-medium"
+                >
+                  {item.label}
+                </Link>
+              ))}
+            </nav>
+
+            {/* Search Bar */}
+            <div className="hidden lg:block flex-1 max-w-md mx-8">
+              <SearchBar 
+                placeholder="Luke Littler, , Boards..."
+                maxResults={6}
+              />
+            </div>
+
+            {/* Cart and Mobile Menu */}
+            <div className="flex items-center space-x-4">
+              <Link
+                href="/cart"
+                className="relative p-2 text-white hover:text-white/80 transition-colors duration-200"
+              >
+                <TiShoppingCart className="h-6 w-6" />
+                {count > 0 && (
+                  <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs rounded-full h-5 w-5 flex items-center justify-center">
+                    {count}
+                  </span>
+                )}
+              </Link>
+
+              {/* Mobile menu button */}
+              <button
+                onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
+                className="md:hidden p-2 text-white hover:text-white/80 transition-colors duration-200"
+              >
+                <svg className="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
+                </svg>
+              </button>
+            </div>
+          </div>
+        </div>
+      </header>
+    );
+  }
+
   return (
     <header 
-      className={`fixed top-0 left-0 right-0 z-50 transition-all duration-300 ${
-        isMounted && isScrolled 
-          ? "shadow-lg border-b border-blue-200/50" 
-          : "shadow-md border-b border-blue-200/30"
-      }`}
+      className="fixed top-0 left-0 right-0 z-50 transition-all duration-300 shadow-md border-b border-blue-200/30"
       style={{
-        background: 'linear-gradient(135deg, #1E40AF 0%,rgb(52, 120, 230) 10%,rgb(75, 142, 224) 25%,rgb(3, 27, 148) 60%,rgb(15, 3, 83) 100%)'
+        background: 'linear-gradient(135deg, #1E40AF 0%,rgb(52, 120, 230) 10%,rgb(75, 142, 224) 25%,rgb(3, 27, 148) 60%,rgb(15, 3, 83) 100%)',
+        boxShadow: isScrolled ? '0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05)' : '0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06)'
       }}
     >
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-4">
@@ -75,7 +158,7 @@ export default function Navbar() {
           {/* Search Bar - Desktop */}
           <div className="hidden lg:block flex-1 max-w-md mx-8">
             <SearchBar 
-              placeholder="Luke Littler, Dartpfeile, Boards..."
+              placeholder="Luke Littler, , Boards..."
               maxResults={6}
             />
           </div>

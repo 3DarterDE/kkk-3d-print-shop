@@ -87,9 +87,16 @@ export default function DynamicFilters({
           // Don't show any filters if we don't have products or product filters yet
           setFilters([]);
         }
-      } else if (!categoryId && allProducts.length > 0) {
-        // Show all filters if viewing "all products"
-        setFilters(allFilters);
+      } else if (!categoryId && currentCategoryProducts.length > 0) {
+        // For search results or "all products", only show filters used by current products
+        const relevantFilters = allFilters.filter((filter: Filter) => {
+          // Check if any product in current results has this filter
+          return currentCategoryProducts.some(product => {
+            const productFilterList = productFilters[product._id] || [];
+            return productFilterList.some(pf => pf.filterId === filter._id?.toString());
+          });
+        });
+        setFilters(relevantFilters);
       } else {
         // No products or no category
         setFilters([]);
@@ -101,8 +108,9 @@ export default function DynamicFilters({
 
   // Function to count products for each filter option
   const getProductCountForOption = (filterId: string, optionValue: string) => {
-    // Use allProducts for "all products" view, currentCategoryProducts for category view
-    const productsToCheck = categoryId ? currentCategoryProducts : allProducts;
+    // Use currentCategoryProducts which already contains the filtered results
+    // This ensures we only count products that are currently visible/selected
+    const productsToCheck = currentCategoryProducts;
     
     if (!productsToCheck || productsToCheck.length === 0) return 0;
     
