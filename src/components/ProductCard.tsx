@@ -254,7 +254,7 @@ export default function ProductCard({ product }: ProductCardProps) {
     <>
       <Link
         href={`/shop/${product.slug}`}
-        className="block border rounded-lg overflow-hidden transition-all duration-200 border-gray-200 hover:shadow-md hover:border-gray-300"
+        className="shop-grid-item block overflow-hidden"
         onMouseEnter={handleMouseEnter}
         onMouseLeave={handleMouseLeave}
         onClick={handleClick}
@@ -301,69 +301,73 @@ export default function ProductCard({ product }: ProductCardProps) {
           </div>
         )}
 
-        {/* Sale badge */}
-        {product.isOnSale && (
-          <div className="absolute top-2 left-2 bg-red-500 text-white px-2 py-1 rounded text-xs font-semibold">
-            Sale
-          </div>
-        )}
 
-
-        {/* Out of stock badge */}
-        {isOutOfStock() && (
-          <div className="absolute top-2 left-2 bg-red-500 text-white px-2 py-1 rounded text-xs font-semibold">
-            Nicht verfügbar
-          </div>
-        )}
-
-        {/* Add to cart button */}
-        <button
-          onClick={handleAddToCart}
-          disabled={isOutOfStock()}
-          className={`absolute top-2 right-2 p-2 rounded-full transition-all duration-200 ${
-            isOutOfStock()
-              ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
-              : product.variations && product.variations.length > 0
-              ? 'bg-orange-500 text-white hover:bg-orange-600 shadow-lg hover:shadow-xl'
-              : 'bg-blue-600 text-white hover:bg-blue-700 shadow-lg hover:shadow-xl'
-          }`}
-          title={product.variations && product.variations.length > 0 ? 'Optionen auswählen' : 'In den Warenkorb'}
-        >
-          <TiShoppingCart className="w-4 h-4" />
-        </button>
 
       </div>
       
-      <div className="p-4">
-        <div className="font-semibold text-gray-900 mb-1 line-clamp-2">
+      <div className="p-4 relative">
+        <div className="font-semibold text-gray-900 mb-2 line-clamp-2">
           {product.title}
         </div>
-        <div className="text-sm text-gray-500 flex items-center gap-2 mb-2">
-          {product.isOnSale && product.offerPrice ? (
-            <>
-              <span className="text-red-600 font-semibold">
-                {(product.offerPrice / 100).toFixed(2)} €
-              </span>
-              <span className="line-through text-gray-400">
-                {(product.price / 100).toFixed(2)} €
-              </span>
-            </>
-          ) : (
-            <span>{(product.price / 100).toFixed(2)} €</span>
-          )}
-        </div>
-        {product.tags && product.tags.length > 0 && (
-          <div className="flex flex-wrap gap-1">
-            {product.tags.slice(0, 3).map((tag: string, index: number) => (
-              <span
-                key={index}
-                className="text-xs bg-gray-100 text-gray-600 px-2 py-1 rounded"
-              >
-                {tag}
-              </span>
-            ))}
+        
+        {/* Price with large Euro and small Cent */}
+        <div className="mb-3 flex items-center justify-between">
+          <div>
+            {product.isOnSale && product.offerPrice ? (
+              <div className="flex items-baseline gap-2">
+                <div className="flex items-baseline">
+                  <span className="text-2xl font-bold text-red-600">
+                    {Math.floor(product.offerPrice / 100)}
+                  </span>
+                  <span className="text-sm text-red-600 font-medium">
+                    ,{(product.offerPrice % 100).toString().padStart(2, '0')}
+                  </span>
+                  <span className="text-sm text-red-600 ml-1">€</span>
+                </div>
+                <span className="line-through text-gray-400 text-sm">
+                  {(product.price / 100).toFixed(2)} €
+                </span>
+              </div>
+            ) : (
+              <div className="flex items-baseline">
+                <span className="text-2xl font-bold text-gray-900">
+                  {Math.floor(product.price / 100)}
+                </span>
+                <span className="text-sm text-gray-900 font-medium">
+                  ,{(product.price % 100).toString().padStart(2, '0')}
+                </span>
+                <span className="text-sm text-gray-900 ml-1">€</span>
+              </div>
+            )}
           </div>
-        )}
+          
+          {/* Stock status and cart button */}
+          <div className="flex items-center gap-2">
+            {/* Stock status */}
+            <div className="flex items-center gap-1">
+              <div className={`w-2 h-2 rounded-full ${!isOutOfStock() ? 'bg-green-500' : 'bg-red-500'}`}></div>
+              <span className={`text-xs font-medium ${!isOutOfStock() ? 'text-green-600' : 'text-red-600'}`}>
+                {!isOutOfStock() ? 'Auf Lager' : 'Nicht verfügbar'}
+              </span>
+            </div>
+            
+            {/* Add to cart button */}
+            <button
+              onClick={handleAddToCart}
+              disabled={isOutOfStock()}
+              className={`p-2 rounded-full transition-all duration-200 ${
+                isOutOfStock()
+                  ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                  : product.variations && product.variations.length > 0
+                  ? 'bg-orange-500 text-white hover:bg-orange-600 shadow-lg hover:shadow-xl'
+                  : 'bg-blue-600 text-white hover:bg-blue-700 shadow-lg hover:shadow-xl'
+              }`}
+              title={product.variations && product.variations.length > 0 ? 'Optionen auswählen' : 'In den Warenkorb'}
+            >
+              <TiShoppingCart className="w-4 h-4" />
+            </button>
+          </div>
+        </div>
       </div>
       </Link>
 

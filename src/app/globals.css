@@ -267,3 +267,15 @@ body {
   opacity: 0;
   transform: translateX(20px);
 }
+
+/* Shop Grid Styles */
+.shop-grid-item {
+  transition: all 0.3s ease;
+}
+
+.shop-grid-item:hover {
+  transform: scale(1.02);
+  box-shadow: 0 8px 25px rgba(0, 0, 0, 0.15);
+  z-index: 10;
+  position: relative;
+}

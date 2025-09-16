@@ -766,6 +766,7 @@ export default function ShopPage({ searchParams }: { searchParams: Promise<{ cat
         </div>
       )}
 
+
       {/* Main Layout: Filters on left, Products on right */}
       <div className="flex">
         {/* Left Sidebar - Filters */}
@@ -1073,7 +1074,7 @@ export default function ShopPage({ searchParams }: { searchParams: Promise<{ cat
                     return (
                       <div
                         key={`${filterId}-range`}
-                        className="inline-flex items-center px-3 py-1 rounded-full text-sm bg-blue-100 text-blue-800 border border-blue-200"
+                        className="inline-flex items-center px-3 py-1 rounded-md text-sm bg-gray-100 text-gray-800 border border-gray-200"
                       >
                         <span className="mr-2">{filter.name}: {minValue} - {maxValue}</span>
                         <button
@@ -1099,14 +1100,17 @@ export default function ShopPage({ searchParams }: { searchParams: Promise<{ cat
                       return (
                         <div
                           key={`${filterId}-${value}`}
-                          className="inline-flex items-center px-3 py-1 rounded-full text-sm bg-blue-100 text-blue-800 border border-blue-200"
+                          className="inline-flex items-center px-3 py-1 rounded-md text-sm bg-gray-100 text-gray-800 border border-gray-200"
                         >
                           <div className="flex items-center mr-2">
                             {filter.type === 'color' && option?.color ? (
-                              <div 
-                                className="w-1 h-1 rounded-full border border-gray-300"
-                                style={{ backgroundColor: option.color }}
-                              />
+                              <div className="flex items-center gap-2">
+                                <span className="text-sm">{filter.name}:</span>
+                                <div 
+                                  className="w-3 h-3 rounded-full border border-gray-300"
+                                  style={{ backgroundColor: option.color }}
+                                />
+                              </div>
                             ) : (
                               <span>{filter.name}: {option?.name || value}</span>
                             )}
@@ -1143,7 +1147,7 @@ export default function ShopPage({ searchParams }: { searchParams: Promise<{ cat
                 
                 {/* Price Range Filter Button */}
                 {isPriceFilterModified && (
-                  <div className="inline-flex items-center px-3 py-1 rounded-full text-sm bg-blue-100 text-blue-800 border border-blue-200">
+                  <div className="inline-flex items-center px-3 py-1 rounded-md text-sm bg-gray-100 text-gray-800 border border-gray-200">
                     <span className="mr-2">Preis: {(priceRange.min / 100).toFixed(0)}€ - {(priceRange.max / 100).toFixed(0)}€</span>
                     <button
                       onClick={() => {
@@ -1162,7 +1166,7 @@ export default function ShopPage({ searchParams }: { searchParams: Promise<{ cat
                 
                 {/* Top Seller Filter Button */}
                 {showTopSellers && (
-                  <div className="inline-flex items-center px-3 py-1 rounded-full text-sm bg-blue-100 text-blue-800 border border-blue-200">
+                  <div className="inline-flex items-center px-3 py-1 rounded-md text-sm bg-gray-100 text-gray-800 border border-gray-200">
                     <span className="mr-2">Top Seller</span>
                     <button
                       onClick={() => setShowTopSellers(false)}
@@ -1177,7 +1181,7 @@ export default function ShopPage({ searchParams }: { searchParams: Promise<{ cat
                 
                 {/* Sale Filter Button */}
                 {showSaleItems && (
-                  <div className="inline-flex items-center px-3 py-1 rounded-full text-sm bg-blue-100 text-blue-800 border border-blue-200">
+                  <div className="inline-flex items-center px-3 py-1 rounded-md text-sm bg-gray-100 text-gray-800 border border-gray-200">
                     <span className="mr-2">Sale</span>
                     <button
                       onClick={() => setShowSaleItems(false)}
@@ -1192,7 +1196,7 @@ export default function ShopPage({ searchParams }: { searchParams: Promise<{ cat
                 
                 {/* Verfügbar Filter Button */}
                 {showAvailableOnly && (
-                  <div className="inline-flex items-center px-3 py-1 rounded-full text-sm bg-blue-100 text-blue-800 border border-blue-200">
+                  <div className="inline-flex items-center px-3 py-1 rounded-md text-sm bg-gray-100 text-gray-800 border border-gray-200">
                     <span className="mr-2">Verfügbar</span>
                     <button
                       onClick={() => setShowAvailableOnly(false)}
@@ -1204,6 +1208,18 @@ export default function ShopPage({ searchParams }: { searchParams: Promise<{ cat
                     </button>
                   </div>
                 )}
+              </div>
+              
+              {/* Products Count */}
+              <div className="mt-3">
+                <p className="text-sm text-gray-600">
+                  <span className="font-semibold text-lg">{sortedPrimaryProducts.length}</span> Artikel
+                  {resolvedSearchParams.category && (
+                    <span className="ml-2 text-blue-600">
+                      in Kategorie "{categories.find(c => c.slug === resolvedSearchParams.category)?.name || resolvedSearchParams.category}"
+                    </span>
+                  )}
+                </p>
               </div>
             </div>
             
@@ -1228,7 +1244,7 @@ export default function ShopPage({ searchParams }: { searchParams: Promise<{ cat
               </select>
             </div>
           </div>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+          <div className="grid grid-cols-3 gap-0.5">
               {/* Primary Products */}
               {sortedPrimaryProducts.map((p: any) => {
                 // Determine if this product should show as top seller
