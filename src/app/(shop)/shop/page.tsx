@@ -933,10 +933,10 @@ export default function ShopPage({ searchParams }: { searchParams: Promise<{ cat
       )}
 
 
-      {/* Main Layout: Filters on left, Products on right */}
-      <div className="flex">
-        {/* Left Sidebar - Filters */}
-        <div className="w-80 flex-shrink-0 pr-8">
+      {/* Main Layout: Responsive Filters & Products */}
+      <div className="flex flex-col md:flex-row">
+        {/* Filterleiste: mobil oben, ab md links */}
+        <div className="w-full md:w-80 md:flex-shrink-0 md:pr-8 mb-6 md:mb-0">
           <div className="space-y-4">
             {/* Price Filter */}
             <div>
