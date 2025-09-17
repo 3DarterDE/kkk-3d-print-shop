@@ -11,6 +11,10 @@ interface DynamicFiltersProps {
   allProducts?: any[];
   currentCategoryProducts?: any[];
   priceRange?: { min: number; max: number };
+  showTopSellers?: boolean;
+  showSaleItems?: boolean;
+  showAvailableOnly?: boolean;
+  specialFilter?: string; // 'topseller' | 'sale' | 'neu' | undefined
 }
 
 export default function DynamicFilters({ 
@@ -20,13 +24,18 @@ export default function DynamicFilters({
   productFilters = {},
   allProducts = [],
   currentCategoryProducts = [],
-  priceRange = { min: 0, max: 1000 }
+  priceRange = { min: 0, max: 1000 },
+  showTopSellers = false,
+  showSaleItems = false,
+  showAvailableOnly = false,
+  specialFilter
 }: DynamicFiltersProps) {
   const [filters, setFilters] = useState<Filter[]>([]);
   const [loading, setLoading] = useState(false);
   const [allFilters, setAllFilters] = useState<Filter[]>([]);
   const [originalRangeValues, setOriginalRangeValues] = useState<Record<string, { min: number; max: number }>>({});
   const [expandedFilters, setExpandedFilters] = useState<Record<string, boolean>>({});
+  const [initialProducts, setInitialProducts] = useState<any[]>([]);
 
   // Toggle filter expansion
   const toggleFilter = (filterId: string) => {
@@ -65,50 +74,49 @@ export default function DynamicFilters({
     fetchFilters();
   }, []); // Only run once on mount
 
-  // Effect for filtering based on category with debounce
+  // Reset initial products snapshot when view/category changes
+  useEffect(() => {
+    setInitialProducts([]);
+  }, [categoryId]);
+
+  // Take a one-time snapshot of the initial product set for the current view
+  useEffect(() => {
+    if (initialProducts.length === 0 && currentCategoryProducts.length > 0) {
+      setInitialProducts(currentCategoryProducts);
+    }
+  }, [currentCategoryProducts, initialProducts.length]);
+
+  // Determine which filters to show based on the initial snapshot only (stable while user toggles filters)
   useEffect(() => {
     if (allFilters.length === 0) return;
 
-    // Add a small delay to prevent flicker
     const timeoutId = setTimeout(() => {
-      // Always use currentCategoryProducts to determine which filters to show
-      // This works for categories, search results, special filters (topseller, sale, neu), etc.
-      if (currentCategoryProducts.length > 0 && Object.keys(productFilters).length > 0) {
-        // Filter to only show filters that are used by the current products
+      if (initialProducts.length > 0 && Object.keys(productFilters).length > 0) {
         const relevantFilters = allFilters.filter((filter: Filter) => {
-          // Check if any product in current results has this filter
-          return currentCategoryProducts.some(product => {
+          return initialProducts.some(product => {
             const productFilterList = productFilters[product._id] || [];
             return productFilterList.some(pf => pf.filterId === filter._id?.toString());
           });
         });
         setFilters(relevantFilters);
       } else {
-        // Don't show any filters if we don't have products or product filters yet
         setFilters([]);
       }
-    }, 100); // 100ms delay to prevent flicker
+    }, 100);
 
     return () => clearTimeout(timeoutId);
-  }, [categoryId, allProducts, currentCategoryProducts, productFilters, allFilters, priceRange]);
+  }, [productFilters, allFilters, initialProducts]);
 
   // Function to count products for each filter option
   const getProductCountForOption = (filterId: string, optionValue: string) => {
-    // Use currentCategoryProducts which already contains the filtered results
-    // This ensures we only count products that are currently visible/selected
-    const productsToCheck = currentCategoryProducts;
+    // Use initial snapshot for the current view (global or category), fallback to allProducts
+    const productsToCheck = initialProducts.length > 0 ? initialProducts : allProducts;
     
     if (!productsToCheck || productsToCheck.length === 0) return 0;
     
-    // Get all selected filters including the current filter
-    const allSelectedFilters = { ...selectedFilters };
-    
-    // For the current filter, simulate adding this option to the selection
-    const currentFilterValues = allSelectedFilters[filterId] || [];
-    const simulatedFilterValues = currentFilterValues.includes(optionValue) 
-      ? currentFilterValues 
-      : [...currentFilterValues, optionValue];
-    allSelectedFilters[filterId] = simulatedFilterValues;
+    // Get all selected filters EXCEPT the current filter
+    const otherSelectedFilters = { ...selectedFilters };
+    delete otherSelectedFilters[filterId]; // Remove current filter to avoid double filtering
     
     const filteredProducts = productsToCheck.filter(product => {
       // Apply price filter first
@@ -117,8 +125,31 @@ export default function DynamicFilters({
         return false;
       }
       
-      // Apply all selected filters (including the simulated one)
-      for (const [filterIdToCheck, filterValues] of Object.entries(allSelectedFilters)) {
+      // Apply special URL filter (topseller, sale, neu)
+      if (specialFilter) {
+        switch (specialFilter) {
+          case 'topseller':
+            if (!product.isTopSeller) return false;
+            break;
+          case 'sale':
+            if (!product.isOnSale) return false;
+            break;
+          case 'neu':
+            const twoWeeksAgo = new Date();
+            twoWeeksAgo.setDate(twoWeeksAgo.getDate() - 14);
+            const productDate = new Date(product.createdAt || product.updatedAt);
+            if (productDate < twoWeeksAgo) return false;
+            break;
+        }
+      }
+
+      // Apply standard toggles (except the current filter which is an attribute-filter, so all apply)
+      if (showTopSellers && !product.isTopSeller) return false;
+      if (showSaleItems && !product.isOnSale) return false;
+      if (showAvailableOnly && !isProductAvailable(product)) return false;
+
+      // Apply all OTHER selected filters (excluding current filter)
+      for (const [filterIdToCheck, filterValues] of Object.entries(otherSelectedFilters)) {
         if (filterValues && filterValues.length > 0) {
           const productFilterList = productFilters[product._id] || [];
           const productFilter = productFilterList.find((pf: any) => pf.filterId === filterIdToCheck);
@@ -143,22 +174,43 @@ export default function DynamicFilters({
               return false;
             }
           } else {
-            // Multiselect filter: Check if product has ALL selected values for this filter
-            const hasAllValues = filterValues.every((selectedValue: string) => 
+            // Multiselect filter: Check if product has ANY of the selected values for this filter (OR logic within filter)
+            const hasAnyValue = filterValues.some((selectedValue: string) => 
               productFilter.values.includes(selectedValue)
             );
             
-            if (!hasAllValues) {
+            if (!hasAnyValue) {
               return false;
             }
           }
         }
       }
       
-      return true;
+      // Now check if this product has the specific option value we're counting
+      const productFilterList = productFilters[product._id] || [];
+      const productFilter = productFilterList.find((pf: any) => pf.filterId === filterId);
+      if (!productFilter) {
+        return false; // Product doesn't have this filter at all
+      }
+      
+      // Check if product has this specific option value
+      return productFilter.values.includes(optionValue);
     });
     
     return filteredProducts.length;
+  };
+
+  // Availability check similar to shop page
+  const isProductAvailable = (product: any) => {
+    if (product.inStock) return true;
+    if (product.variations && product.variations.length > 0) {
+      return product.variations.some((variation: any) => 
+        variation.options && variation.options.some((option: any) => 
+          option.inStock === true || (option.stockQuantity && option.stockQuantity > 0)
+        )
+      );
+    }
+    return false;
   };
 
   // Function to get min/max values for range filters
@@ -247,7 +299,6 @@ export default function DynamicFilters({
                   ...option,
                   productCount: getProductCountForOption(filter._id!, option.value)
                 }))
-                .filter((option) => option.productCount > 0)
                 .map((option) => (
                 <label key={option.value} className="flex items-center">
                   <input
@@ -287,7 +338,6 @@ export default function DynamicFilters({
                   ...option,
                   productCount: getProductCountForOption(filter._id!, option.value)
                 }))
-                .filter((option) => option.productCount > 0)
                 .map((option) => (
                 <label key={option.value} className="flex items-center">
                   <input
@@ -477,7 +527,6 @@ export default function DynamicFilters({
                   ...option,
                   productCount: getProductCountForOption(filter._id!, option.value)
                 }))
-                .filter((option) => option.productCount > 0)
                 .map((option) => {
                   const isSelected = (selectedFilters[filter._id!] || []).includes(option.value);
                   return (

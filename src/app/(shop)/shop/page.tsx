@@ -57,6 +57,7 @@ export default function ShopPage({ searchParams }: { searchParams: Promise<{ cat
   const [showTopSellers, setShowTopSellers] = useState(false);
   const [showSaleItems, setShowSaleItems] = useState(false);
   const [showAvailableOnly, setShowAvailableOnly] = useState(false);
+  const [initialViewProducts, setInitialViewProducts] = useState<any[]>([]);
 
   // Load product filters for all products
   const loadProductFilters = async (products: any[]) => {
@@ -367,12 +368,12 @@ export default function ShopPage({ searchParams }: { searchParams: Promise<{ cat
             return false;
           }
         } else {
-          // Multiselect filter: AND logic - product needs to have ALL selected values
-          const hasAllValues = filterValues.every((selectedValue: string) => 
+          // Multiselect filter: OR logic - product needs to have ANY of the selected values
+          const hasAnyValue = filterValues.some((selectedValue: string) => 
             productFilter.values.includes(selectedValue)
           );
           
-          if (!hasAllValues) {
+          if (!hasAnyValue) {
             return false;
           }
         }
@@ -409,6 +410,86 @@ export default function ShopPage({ searchParams }: { searchParams: Promise<{ cat
 
   // Debug: Log filtered products count
   console.log(`Filtered products count: ${filteredProducts.length} out of ${allProducts.length} total products`);
+
+  // Reset initial view snapshot when category or subcategory changes
+  useEffect(() => {
+    setInitialViewProducts([]);
+  }, [resolvedSearchParams.category, resolvedSearchParams.subcategory]);
+
+  // Take a one-time snapshot of the product set for the current view
+  useEffect(() => {
+    if (initialViewProducts.length === 0 && filteredProducts.length > 0) {
+      setInitialViewProducts(filteredProducts);
+    }
+  }, [filteredProducts, initialViewProducts.length]);
+
+  // Helper to count products for standard filters with current selections, based on initial snapshot
+  const getStandardFilterCount = (type: 'topseller' | 'sale' | 'available') => {
+    const base = initialViewProducts.length > 0 ? initialViewProducts : allProducts;
+    return base.filter((p: any) => {
+      // Price filter
+      const effectivePrice = getEffectivePrice(p);
+      if (effectivePrice < priceRange.min || effectivePrice > priceRange.max) {
+        return false;
+      }
+
+      // Dynamic filters
+      for (const [filterId, filterValues] of Object.entries(selectedDynamicFilters)) {
+        if (filterValues && filterValues.length > 0) {
+          const productFilterList = productFilters[p._id] || [];
+          const productFilter = productFilterList.find((pf: any) => pf.filterId === filterId);
+          if (!productFilter) return false;
+
+          const filterType = allFilters.find(f => f._id === filterId)?.type;
+          if (filterType === 'range') {
+            const minValue = parseFloat(filterValues[0]);
+            const maxValue = parseFloat(filterValues[1]);
+            const hasValueInRange = productFilter.values.some((value: string) => {
+              const numValue = parseFloat(value);
+              return !isNaN(numValue) && numValue >= minValue && numValue <= maxValue;
+            });
+            if (!hasValueInRange) return false;
+          } else {
+            const hasAnyValue = filterValues.some((selectedValue: string) => 
+              productFilter.values.includes(selectedValue)
+            );
+            if (!hasAnyValue) return false;
+          }
+        }
+      }
+
+      // Special filter from URL
+      const special = resolvedSearchParams.filter;
+      if (special) {
+        switch (special) {
+          case 'topseller':
+            if (!p.isTopSeller) return false;
+            break;
+          case 'sale':
+            if (!p.isOnSale) return false;
+            break;
+          case 'neu':
+            const twoWeeksAgo = new Date();
+            twoWeeksAgo.setDate(twoWeeksAgo.getDate() - 14);
+            const productDate = new Date(p.createdAt || p.updatedAt);
+            if (productDate < twoWeeksAgo) return false;
+            break;
+        }
+      }
+
+      // Apply other standard toggles except the current one being counted
+      if (type !== 'topseller' && showTopSellers && !p.isTopSeller) return false;
+      if (type !== 'sale' && showSaleItems && !p.isOnSale) return false;
+      if (type !== 'available' && showAvailableOnly && !isProductAvailable(p)) return false;
+
+      // Finally, require the attribute for the counted type
+      if (type === 'topseller' && !p.isTopSeller) return false;
+      if (type === 'sale' && !p.isOnSale) return false;
+      if (type === 'available' && !isProductAvailable(p)) return false;
+
+      return true;
+    }).length;
+  };
 
   // Separate products into primary matches for search
   let primaryProducts: any[] = [];
@@ -583,12 +664,12 @@ export default function ShopPage({ searchParams }: { searchParams: Promise<{ cat
                 return false;
               }
             } else {
-              // Multiselect filter: AND logic - product needs to have ALL selected values
-              const hasAllValues = filterValues.every((selectedValue: string) => 
+              // Multiselect filter: OR logic - product needs to have ANY of the selected values
+              const hasAnyValue = filterValues.some((selectedValue: string) => 
                 productFilter.values.includes(selectedValue)
               );
               
-              if (!hasAllValues) {
+              if (!hasAnyValue) {
                 return false;
               }
             }
@@ -937,10 +1018,14 @@ export default function ShopPage({ searchParams }: { searchParams: Promise<{ cat
               allProducts={allProducts}
               currentCategoryProducts={filteredProducts}
               priceRange={priceRange}
+              showTopSellers={showTopSellers}
+              showSaleItems={showSaleItems}
+              showAvailableOnly={showAvailableOnly}
+              specialFilter={resolvedSearchParams.filter}
             />
             
-            {/* Top Seller Filter - only show if there are top sellers in current category */}
-            {filteredProducts.some(p => p.isTopSeller) && (
+            {/* Top Seller Filter - stable visibility and count based on initial view snapshot */}
+            {initialViewProducts.some(p => p.isTopSeller) && (
             <div>
               <div className="flex items-center justify-between mb-3">
                 <h2 className="text-lg font-semibold">Top Seller</h2>
@@ -964,7 +1049,7 @@ export default function ShopPage({ searchParams }: { searchParams: Promise<{ cat
                   <span className="ml-1 text-sm text-gray-700 flex items-center justify-between w-full">
                     <span>Nur Top Seller anzeigen</span>
                     <span className="text-xs text-gray-500 bg-gray-100 w-6 h-6 rounded-full flex items-center justify-center">
-                      {filteredProducts.filter(p => p.isTopSeller).length}
+                      {getStandardFilterCount('topseller')}
                     </span>
                   </span>
                 </label>
@@ -975,8 +1060,8 @@ export default function ShopPage({ searchParams }: { searchParams: Promise<{ cat
             </div>
             )}
             
-            {/* Sale Filter - only show if there are sale items in current category */}
-            {filteredProducts.some(p => p.isOnSale) && (
+            {/* Sale Filter - stable visibility and count based on initial view snapshot */}
+            {initialViewProducts.some(p => p.isOnSale) && (
             <div>
               <div className="flex items-center justify-between mb-3">
                 <h2 className="text-lg font-semibold">Sale</h2>
@@ -1000,7 +1085,7 @@ export default function ShopPage({ searchParams }: { searchParams: Promise<{ cat
                   <span className="ml-1 text-sm text-gray-700 flex items-center justify-between w-full">
                     <span>Im Angebot</span>
                     <span className="text-xs text-gray-500 bg-gray-100 w-6 h-6 rounded-full flex items-center justify-center">
-                      {filteredProducts.filter(p => p.isOnSale).length}
+                      {getStandardFilterCount('sale')}
                     </span>
                   </span>
                 </label>
@@ -1011,8 +1096,8 @@ export default function ShopPage({ searchParams }: { searchParams: Promise<{ cat
             </div>
             )}
             
-            {/* Verfügbar Filter - only show if there are available items in current category */}
-            {filteredProducts.some(p => isProductAvailable(p)) && (
+            {/* Verfügbar Filter - stable visibility and count based on initial view snapshot */}
+            {initialViewProducts.some(p => isProductAvailable(p)) && (
             <div>
               <div className="flex items-center justify-between mb-3">
                 <h2 className="text-lg font-semibold">Verfügbar</h2>
@@ -1036,7 +1121,7 @@ export default function ShopPage({ searchParams }: { searchParams: Promise<{ cat
                   <span className="ml-1 text-sm text-gray-700 flex items-center justify-between w-full">
                     <span>Auf Lager</span>
                     <span className="text-xs text-gray-500 bg-gray-100 w-6 h-6 rounded-full flex items-center justify-center">
-                      {filteredProducts.filter(p => isProductAvailable(p)).length}
+                      {getStandardFilterCount('available')}
                     </span>
                   </span>
                 </label>
