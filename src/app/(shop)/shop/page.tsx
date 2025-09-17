@@ -58,6 +58,8 @@ export default function ShopPage({ searchParams }: { searchParams: Promise<{ cat
   const [showSaleItems, setShowSaleItems] = useState(false);
   const [showAvailableOnly, setShowAvailableOnly] = useState(false);
   const [initialViewProducts, setInitialViewProducts] = useState<any[]>([]);
+  // Mobile filter overlay state
+  const [showMobileFilters, setShowMobileFilters] = useState(false);
 
   // Load product filters for all products
   const loadProductFilters = async (products: any[]) => {
@@ -935,9 +937,60 @@ export default function ShopPage({ searchParams }: { searchParams: Promise<{ cat
 
       {/* Main Layout: Responsive Filters & Products */}
       <div className="flex flex-col md:flex-row">
-        {/* Filterleiste: mobil oben, ab md links */}
-        <div className="w-full md:w-80 md:flex-shrink-0 md:pr-8 mb-6 md:mb-0">
+        {/* Mobile Filter Button */}
+        <div className="md:hidden mb-4 flex justify-end">
+          <button
+            className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-blue-600 text-white font-semibold shadow hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all"
+            onClick={() => setShowMobileFilters(true)}
+            aria-label="Filter öffnen"
+          >
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M4 6h16M4 12h16M4 18h16" /></svg>
+            Filter
+          </button>
+        </div>
+        {/* Filterleiste: mobil als Overlay, ab md links */}
+        <div className="hidden md:block w-full md:w-80 md:flex-shrink-0 md:pr-8 mb-6 md:mb-0">
           <div className="space-y-4">
+      {/* Offcanvas Filter Overlay for Mobile */}
+      {showMobileFilters && (
+        <div className="fixed inset-0 z-50 flex">
+          {/* Overlay background */}
+          <div className="fixed inset-0 bg-black/40 backdrop-blur-sm transition-opacity" onClick={() => setShowMobileFilters(false)}></div>
+          {/* Offcanvas panel */}
+          <div className="relative bg-white w-11/12 max-w-xs h-full shadow-xl p-4 overflow-y-auto animate-slideInLeft">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-lg font-semibold">Filter</h2>
+              <button onClick={() => setShowMobileFilters(false)} className="text-gray-500 hover:text-gray-700 focus:outline-none">
+                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+              </button>
+            </div>
+            {/* All filter content (copy from sidebar) */}
+            <div className="space-y-4">
+              {/* Price Filter */}
+              {/* ...copy price filter JSX here... */}
+              {/* Dynamic Filters */}
+              <DynamicFilters
+                categoryId={categories.find(c => c.slug === resolvedSearchParams.category)?._id}
+                selectedFilters={selectedDynamicFilters}
+                onFilterChange={(filterId, values) => {
+                  setSelectedDynamicFilters(prev => ({
+                    ...prev,
+                    [filterId]: values
+                  }));
+                }}
+                productFilters={productFilters}
+                allProducts={allProducts}
+                currentCategoryProducts={filteredProducts}
+                priceRange={priceRange}
+                showTopSellers={showTopSellers}
+                showSaleItems={showSaleItems}
+                showAvailableOnly={showAvailableOnly}
+                specialFilter={resolvedSearchParams.filter}
+              />
+            </div>
+          </div>
+        </div>
+      )}
             {/* Price Filter */}
             <div>
               <div className="flex items-center justify-between mb-3">

@@ -255,13 +255,13 @@ export default function ProductCard({ product }: ProductCardProps) {
     <>
       <Link
         href={`/shop/${product.slug}`}
-        className="shop-grid-item block overflow-hidden group"
+  className="shop-grid-item block overflow-hidden group bg-white transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-blue-500"
         onMouseEnter={handleMouseEnter}
         onMouseLeave={handleMouseLeave}
         onClick={handleClick}
         style={{ cursor: 'default' }}
       >
-      <div className="aspect-square bg-gray-100 relative overflow-hidden cursor-pointer">
+      <div className="aspect-square bg-gray-100 relative overflow-hidden cursor-pointer sm:rounded-lg sm:shadow-none w-full max-w-full mx-auto">
         {images.length > 0 ? (
           <>
             {images.map((image, index) => (
@@ -282,14 +282,14 @@ export default function ProductCard({ product }: ProductCardProps) {
             ))}
           </>
         ) : (
-          <div className="w-full h-full flex items-center justify-center text-gray-400">
+          <div className="w-full h-full flex items-center justify-center text-gray-400 text-lg sm:text-base">
             No Image
           </div>
         )}
         
         {/* Image indicator dots */}
         {hasMultipleImages && (
-          <div className="absolute bottom-2 left-1/2 transform -translate-x-1/2 flex space-x-1">
+          <div className="absolute bottom-2 left-1/2 transform -translate-x-1/2 flex space-x-1 z-10">
             {images.map((_, index) => (
               <div
                 key={index}
@@ -307,48 +307,48 @@ export default function ProductCard({ product }: ProductCardProps) {
 
       </div>
       
-      <div className="p-4 relative">
-        <div className="font-semibold text-gray-900 mb-2 line-clamp-2 cursor-pointer group-hover:underline transition-all duration-200" style={{ textUnderlineOffset: '4px', textDecorationThickness: '1px' }}>
+  <div className="p-3 sm:p-4 relative flex flex-col gap-2">
+  <div className="font-semibold text-gray-900 mb-1 sm:mb-2 line-clamp-2 cursor-pointer group-hover:underline transition-all duration-200 text-base sm:text-lg" style={{ textUnderlineOffset: '4px', textDecorationThickness: '1px' }}>
           {product.title}
         </div>
         
         {/* Price with large Euro and small Cent */}
-        <div className="mb-3 flex items-center justify-between">
-          <div>
+  <div className="mb-2 sm:mb-3 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 sm:gap-0">
+          <div className="flex-1">
             {product.isOnSale && product.offerPrice ? (
-              <div className="flex items-baseline gap-2">
+              <div className="flex items-baseline gap-1 sm:gap-2">
                 <div className="flex items-baseline">
-                  <span className="text-2xl font-bold text-gray-900">
+                  <span className="text-xl sm:text-2xl font-bold text-gray-900">
                     {Math.floor(product.offerPrice / 100)}
                   </span>
-                  <span className="text-sm text-gray-900 font-medium">
+                  <span className="text-xs sm:text-sm text-gray-900 font-medium">
                     ,{(product.offerPrice % 100).toString().padStart(2, '0')}
                   </span>
-                  <span className="text-sm text-gray-900 ml-1">€</span>
+                  <span className="text-xs sm:text-sm text-gray-900 ml-1">€</span>
                 </div>
-                <span className="line-through text-gray-400 text-sm">
+                <span className="line-through text-gray-400 text-xs sm:text-sm">
                   {(product.price / 100).toFixed(2)} €
                 </span>
               </div>
             ) : (
               <div className="flex items-baseline">
-                <span className="text-2xl font-bold text-gray-900">
+                <span className="text-xl sm:text-2xl font-bold text-gray-900">
                   {Math.floor(product.price / 100)}
                 </span>
-                <span className="text-sm text-gray-900 font-medium">
+                <span className="text-xs sm:text-sm text-gray-900 font-medium">
                   ,{(product.price % 100).toString().padStart(2, '0')}
                 </span>
-                <span className="text-sm text-gray-900 ml-1">€</span>
+                <span className="text-xs sm:text-sm text-gray-900 ml-1">€</span>
               </div>
             )}
           </div>
           
           {/* Stock status and cart button */}
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 mt-2 sm:mt-0">
             {/* Stock status */}
             <div className="flex items-center gap-1">
               <div className={`w-2 h-2 rounded-full ${!isOutOfStock() ? 'bg-green-500' : 'bg-red-500'}`}></div>
-              <span className={`text-xs font-medium ${!isOutOfStock() ? 'text-green-600' : 'text-red-600'}`}>
+              <span className={`text-[10px] sm:text-xs font-medium ${!isOutOfStock() ? 'text-green-600' : 'text-red-600'}`}>
                 {!isOutOfStock() ? 'Auf Lager' : 'Nicht verfügbar'}
               </span>
             </div>
@@ -357,7 +357,7 @@ export default function ProductCard({ product }: ProductCardProps) {
             <button
               onClick={handleAddToCart}
               disabled={isOutOfStock()}
-              className={`p-2 rounded-full transition-all duration-200 ${
+              className={`p-3 sm:p-2 rounded-full transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 ${
                 isOutOfStock()
                   ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
                   : product.variations && product.variations.length > 0
@@ -368,11 +368,11 @@ export default function ProductCard({ product }: ProductCardProps) {
             >
               {product.variations && product.variations.length > 0 ? (
                 <div className="relative">
-                  <TiShoppingCart className="w-4 h-4" />
-                  <FaPlus className="w-2 h-2 absolute -top-1 -right-1 bg-white text-blue-600 rounded-full" />
+                  <TiShoppingCart className="w-5 h-5 sm:w-4 sm:h-4" />
+                  <FaPlus className="w-3 h-3 sm:w-2 sm:h-2 absolute -top-1 -right-1 bg-white text-blue-600 rounded-full" />
                 </div>
               ) : (
-                <TiShoppingCart className="w-4 h-4" />
+                <TiShoppingCart className="w-5 h-5 sm:w-4 sm:h-4" />
               )}
             </button>
           </div>
