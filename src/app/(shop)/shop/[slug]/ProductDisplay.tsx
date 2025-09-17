@@ -2,6 +2,8 @@
 
 import { useState, useEffect } from "react";
 import AddToCartButton from "./AddToCartButton";
+import SearchBar from "@/components/SearchBar";
+import Breadcrumb from "@/components/Breadcrumb";
 import { getOptimizedImageUrl, getContextualImageSize, generateSrcSet } from "@/lib/image-utils";
 import ProductCard from "@/components/ProductCard";
 import { getStockQuantityForVariations, isVariationInStock } from "@/lib/variation-stock";
@@ -15,15 +17,21 @@ interface ProductDisplayProps {
     name: string;
     slug: string;
   } | null;
+  subcategory?: {
+    _id: string;
+    name: string;
+    slug: string;
+  } | null;
 }
 
-export default function ProductDisplay({ product, descriptionHtml, recommendedProducts = [], category }: ProductDisplayProps) {
+export default function ProductDisplay({ product, descriptionHtml, recommendedProducts = [], category, subcategory }: ProductDisplayProps) {
   const [selectedImageIndex, setSelectedImageIndex] = useState(0);
   const [quantity, setQuantity] = useState(1);
   const [isLightboxOpen, setIsLightboxOpen] = useState(false);
   const [isLightboxClosing, setIsLightboxClosing] = useState(false);
   const [activeTab, setActiveTab] = useState('description');
   const [selectedVariations, setSelectedVariations] = useState<Record<string, string>>({});
+  const [isScrolled, setIsScrolled] = useState(false);
 
   // Handle lightbox close with animation
   const handleLightboxClose = () => {
@@ -107,6 +115,18 @@ export default function ProductDisplay({ product, descriptionHtml, recommendedPr
     }
   }, [product.variations]);
 
+  // Handle scroll to hide breadcrumb behind search bar
+  useEffect(() => {
+    const handleScroll = () => {
+      const scrollTop = window.scrollY;
+      // Hide breadcrumb when scrolled more than 20px
+      setIsScrolled(scrollTop > 20);
+    };
+
+    window.addEventListener('scroll', handleScroll);
+    return () => window.removeEventListener('scroll', handleScroll);
+  }, []);
+
   // Combine images and videos for display with video at position 2
   const arrangeMedia = (images: string[], videos: string[]) => {
     const result = [...images];
@@ -132,9 +152,29 @@ export default function ProductDisplay({ product, descriptionHtml, recommendedPr
   const videoThumbnail = product.videoThumbnails?.[videoIndex];
 
   return (
-    <div className="max-w-7xl mx-auto px-4 py-10">
+    <>
+      {/* Fixed Search Bar - immer sichtbar auf Mobile */}
+      <div className="fixed top-16 left-0 right-0 z-40 bg-white border-b border-gray-200 px-4 py-3 md:hidden">
+        <SearchBar 
+          placeholder="Luke Littler, Dartpfeile..."
+          maxResults={4}
+        />
+      </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
+      {/* Fixed Mobile Breadcrumb - direkt unter der Suchleiste, verschwindet beim Scrollen */}
+      <div className={`fixed top-32 left-0 right-0 z-30 bg-white border-a border-gray-200 md:hidden transition-transform duration-250 ${
+        isScrolled ? '-translate-y-full' : 'translate-y-0'
+      }`}>
+        <Breadcrumb category={category?.slug} subcategory={subcategory?.slug} productName={product.title} />
+      </div>
+
+      {/* Desktop Breadcrumb - normal position */}
+      <div className="hidden md:block">
+        <Breadcrumb category={category?.slug} subcategory={subcategory?.slug} productName={product.title} />
+      </div>
+
+      <div className="max-w-7xl mx-auto px-4 py-10 pt-30 md:pt-10">
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
         {/* Left: Main Product Image/Video */}
         <div className="lg:col-span-7">
           <div className="bg-white rounded-xl shadow-lg p-4">
@@ -673,6 +713,7 @@ export default function ProductDisplay({ product, descriptionHtml, recommendedPr
            </div>
          </div>
        )}
-     </div>
+       </div>
+     </>
    );
  }

@@ -2,7 +2,6 @@ import { fetchProductBySlug, fetchRecommendedProducts } from "@/lib/products";
 import { connectToDatabase } from "@/lib/mongodb";
 import Category from "@/lib/models/Category";
 import JsonLd from "@/components/JsonLd";
-import Breadcrumb from "@/components/Breadcrumb";
 import { notFound } from "next/navigation";
 import { remark } from "remark";
 import remarkHtml from "remark-html";
@@ -154,14 +153,12 @@ export default async function ProductPage({ params }: { params: Promise<{ slug: 
 
   return (
     <>
-      {/* Breadcrumb - show if product has category */}
-      {serializedCategory && <Breadcrumb category={serializedCategory.slug} subcategory={serializedSubcategory?.slug} productName={product.title} />}
-      
       <ProductDisplay 
         product={serializedProduct} 
         descriptionHtml={descriptionHtml} 
         recommendedProducts={recommendedProductsData}
         category={serializedCategory}
+        subcategory={serializedSubcategory}
       />
       <JsonLd
         data={{

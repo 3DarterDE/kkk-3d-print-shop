@@ -1,5 +1,5 @@
 "use client";
-import React, { useState, useEffect } from "react";
+import React from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 
@@ -12,40 +12,9 @@ interface BreadcrumbProps {
 
 export default function Breadcrumb({ className = "", category: propCategory, subcategory: propSubcategory, productName }: BreadcrumbProps) {
   const searchParams = useSearchParams();
-  const [isVisible, setIsVisible] = useState(true);
   const category = propCategory || searchParams.get('category');
   const subcategory = propSubcategory || searchParams.get('subcategory');
   const filter = searchParams.get('filter');
-
-  // Handle scroll visibility
-  useEffect(() => {
-    let lastScrollY = window.scrollY;
-    let ticking = false;
-
-    const updateScrollDirection = () => {
-      const scrollY = window.scrollY;
-      const direction = scrollY > lastScrollY ? 'down' : 'up';
-      
-      if (scrollY > 50) {
-        setIsVisible(false);
-      } else {
-        setIsVisible(true);
-      }
-      
-      lastScrollY = scrollY > 0 ? scrollY : 0;
-      ticking = false;
-    };
-
-    const onScroll = () => {
-      if (!ticking) {
-        requestAnimationFrame(updateScrollDirection);
-        ticking = true;
-      }
-    };
-
-    window.addEventListener('scroll', onScroll);
-    return () => window.removeEventListener('scroll', onScroll);
-  }, []);
 
   // Get category name from URL or use slug
   const getCategoryName = (slug: string) => {
@@ -121,37 +90,35 @@ export default function Breadcrumb({ className = "", category: propCategory, sub
   }
 
   return (
-    <div className={`sticky top-[112px] z-20 bg-gray-50 border-b border-gray-200 py-3 transition-opacity duration-300 ${!isVisible ? 'opacity-0' : 'opacity-100'} ${className}`}>
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <nav className="flex items-center space-x-2 text-sm pl-4">
-          {breadcrumbs.map((breadcrumb, index) => (
-            <React.Fragment key={breadcrumb.href}>
-              {index > 0 && (
-                <svg 
-                  className="w-4 h-4 text-gray-400" 
-                  fill="none" 
-                  stroke="currentColor" 
-                  viewBox="0 0 24 24"
-                >
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                </svg>
-              )}
-              {index === breadcrumbs.length - 1 ? (
-                <span className="text-gray-900 font-medium">
-                  {breadcrumb.name}
-                </span>
-              ) : (
-                <Link 
-                  href={breadcrumb.href}
-                  className="text-gray-600 hover:text-gray-900 transition-colors"
-                >
-                  {breadcrumb.name}
-                </Link>
-              )}
-            </React.Fragment>
-          ))}
-        </nav>
-      </div>
+    <div className={`bg-white border-b border-gray-200 py-2 px-4 max-w-7xl mx-auto ${className}`}>
+      <nav className="flex items-center space-x-2 text-sm">
+        {breadcrumbs.map((breadcrumb, index) => (
+          <React.Fragment key={breadcrumb.href}>
+            {index > 0 && (
+              <svg 
+                className="w-4 h-4 text-gray-400" 
+                fill="none" 
+                stroke="currentColor" 
+                viewBox="0 0 24 24"
+              >
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+              </svg>
+            )}
+            {index === breadcrumbs.length - 1 ? (
+              <span className="text-gray-900 font-medium">
+                {breadcrumb.name}
+              </span>
+            ) : (
+              <Link 
+                href={breadcrumb.href}
+                className="text-gray-600 hover:text-gray-900 transition-colors"
+              >
+                {breadcrumb.name}
+              </Link>
+            )}
+          </React.Fragment>
+        ))}
+      </nav>
     </div>
   );
 }

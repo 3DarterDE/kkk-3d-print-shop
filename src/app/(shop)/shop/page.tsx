@@ -4,6 +4,7 @@ import Link from "next/link";
 import ProductCard from "@/components/ProductCard";
 import DynamicFilters from "@/components/DynamicFilters";
 import Breadcrumb from "@/components/Breadcrumb";
+import SearchBar from "@/components/SearchBar";
 import { getOptimizedImageUrl, getContextualImageSize } from "@/lib/image-utils";
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
@@ -60,6 +61,8 @@ export default function ShopPage({ searchParams }: { searchParams: Promise<{ cat
   const [initialViewProducts, setInitialViewProducts] = useState<any[]>([]);
   // Mobile filter overlay state
   const [showMobileFilters, setShowMobileFilters] = useState(false);
+  // Scroll state for mobile breadcrumb
+  const [isScrolled, setIsScrolled] = useState(false);
 
   // Load product filters for all products
   const loadProductFilters = async (products: any[]) => {
@@ -547,6 +550,18 @@ export default function ShopPage({ searchParams }: { searchParams: Promise<{ cat
     }
   }, [filteredProducts, initialViewProducts.length]);
 
+  // Handle scroll to hide breadcrumb behind search bar on mobile
+  useEffect(() => {
+    const handleScroll = () => {
+      const scrollTop = window.scrollY;
+      // Hide breadcrumb when scrolled more than 20px
+      setIsScrolled(scrollTop > 20);
+    };
+
+    window.addEventListener('scroll', handleScroll);
+    return () => window.removeEventListener('scroll', handleScroll);
+  }, []);
+
   // Helper to count products for standard filters with current selections, based on initial snapshot
   const getStandardFilterCount = (type: 'topseller' | 'sale' | 'available') => {
     const base = initialViewProducts.length > 0 ? initialViewProducts : allProducts;
@@ -919,13 +934,31 @@ export default function ShopPage({ searchParams }: { searchParams: Promise<{ cat
 
   return (
     <>
-      {/* Breadcrumb - show if category or filter is selected, positioned sticky under CategoryNavigation */}
-      {(resolvedSearchParams.category || resolvedSearchParams.filter) && <Breadcrumb />}
+      {/* Fixed Search Bar - immer sichtbar auf Mobile */}
+      <div className="fixed top-16 left-0 right-0 z-40 bg-white border-b border-gray-200 px-4 py-3 md:hidden">
+        <SearchBar 
+          placeholder="Luke Littler, Dartpfeile..."
+          maxResults={4}
+        />
+      </div>
+
+      {/* Fixed Mobile Breadcrumb - direkt unter der Suchleiste, verschwindet beim Scrollen */}
+      <div className={`fixed top-32 left-0 right-0 z-30 bg-white border-a border-gray-200 md:hidden transition-transform duration-250 ${
+        isScrolled ? '-translate-y-full' : 'translate-y-0'
+      }`}>
+        <Breadcrumb />
+      </div>
+
+      {/* Desktop Breadcrumb - normal position */}
+      <div className="hidden md:block">
+        <Breadcrumb />
+      </div>
+
       
-      <div className="max-w-7xl mx-auto px-4 py-10">
+      <div className="max-w-7xl mx-auto px-px py-10 pt-30 md:pt-10 md:px-4">
         {/* Search Results Info - only show if there are products or if we're not in a category */}
       {searchQuery && (filteredProducts.length > 0 || !resolvedSearchParams.category) && (
-        <div className="mb-6">
+        <div className="mb-6 px-4 md:px-0">
           <div className="max-w-md mx-auto xl:mx-0">
             <p className="text-sm text-gray-600">
               {getDisplayProductCount()} Produkt{getDisplayProductCount() !== 1 ? 'e' : ''} gefunden für "<span className="font-medium">{searchQuery}</span>"
@@ -935,28 +968,12 @@ export default function ShopPage({ searchParams }: { searchParams: Promise<{ cat
       )}
 
 
-      {/* Main Layout: Responsive Filters & Products */}
-      <div className="flex flex-col md:flex-row">
-        {/* Mobile Filter Button */}
-        <div className="md:hidden mb-4 flex justify-end">
-          <button
-            className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-blue-600 text-white font-semibold shadow hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all"
-            onClick={() => setShowMobileFilters(true)}
-            aria-label="Filter öffnen"
-          >
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M4 6h16M4 12h16M4 18h16" /></svg>
-            Filter
-          </button>
-        </div>
-        {/* Filterleiste: mobil als Overlay, ab md links */}
-        <div className="hidden md:block w-full md:w-80 md:flex-shrink-0 md:pr-8 mb-6 md:mb-0">
-          <div className="space-y-4">
       {/* Offcanvas Filter Overlay for Mobile */}
       {showMobileFilters && (
-        <div className="fixed inset-0 z-50 flex">
+        <div className="fixed inset-0 z-50 flex md:hidden">
           {/* Overlay background */}
           <div className="fixed inset-0 bg-black/40 backdrop-blur-sm transition-opacity" onClick={() => setShowMobileFilters(false)}></div>
-          {/* Offcanvas panel */}
+          {/* Offcanvas panel - slides in from left */}
           <div className="relative bg-white w-11/12 max-w-xs h-full shadow-xl p-4 overflow-y-auto animate-slideInLeft">
             <div className="flex items-center justify-between mb-4">
               <h2 className="text-lg font-semibold">Filter</h2>
@@ -964,10 +981,158 @@ export default function ShopPage({ searchParams }: { searchParams: Promise<{ cat
                 <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
               </button>
             </div>
-            {/* All filter content (copy from sidebar) */}
+            {/* All filter content */}
             <div className="space-y-4">
               {/* Price Filter */}
-              {/* ...copy price filter JSX here... */}
+              <div>
+                <div className="flex items-center justify-between mb-3">
+                  <h2 className="text-lg font-semibold">Preis</h2>
+                  {isPriceFilterModified && (
+                    <button
+                      onClick={() => {
+                        const range = calculateCurrentPriceRange();
+                        setPriceRange(range);
+                        setIsPriceFilterModified(false);
+                      }}
+                      className="text-sm text-blue-600 hover:text-blue-800 hover:underline transition-colors"
+                    >
+                      Filter zurücksetzen
+                    </button>
+                  )}
+                </div>
+                <div className="space-y-3">
+                  <div className="space-y-3">
+                    {/* Range Slider Container */}
+                    <div className="relative">
+                      <div className="relative h-2 bg-gray-200 rounded-lg mx-2">
+                        {/* Active range track */}
+                        <div 
+                          className="absolute h-2 bg-blue-500 rounded-lg"
+                          style={{
+                            left: `${((priceRange.min - calculateCurrentPriceRange().min) / (calculateCurrentPriceRange().max - calculateCurrentPriceRange().min)) * 100}%`,
+                            width: `${((priceRange.max - priceRange.min) / (calculateCurrentPriceRange().max - calculateCurrentPriceRange().min)) * 100}%`
+                          }}
+                        />
+                        
+                        {/* Min thumb */}
+                        <div
+                          className="absolute w-4 h-4 bg-blue-500 rounded-full cursor-pointer transform -translate-y-1 -translate-x-2 hover:scale-110 transition-transform"
+                          style={{
+                            left: `${((priceRange.min - calculateCurrentPriceRange().min) / (calculateCurrentPriceRange().max - calculateCurrentPriceRange().min)) * 100}%`,
+                            zIndex: 10
+                          }}
+                          onMouseDown={(e) => {
+                            e.preventDefault();
+                            const startX = e.clientX;
+                            const startValue = priceRange.min;
+                            const currentRange = calculateCurrentPriceRange();
+                            const minPrice = currentRange.min;
+                            const maxPrice = currentRange.max;
+                            const range = maxPrice - minPrice;
+                            
+                            const handleMouseMove = (e: MouseEvent) => {
+                              const rect = (e.target as Element).closest('.relative')?.getBoundingClientRect();
+                              if (!rect) return;
+                              
+                              const deltaX = e.clientX - startX;
+                              const deltaPercent = (deltaX / rect.width) * 100;
+                              const deltaValue = (deltaPercent / 100) * range;
+                              const newValue = Math.max(minPrice, Math.min(maxPrice, startValue + deltaValue));
+                              const clampedValue = Math.min(newValue, priceRange.max - 100);
+                              
+                              if (clampedValue === minPrice && priceRange.max === maxPrice) {
+                                const originalRange = calculateCurrentPriceRange();
+                                setPriceRange(originalRange);
+                                setIsPriceFilterModified(false);
+                              } else {
+                                setPriceRange(prev => ({
+                                  ...prev,
+                                  min: clampedValue
+                                }));
+                                setIsPriceFilterModified(true);
+                              }
+                            };
+                            
+                            const handleMouseUp = () => {
+                              document.removeEventListener('mousemove', handleMouseMove);
+                              document.removeEventListener('mouseup', handleMouseUp);
+                            };
+                            
+                            document.addEventListener('mousemove', handleMouseMove);
+                            document.addEventListener('mouseup', handleMouseUp);
+                          }}
+                        />
+                        
+                        {/* Max thumb */}
+                        <div
+                          className="absolute w-4 h-4 bg-blue-500 rounded-full cursor-pointer transform -translate-y-1 -translate-x-2 hover:scale-110 transition-transform"
+                          style={{
+                            left: `${((priceRange.max - calculateCurrentPriceRange().min) / (calculateCurrentPriceRange().max - calculateCurrentPriceRange().min)) * 100}%`,
+                            zIndex: 10
+                          }}
+                          onMouseDown={(e) => {
+                            e.preventDefault();
+                            const startX = e.clientX;
+                            const startValue = priceRange.max;
+                            const currentRange = calculateCurrentPriceRange();
+                            const minPrice = currentRange.min;
+                            const maxPrice = currentRange.max;
+                            const range = maxPrice - minPrice;
+                            
+                            const handleMouseMove = (e: MouseEvent) => {
+                              const rect = (e.target as Element).closest('.relative')?.getBoundingClientRect();
+                              if (!rect) return;
+                              
+                              const deltaX = e.clientX - startX;
+                              const deltaPercent = (deltaX / rect.width) * 100;
+                              const deltaValue = (deltaPercent / 100) * range;
+                              const newValue = Math.max(minPrice, Math.min(maxPrice, startValue + deltaValue));
+                              const clampedValue = Math.max(newValue, priceRange.min + 100);
+                              
+                              if (priceRange.min === minPrice && clampedValue === maxPrice) {
+                                const originalRange = calculateCurrentPriceRange();
+                                setPriceRange(originalRange);
+                                setIsPriceFilterModified(false);
+                              } else {
+                                setPriceRange(prev => ({
+                                  ...prev,
+                                  max: clampedValue
+                                }));
+                                setIsPriceFilterModified(true);
+                              }
+                            };
+                            
+                            const handleMouseUp = () => {
+                              document.removeEventListener('mousemove', handleMouseMove);
+                              document.removeEventListener('mouseup', handleMouseUp);
+                            };
+                            
+                            document.addEventListener('mousemove', handleMouseMove);
+                            document.addEventListener('mouseup', handleMouseUp);
+                          }}
+                        />
+                      </div>
+                      
+                      {/* Min/Max labels */}
+                      <div className="flex justify-between text-xs text-gray-500 mt-2 mx-2">
+                        <span>{(priceRange.min / 100).toFixed(0)} €</span>
+                        <span>{(priceRange.max / 100).toFixed(0)} €</span>
+                      </div>
+                    </div>
+                    
+                    {/* Current selection display */}
+                    <div className="text-center text-sm text-gray-600 mt-2">
+                      <span className="font-medium">{(priceRange.min / 100).toFixed(0)} €</span>
+                      <span className="mx-2">-</span>
+                      <span className="font-medium">{(priceRange.max / 100).toFixed(0)} €</span>
+                    </div>
+                  </div>
+                  
+                  {/* Trennstrich */}
+                  <div className="border-b border-gray-200 mt-4"></div>
+                </div>
+              </div>
+              
               {/* Dynamic Filters */}
               <DynamicFilters
                 categoryId={categories.find(c => c.slug === resolvedSearchParams.category)?._id}
@@ -987,10 +1152,121 @@ export default function ShopPage({ searchParams }: { searchParams: Promise<{ cat
                 showAvailableOnly={showAvailableOnly}
                 specialFilter={resolvedSearchParams.filter}
               />
+              
+              {/* Top Seller Filter */}
+              {initialViewProducts.some(p => p.isTopSeller) && (
+              <div>
+                <div className="flex items-center justify-between mb-3">
+                  <h2 className="text-lg font-semibold">Top Seller</h2>
+                  {showTopSellers && (
+                    <button
+                      onClick={() => setShowTopSellers(false)}
+                      className="text-sm text-blue-600 hover:text-blue-800 hover:underline transition-colors"
+                    >
+                      Filter zurücksetzen
+                    </button>
+                  )}
+                </div>
+                <div className="space-y-2">
+                  <label className="flex items-center">
+                    <input
+                      type="checkbox"
+                      checked={showTopSellers}
+                      onChange={(e) => setShowTopSellers(e.target.checked)}
+                      className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                    />
+                    <span className="ml-1 text-sm text-gray-700 flex items-center justify-between w-full">
+                      <span>Nur Top Seller anzeigen</span>
+                      <span className="text-xs text-gray-500 bg-gray-100 w-6 h-6 rounded-full flex items-center justify-center">
+                        {getStandardFilterCount('topseller')}
+                      </span>
+                    </span>
+                  </label>
+                </div>
+                
+                {/* Trennstrich */}
+                <div className="border-b border-gray-200 mt-4"></div>
+              </div>
+              )}
+              
+              {/* Sale Filter */}
+              {initialViewProducts.some(p => p.isOnSale) && (
+              <div>
+                <div className="flex items-center justify-between mb-3">
+                  <h2 className="text-lg font-semibold">Sale</h2>
+                  {showSaleItems && (
+                    <button
+                      onClick={() => setShowSaleItems(false)}
+                      className="text-sm text-blue-600 hover:text-blue-800 hover:underline transition-colors"
+                    >
+                      Filter zurücksetzen
+                    </button>
+                  )}
+                </div>
+                <div className="space-y-2">
+                  <label className="flex items-center">
+                    <input
+                      type="checkbox"
+                      checked={showSaleItems}
+                      onChange={(e) => setShowSaleItems(e.target.checked)}
+                      className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                    />
+                    <span className="ml-1 text-sm text-gray-700 flex items-center justify-between w-full">
+                      <span>Im Angebot</span>
+                      <span className="text-xs text-gray-500 bg-gray-100 w-6 h-6 rounded-full flex items-center justify-center">
+                        {getStandardFilterCount('sale')}
+                      </span>
+                    </span>
+                  </label>
+                </div>
+                
+                {/* Trennstrich */}
+                <div className="border-b border-gray-200 mt-4"></div>
+              </div>
+              )}
+              
+              {/* Verfügbar Filter */}
+              {initialViewProducts.some(p => isProductAvailable(p)) && (
+              <div>
+                <div className="flex items-center justify-between mb-3">
+                  <h2 className="text-lg font-semibold">Verfügbar</h2>
+                  {showAvailableOnly && (
+                    <button
+                      onClick={() => setShowAvailableOnly(false)}
+                      className="text-sm text-blue-600 hover:text-blue-800 hover:underline transition-colors"
+                    >
+                      Filter zurücksetzen
+                    </button>
+                  )}
+                </div>
+                <div className="space-y-2">
+                  <label className="flex items-center">
+                    <input
+                      type="checkbox"
+                      checked={showAvailableOnly}
+                      onChange={(e) => setShowAvailableOnly(e.target.checked)}
+                      className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                    />
+                    <span className="ml-1 text-sm text-gray-700 flex items-center justify-between w-full">
+                      <span>Auf Lager</span>
+                      <span className="text-xs text-gray-500 bg-gray-100 w-6 h-6 rounded-full flex items-center justify-center">
+                        {getStandardFilterCount('available')}
+                      </span>
+                    </span>
+                  </label>
+                </div>
+              </div>
+              )}
             </div>
           </div>
         </div>
       )}
+
+      {/* Main Layout: Responsive Filters & Products */}
+      <div className="flex flex-col md:flex-row">
+        {/* Filterleiste: mobil als Overlay, ab md links */}
+        <div className="hidden md:block w-full md:w-80 md:flex-shrink-0 md:pr-8 mb-6 md:mb-0">
+          <div className="space-y-4">
             {/* Price Filter */}
             <div>
               <div className="flex items-center justify-between mb-3">
@@ -1276,13 +1552,13 @@ export default function ShopPage({ searchParams }: { searchParams: Promise<{ cat
         <div className="w-px bg-gray-200 flex-shrink-0"></div>
 
         {/* Right Side: Products */}
-        <div className="flex-1 pl-8">
+        <div className="flex-1 pl-0 md:pl-8">
           {/* Products Section */}
           <div className="min-h-[400px]">
         {/* Category Products */}
         <div className="h-full">
-          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-4">
-            <div className="flex flex-col space-y-2 mb-2 sm:mb-0">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-4 px-4 md:px-0">
+            <div className="flex flex-col mb-2 sm:mb-0">
               {/* Active Filter Buttons */}
               <div className="flex flex-wrap gap-2">
                 {/* Dynamic Filter Buttons */}
@@ -1435,8 +1711,8 @@ export default function ShopPage({ searchParams }: { searchParams: Promise<{ cat
                 )}
               </div>
               
-              {/* Products Count */}
-              <div className="mt-3">
+              {/* Products Count and Sort Dropdown in same row */}
+              <div className="flex items-center justify-between">
                 <p className="text-sm text-gray-600">
                   <span className="font-semibold text-lg">{sortedPrimaryProducts.length}</span> Artikel
                   {resolvedSearchParams.category && (
@@ -1445,31 +1721,25 @@ export default function ShopPage({ searchParams }: { searchParams: Promise<{ cat
                     </span>
                   )}
                 </p>
+                
+                {/* Sort Dropdown - rechts neben Artikel-Anzahl */}
+                <select
+                  value={sortBy}
+                  onChange={(e) => setSortBy(e.target.value as any)}
+                  className="px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+                >
+                  <option value="default">Standard</option>
+                  <option value="newest">Neueste zuerst</option>
+                  <option value="oldest">Älteste zuerst</option>
+                  <option value="price-low">Niedrigster Preis</option>
+                  <option value="price-high">Höchster Preis</option>
+                  <option value="name-asc">Name A-Z</option>
+                  <option value="name-desc">Name Z-A</option>
+                </select>
               </div>
             </div>
-            
-            {/* Sort Dropdown */}
-            <div className="flex items-center space-x-2">
-              <label htmlFor="sort-select" className="text-sm font-medium text-gray-700">
-                Sortieren nach:
-              </label>
-              <select
-                id="sort-select"
-                value={sortBy}
-                onChange={(e) => setSortBy(e.target.value as any)}
-                className="px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
-              >
-                <option value="default">Standard</option>
-                <option value="newest">Neueste zuerst</option>
-                <option value="oldest">Älteste zuerst</option>
-                <option value="price-low">Niedrigster Preis</option>
-                <option value="price-high">Höchster Preis</option>
-                <option value="name-asc">Name A-Z</option>
-                <option value="name-desc">Name Z-A</option>
-              </select>
-            </div>
           </div>
-          <div className="grid grid-cols-2 md:grid-cols-3 gap-x-3 gap-y-6 pl-2 pr-1">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-x-3 gap-y-0 md:gap-y-6 pl-0 pr-0 md:pl-0 md:pr-4">
               {/* Primary Products */}
               {sortedPrimaryProducts.map((p: any) => {
                 // Determine if this product should show as top seller
@@ -1530,6 +1800,20 @@ export default function ShopPage({ searchParams }: { searchParams: Promise<{ cat
       </div>
     </div>
     </div>
+    </div>
+
+    {/* Mobile Filter Button - Fixed Bottom */}
+    <div className="md:hidden fixed bottom-4 right-4 z-40">
+      <button
+        className="inline-flex items-center gap-2 px-4 py-3 rounded-full bg-blue-600 text-white font-semibold shadow-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all transform hover:scale-105"
+        onClick={() => setShowMobileFilters(true)}
+        aria-label="Filter öffnen"
+      >
+        <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" />
+        </svg>
+        Filter
+      </button>
     </div>
     </>
   );

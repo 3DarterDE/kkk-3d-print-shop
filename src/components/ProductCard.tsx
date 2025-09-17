@@ -255,126 +255,260 @@ export default function ProductCard({ product }: ProductCardProps) {
     <>
       <Link
         href={`/shop/${product.slug}`}
-  className="shop-grid-item block overflow-hidden group bg-white transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-blue-500"
+        className="shop-grid-item block overflow-hidden group bg-white transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-blue-500"
         onMouseEnter={handleMouseEnter}
         onMouseLeave={handleMouseLeave}
         onClick={handleClick}
         style={{ cursor: 'default' }}
       >
-      <div className="aspect-square bg-gray-100 relative overflow-hidden cursor-pointer sm:rounded-lg sm:shadow-none w-full max-w-full mx-auto">
-        {images.length > 0 ? (
-          <>
-            {images.map((image, index) => (
-              <img
-                key={`image-${index}`}
-                src={getOptimizedImageUrl(
-                  image, 
-                  getContextualImageSize('shop-listing'), 
-                  product.imageSizes, 
-                  index
+        {/* Mobile Layout: Horizontal arrangement */}
+        <div className="md:hidden flex gap-4 p-5 border-b border-gray-100 last:border-b-0 -mx-px">
+          {/* Left: Product Images */}
+          <div className="flex-shrink-0 w-28 h-28 sm:w-32 sm:h-32 bg-gray-100 relative overflow-hidden rounded-lg">
+            {images.length > 0 ? (
+              <>
+                {images.map((image, index) => (
+                  <img
+                    key={`image-${index}`}
+                    src={getOptimizedImageUrl(
+                      image, 
+                      getContextualImageSize('shop-listing'), 
+                      product.imageSizes, 
+                      index
+                    )}
+                    alt={product.title}
+                    className={`absolute inset-0 w-full h-full object-cover transition-opacity duration-300 ease-in-out ${
+                      index === currentImageIndex ? 'opacity-100' : 'opacity-0'
+                    }`}
+                    loading="lazy"
+                  />
+                ))}
+              </>
+            ) : (
+              <div className="w-full h-full flex items-center justify-center text-gray-400 text-sm">
+                No Image
+              </div>
+            )}
+            
+            {/* Image indicator dots for mobile */}
+            {hasMultipleImages && (
+              <div className="absolute bottom-1 left-1/2 transform -translate-x-1/2 flex space-x-1 z-10">
+                {images.map((_, index) => (
+                  <div
+                    key={index}
+                    className={`w-1.5 h-1.5 rounded-full transition-all duration-300 ${
+                      index === currentImageIndex 
+                        ? 'bg-white shadow-md' 
+                        : 'bg-white/50'
+                    }`}
+                  />
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Right: Product Info */}
+          <div className="flex-1 flex flex-col justify-between min-w-0">
+            {/* Product Title */}
+            <div className="font-semibold text-gray-900 line-clamp-2 cursor-pointer group-hover:underline transition-all duration-200 text-base sm:text-lg leading-tight">
+              {product.title}
+            </div>
+            
+            {/* Rating (placeholder for now) */}
+            <div className="flex items-center gap-1 mt-2">
+              <div className="flex text-orange-400">
+                {[...Array(5)].map((_, i) => (
+                  <svg key={i} className="w-4 h-4 fill-current" viewBox="0 0 20 20">
+                    <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
+                  </svg>
+                ))}
+              </div>
+              <span className="text-sm text-gray-500">4,76 (37)</span>
+            </div>
+
+            {/* Price and Cart Button Row */}
+            <div className="flex items-center justify-between mt-3">
+              {/* Price */}
+              <div className="flex-1 min-w-0">
+                {product.isOnSale && product.offerPrice ? (
+                  <div className="flex items-baseline gap-1 flex-wrap">
+                    <div className="flex items-baseline">
+                      <span className="text-lg sm:text-xl font-bold text-gray-900">
+                        {Math.floor(product.offerPrice / 100)}
+                      </span>
+                      <span className="text-sm text-gray-900 font-medium">
+                        ,{(product.offerPrice % 100).toString().padStart(2, '0')}
+                      </span>
+                      <span className="text-sm text-gray-900 ml-1">€</span>
+                    </div>
+                    <span className="line-through text-gray-400 text-sm ml-2">
+                      {Math.floor(product.price / 100)},{(product.price % 100).toString().padStart(2, '0')}€
+                    </span>
+                  </div>
+                ) : (
+                  <div className="flex items-baseline">
+                    <span className="text-lg sm:text-xl font-bold text-gray-900">
+                      {Math.floor(product.price / 100)}
+                    </span>
+                    <span className="text-sm text-gray-900 font-medium">
+                      ,{(product.price % 100).toString().padStart(2, '0')}
+                    </span>
+                    <span className="text-sm text-gray-900 ml-1">€</span>
+                  </div>
                 )}
-                alt={product.title}
-                className={`absolute inset-0 w-full h-full object-cover transition-opacity duration-300 ease-in-out ${
-                  index === currentImageIndex ? 'opacity-100' : 'opacity-0'
-                }`}
-                loading="lazy"
-              />
-            ))}
-          </>
-        ) : (
-          <div className="w-full h-full flex items-center justify-center text-gray-400 text-lg sm:text-base">
-            No Image
-          </div>
-        )}
-        
-        {/* Image indicator dots */}
-        {hasMultipleImages && (
-          <div className="absolute bottom-2 left-1/2 transform -translate-x-1/2 flex space-x-1 z-10">
-            {images.map((_, index) => (
-              <div
-                key={index}
-                className={`w-2 h-2 rounded-full transition-all duration-300 ${
-                  index === currentImageIndex 
-                    ? 'bg-white shadow-md' 
-                    : 'bg-white/50'
-                }`}
-              />
-            ))}
-          </div>
-        )}
-
-
-
-      </div>
-      
-  <div className="p-3 sm:p-4 relative flex flex-col gap-2">
-  <div className="font-semibold text-gray-900 mb-1 sm:mb-2 line-clamp-2 cursor-pointer group-hover:underline transition-all duration-200 text-base sm:text-lg" style={{ textUnderlineOffset: '4px', textDecorationThickness: '1px' }}>
-          {product.title}
-        </div>
-        
-        {/* Price with large Euro and small Cent */}
-  <div className="mb-2 sm:mb-3 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 sm:gap-0">
-          <div className="flex-1">
-            {product.isOnSale && product.offerPrice ? (
-              <div className="flex items-baseline gap-1 sm:gap-2">
-                <div className="flex items-baseline">
-                  <span className="text-xl sm:text-2xl font-bold text-gray-900">
-                    {Math.floor(product.offerPrice / 100)}
-                  </span>
-                  <span className="text-xs sm:text-sm text-gray-900 font-medium">
-                    ,{(product.offerPrice % 100).toString().padStart(2, '0')}
-                  </span>
-                  <span className="text-xs sm:text-sm text-gray-900 ml-1">€</span>
-                </div>
-                <span className="line-through text-gray-400 text-xs sm:text-sm">
-                  {(product.price / 100).toFixed(2)} €
+              </div>
+              
+              {/* Stock Status */}
+              <div className="flex items-center gap-1 mr-2 flex-shrink-0">
+                <div className={`w-2 h-2 rounded-full ${!isOutOfStock() ? 'bg-green-500' : 'bg-red-500'}`}></div>
+                <span className={`text-[10px] font-medium ${!isOutOfStock() ? 'text-green-600' : 'text-red-600'}`}>
+                  {!isOutOfStock() ? 'Auf Lager' : 'Nicht verfügbar'}
                 </span>
               </div>
+              
+              {/* Add to cart button */}
+              <button
+                onClick={handleAddToCart}
+                disabled={isOutOfStock()}
+                className={`p-2 rounded-lg transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 flex-shrink-0 ${
+                  isOutOfStock()
+                    ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                    : product.variations && product.variations.length > 0
+                    ? 'bg-blue-600 text-white hover:bg-blue-700 shadow-lg hover:shadow-xl cursor-pointer'
+                    : 'bg-blue-600 text-white hover:bg-blue-700 shadow-lg hover:shadow-xl cursor-pointer'
+                }`}
+                title={product.variations && product.variations.length > 0 ? 'Optionen auswählen' : 'In den Warenkorb'}
+              >
+                {product.variations && product.variations.length > 0 ? (
+                  <div className="relative">
+                    <TiShoppingCart className="w-4 h-4" />
+                    <FaPlus className="w-2 h-2 absolute -top-1 -right-1 bg-white text-blue-600 rounded-full" />
+                  </div>
+                ) : (
+                  <TiShoppingCart className="w-4 h-4" />
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+
+        {/* Desktop Layout: Original vertical arrangement */}
+        <div className="hidden md:block">
+          <div className="aspect-square bg-gray-100 relative overflow-hidden cursor-pointer sm:rounded-lg sm:shadow-none w-full max-w-full mx-auto">
+            {images.length > 0 ? (
+              <>
+                {images.map((image, index) => (
+                  <img
+                    key={`image-${index}`}
+                    src={getOptimizedImageUrl(
+                      image, 
+                      getContextualImageSize('shop-listing'), 
+                      product.imageSizes, 
+                      index
+                    )}
+                    alt={product.title}
+                    className={`absolute inset-0 w-full h-full object-cover transition-opacity duration-300 ease-in-out ${
+                      index === currentImageIndex ? 'opacity-100' : 'opacity-0'
+                    }`}
+                    loading="lazy"
+                  />
+                ))}
+              </>
             ) : (
-              <div className="flex items-baseline">
-                <span className="text-xl sm:text-2xl font-bold text-gray-900">
-                  {Math.floor(product.price / 100)}
-                </span>
-                <span className="text-xs sm:text-sm text-gray-900 font-medium">
-                  ,{(product.price % 100).toString().padStart(2, '0')}
-                </span>
-                <span className="text-xs sm:text-sm text-gray-900 ml-1">€</span>
+              <div className="w-full h-full flex items-center justify-center text-gray-400 text-lg sm:text-base">
+                No Image
+              </div>
+            )}
+            
+            {/* Image indicator dots */}
+            {hasMultipleImages && (
+              <div className="absolute bottom-2 left-1/2 transform -translate-x-1/2 flex space-x-1 z-10">
+                {images.map((_, index) => (
+                  <div
+                    key={index}
+                    className={`w-2 h-2 rounded-full transition-all duration-300 ${
+                      index === currentImageIndex 
+                        ? 'bg-white shadow-md' 
+                        : 'bg-white/50'
+                    }`}
+                  />
+                ))}
               </div>
             )}
           </div>
           
-          {/* Stock status and cart button */}
-          <div className="flex items-center gap-2 mt-2 sm:mt-0">
-            {/* Stock status */}
-            <div className="flex items-center gap-1">
-              <div className={`w-2 h-2 rounded-full ${!isOutOfStock() ? 'bg-green-500' : 'bg-red-500'}`}></div>
+          <div className="p-3 sm:p-4 relative flex flex-col gap-2">
+            <div className="font-semibold text-gray-900 mb-1 sm:mb-2 line-clamp-2 cursor-pointer group-hover:underline transition-all duration-200 text-base sm:text-lg" style={{ textUnderlineOffset: '4px', textDecorationThickness: '1px' }}>
+              {product.title}
             </div>
             
-            {/* Add to cart button */}
-            <button
-              onClick={handleAddToCart}
-              disabled={isOutOfStock()}
-              className={`p-3 sm:p-2 rounded-full transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 ${
-                isOutOfStock()
-                  ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
-                  : product.variations && product.variations.length > 0
-                  ? 'bg-blue-600 text-white hover:bg-blue-700 shadow-lg hover:shadow-xl cursor-pointer'
-                  : 'bg-blue-600 text-white hover:bg-blue-700 shadow-lg hover:shadow-xl cursor-pointer'
-              }`}
-              title={product.variations && product.variations.length > 0 ? 'Optionen auswählen' : 'In den Warenkorb'}
-            >
-              {product.variations && product.variations.length > 0 ? (
-                <div className="relative">
-                  <TiShoppingCart className="w-5 h-5 sm:w-4 sm:h-4" />
-                  <FaPlus className="w-3 h-3 sm:w-2 sm:h-2 absolute -top-1 -right-1 bg-white text-blue-600 rounded-full" />
+            {/* Price with large Euro and small Cent */}
+            <div className="mb-2 sm:mb-3 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 sm:gap-0">
+              <div className="flex-1">
+                {product.isOnSale && product.offerPrice ? (
+                  <div className="flex items-baseline gap-1 sm:gap-2">
+                    <div className="flex items-baseline">
+                      <span className="text-xl sm:text-2xl font-bold text-gray-900">
+                        {Math.floor(product.offerPrice / 100)}
+                      </span>
+                      <span className="text-xs sm:text-sm text-gray-900 font-medium">
+                        ,{(product.offerPrice % 100).toString().padStart(2, '0')}
+                      </span>
+                      <span className="text-xs sm:text-sm text-gray-900 ml-1">€</span>
+                    </div>
+                    <span className="line-through text-gray-400 text-xs sm:text-sm">
+                      {(product.price / 100).toFixed(2)} €
+                    </span>
+                  </div>
+                ) : (
+                  <div className="flex items-baseline">
+                    <span className="text-xl sm:text-2xl font-bold text-gray-900">
+                      {Math.floor(product.price / 100)}
+                    </span>
+                    <span className="text-xs sm:text-sm text-gray-900 font-medium">
+                      ,{(product.price % 100).toString().padStart(2, '0')}
+                    </span>
+                    <span className="text-xs sm:text-sm text-gray-900 ml-1">€</span>
+                  </div>
+                )}
+              </div>
+              
+              {/* Stock status and cart button */}
+              <div className="flex items-center gap-2 mt-2 sm:mt-0">
+                {/* Stock status */}
+                <div className="flex items-center gap-1">
+                  <div className={`w-2 h-2 rounded-full ${!isOutOfStock() ? 'bg-green-500' : 'bg-red-500'}`}></div>
+                  <span className={`text-[10px] sm:text-xs font-medium ${!isOutOfStock() ? 'text-green-600' : 'text-red-600'}`}>
+                    {!isOutOfStock() ? 'Auf Lager' : 'Nicht verfügbar'}
+                  </span>
                 </div>
-              ) : (
-                <TiShoppingCart className="w-5 h-5 sm:w-4 sm:h-4" />
-              )}
-            </button>
+                
+                {/* Add to cart button */}
+                <button
+                  onClick={handleAddToCart}
+                  disabled={isOutOfStock()}
+                  className={`p-3 sm:p-2 rounded-full transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 ${
+                    isOutOfStock()
+                      ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                      : product.variations && product.variations.length > 0
+                      ? 'bg-blue-600 text-white hover:bg-blue-700 shadow-lg hover:shadow-xl cursor-pointer'
+                      : 'bg-blue-600 text-white hover:bg-blue-700 shadow-lg hover:shadow-xl cursor-pointer'
+                  }`}
+                  title={product.variations && product.variations.length > 0 ? 'Optionen auswählen' : 'In den Warenkorb'}
+                >
+                  {product.variations && product.variations.length > 0 ? (
+                    <div className="relative">
+                      <TiShoppingCart className="w-5 h-5 sm:w-4 sm:h-4" />
+                      <FaPlus className="w-3 h-3 sm:w-2 sm:h-2 absolute -top-1 -right-1 bg-white text-blue-600 rounded-full" />
+                    </div>
+                  ) : (
+                    <TiShoppingCart className="w-5 h-5 sm:w-4 sm:h-4" />
+                  )}
+                </button>
+              </div>
+            </div>
           </div>
         </div>
-      </div>
       </Link>
 
       {/* Variation Modal */}
