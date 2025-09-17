@@ -825,7 +825,7 @@ export default function ShopPage({ searchParams }: { searchParams: Promise<{ cat
 
   if (loading) {
     return (
-      <div className="max-w-7xl mx-auto px-4 py-10">
+  <div className="max-w-7xl mx-auto pl-3 pr-2 sm:px-4 py-10">
         <div className="flex items-center justify-center min-h-[400px]">
           <div className="text-center">
             <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
@@ -1469,7 +1469,7 @@ export default function ShopPage({ searchParams }: { searchParams: Promise<{ cat
               </select>
             </div>
           </div>
-          <div className="grid grid-cols-3 gap-0.5">
+          <div className="grid grid-cols-2 md:grid-cols-3 gap-x-3 gap-y-6 pl-2 pr-1">
               {/* Primary Products */}
               {sortedPrimaryProducts.map((p: any) => {
                 // Determine if this product should show as top seller

@@ -348,9 +348,6 @@ export default function ProductCard({ product }: ProductCardProps) {
             {/* Stock status */}
             <div className="flex items-center gap-1">
               <div className={`w-2 h-2 rounded-full ${!isOutOfStock() ? 'bg-green-500' : 'bg-red-500'}`}></div>
-              <span className={`text-[10px] sm:text-xs font-medium ${!isOutOfStock() ? 'text-green-600' : 'text-red-600'}`}>
-                {!isOutOfStock() ? 'Auf Lager' : 'Nicht verfügbar'}
-              </span>
             </div>
             
             {/* Add to cart button */}
