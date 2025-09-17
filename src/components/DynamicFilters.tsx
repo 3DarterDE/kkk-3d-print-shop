@@ -35,13 +35,25 @@ export default function DynamicFilters({
   const [allFilters, setAllFilters] = useState<Filter[]>([]);
   const [originalRangeValues, setOriginalRangeValues] = useState<Record<string, { min: number; max: number }>>({});
   const [expandedFilters, setExpandedFilters] = useState<Record<string, boolean>>({});
+  const [expandedOptions, setExpandedOptions] = useState<Record<string, boolean>>({});
   const [initialProducts, setInitialProducts] = useState<any[]>([]);
+  // Snapshot der ursprünglichen productFilters damit Counts stabil bleiben
+  const [initialProductFilters, setInitialProductFilters] = useState<Record<string, any[]>>({});
+  const [basePriceRange, setBasePriceRange] = useState<{min:number; max:number} | null>(null);
 
   // Toggle filter expansion
   const toggleFilter = (filterId: string) => {
     setExpandedFilters(prev => ({
       ...prev,
       [filterId]: !(prev[filterId] ?? true)
+    }));
+  };
+
+  // Toggle options expansion for multiselect filters
+  const toggleOptionsExpansion = (filterId: string) => {
+    setExpandedOptions(prev => ({
+      ...prev,
+      [filterId]: !(prev[filterId] ?? false)
     }));
   };
 
@@ -74,15 +86,36 @@ export default function DynamicFilters({
     fetchFilters();
   }, []); // Only run once on mount
 
+  // Merke dir den ersten vollständigen Preisbereich als Basis für unselektierte Facet-Counts
+  useEffect(() => {
+    if (!basePriceRange && priceRange) {
+      setBasePriceRange({ ...priceRange });
+    }
+  }, [priceRange, basePriceRange]);
+
   // Reset initial products snapshot when view/category changes
   useEffect(() => {
     setInitialProducts([]);
+    setInitialProductFilters({});
   }, [categoryId]);
 
   // Take a one-time snapshot of the initial product set for the current view
   useEffect(() => {
     if (initialProducts.length === 0 && currentCategoryProducts.length > 0) {
       setInitialProducts(currentCategoryProducts);
+      // Snapshot der Filter-Mapping Struktur zum selben Zeitpunkt sichern
+      if (Object.keys(initialProductFilters).length === 0 && Object.keys(productFilters).length > 0) {
+        // Deep Clone damit spätere Mutationen nicht die ursprüngliche Facet-Basis verändern
+        try {
+          const cloned: Record<string, any[]> = {};
+          for (const [pid, list] of Object.entries(productFilters)) {
+            cloned[pid] = list.map(item => ({ ...item, values: Array.isArray(item.values) ? [...item.values] : item.values }));
+          }
+          setInitialProductFilters(cloned);
+        } catch {
+          setInitialProductFilters(JSON.parse(JSON.stringify(productFilters)));
+        }
+      }
     }
   }, [currentCategoryProducts, initialProducts.length]);
 
@@ -105,26 +138,69 @@ export default function DynamicFilters({
     }, 100);
 
     return () => clearTimeout(timeoutId);
-  }, [productFilters, allFilters, initialProducts]);
+  }, [productFilters, allFilters, initialProducts, initialProductFilters]);
 
   // Function to count products for each filter option
   const getProductCountForOption = (filterId: string, optionValue: string) => {
     // Use initial snapshot for the current view (global or category), fallback to allProducts
     const productsToCheck = initialProducts.length > 0 ? initialProducts : allProducts;
-    
     if (!productsToCheck || productsToCheck.length === 0) return 0;
-    
-    // Get all selected filters EXCEPT the current filter
-    const otherSelectedFilters = { ...selectedFilters };
-    delete otherSelectedFilters[filterId]; // Remove current filter to avoid double filtering
-    
+
+    // Verwende Snapshot der ursprünglichen productFilters falls vorhanden, sonst aktuelle
+    const productFiltersSource = Object.keys(initialProductFilters).length > 0 ? initialProductFilters : productFilters;
+
+    const filterMeta = allFilters.find(f => f._id === filterId);
+    const filterType = filterMeta?.type;
+    const currentVals = selectedFilters[filterId] || [];
+    const isOptionSelected = currentVals.includes(optionValue);
+
+    // Andere Filter ohne diesen
+    const otherFilters: Record<string, string[]> = {};
+    for (const [fid, vals] of Object.entries(selectedFilters)) {
+      if (fid !== filterId) otherFilters[fid] = vals;
+    }
+
+    // Produkte, die alle aktuellen Filter (inkl. OR innerhalb eines Filters) erfüllen (für ausgewählte Optionen Anzeige der aktuellen Treffer)
+    let displayedProductsCache: any[] | null = null;
+    const getDisplayedProducts = () => {
+      if (displayedProductsCache) return displayedProductsCache;
+      displayedProductsCache = productsToCheck.filter(p => {
+        const effectivePrice = getEffectivePrice(p);
+        if (effectivePrice < priceRange.min || effectivePrice > priceRange.max) return false;
+        if (specialFilter) {
+          if (specialFilter === 'topseller' && !p.isTopSeller) return false;
+          if (specialFilter === 'sale' && !p.isOnSale) return false;
+          if (specialFilter === 'neu') {
+            const twoWeeksAgo = new Date(); twoWeeksAgo.setDate(twoWeeksAgo.getDate() - 14);
+            const productDate = new Date(p.createdAt || p.updatedAt); if (productDate < twoWeeksAgo) return false;
+          }
+        }
+        if (showTopSellers && !p.isTopSeller) return false;
+        if (showSaleItems && !p.isOnSale) return false;
+        if (showAvailableOnly && !isProductAvailable(p)) return false;
+        return passesFilters(p, selectedFilters, productFiltersSource);
+      });
+      return displayedProductsCache;
+    };
+
+    if (isOptionSelected) {
+      const displayed = getDisplayedProducts();
+      const count = displayed.filter(p => {
+        const pfl = productFiltersSource[p._id] || [];
+        const pf = pfl.find((pf: any) => pf.filterId === filterId);
+        return pf && pf.values.includes(optionValue);
+      }).length;
+      return count;
+    }
+
     const filteredProducts = productsToCheck.filter(product => {
       // Apply price filter first
+      const pr = basePriceRange || priceRange; // Für unselektierte Counts Basisbereich nutzen
       const effectivePrice = getEffectivePrice(product);
-      if (effectivePrice < priceRange.min || effectivePrice > priceRange.max) {
+      if (effectivePrice < pr.min || effectivePrice > pr.max) {
         return false;
       }
-      
+
       // Apply special URL filter (topseller, sale, neu)
       if (specialFilter) {
         switch (specialFilter) {
@@ -143,61 +219,62 @@ export default function DynamicFilters({
         }
       }
 
-      // Apply standard toggles (except the current filter which is an attribute-filter, so all apply)
+      // Apply standard toggles
       if (showTopSellers && !product.isTopSeller) return false;
       if (showSaleItems && !product.isOnSale) return false;
       if (showAvailableOnly && !isProductAvailable(product)) return false;
 
-      // Apply all OTHER selected filters (excluding current filter)
-      for (const [filterIdToCheck, filterValues] of Object.entries(otherSelectedFilters)) {
-        if (filterValues && filterValues.length > 0) {
-          const productFilterList = productFilters[product._id] || [];
-          const productFilter = productFilterList.find((pf: any) => pf.filterId === filterIdToCheck);
-          if (!productFilter) {
-            return false; // Product doesn't have this filter at all
-          }
-          
-          // Get filter type
-          const filterType = allFilters.find(f => f._id === filterIdToCheck)?.type;
-          
-          if (filterType === 'range') {
-            // Range filter: check if any product value falls within the selected range
-            const minValue = parseFloat(filterValues[0]);
-            const maxValue = parseFloat(filterValues[1]);
-            
-            const hasValueInRange = productFilter.values.some((value: string) => {
-              const numValue = parseFloat(value);
-              return !isNaN(numValue) && numValue >= minValue && numValue <= maxValue;
-            });
-            
-            if (!hasValueInRange) {
-              return false;
-            }
-          } else {
-            // Multiselect filter: Check if product has ANY of the selected values for this filter (OR logic within filter)
-            const hasAnyValue = filterValues.some((selectedValue: string) => 
-              productFilter.values.includes(selectedValue)
-            );
-            
-            if (!hasAnyValue) {
-              return false;
-            }
-          }
-        }
-      }
-      
-      // Now check if this product has the specific option value we're counting
-      const productFilterList = productFilters[product._id] || [];
-      const productFilter = productFilterList.find((pf: any) => pf.filterId === filterId);
-      if (!productFilter) {
-        return false; // Product doesn't have this filter at all
-      }
-      
-      // Check if product has this specific option value
-      return productFilter.values.includes(optionValue);
+      // Nur andere Filter prüfen
+      if (!passesFilters(product, otherFilters, productFiltersSource)) return false;
+      const pfl = productFiltersSource[product._id] || [];
+      const pf = pfl.find((pf: any) => pf.filterId === filterId);
+      if (!pf) return false;
+      if (filterType === 'range') return false;
+      return pf.values.includes(optionValue);
     });
-    
-    return filteredProducts.length;
+    const count = filteredProducts.length;
+    return count;
+  };
+
+  // Prüft ob ein Produkt alle angegebenen Filter (OR innerhalb eines Filters, AND zwischen Filtern) erfüllt
+  const passesFilters = (product: any, filtersToApply: Record<string, string[]>, source: Record<string, any[]>) => {
+    for (const [fid, vals] of Object.entries(filtersToApply)) {
+      if (!vals || vals.length === 0) continue;
+      const meta = allFilters.find(f => f._id === fid);
+      const pfl = source[product._id] || [];
+      const pf = pfl.find((pf: any) => pf.filterId === fid);
+      if (!pf) return false;
+      if (meta?.type === 'range') {
+        const minValue = parseFloat(vals[0]);
+        const maxValue = parseFloat(vals[1]);
+        const hasInRange = pf.values.some((v: string) => {
+          const n = parseFloat(v); return !isNaN(n) && n >= minValue && n <= maxValue;
+        });
+        if (!hasInRange) return false;
+      } else {
+        const hasAny = vals.some(v => pf.values.includes(v));
+        if (!hasAny) return false;
+      }
+    }
+    return true;
+  };
+
+  // Variante von isFilterOptionAvailable die eine bestimmte productFilters-Quelle nutzt
+  const isFilterOptionAvailableWithSource = (product: any, filterId: string, optionValue: string, source: Record<string, any[]>) => {
+    const productFilterList = source[product._id] || [];
+    const productFilter = productFilterList.find((pf: any) => pf.filterId === filterId);
+    if (!productFilter) return false;
+    const hasOption = productFilter.values.includes(optionValue);
+    if (!hasOption) return false;
+    if (showAvailableOnly && product.variations && product.variations.length > 0) {
+      return product.variations.some((variation: any) => 
+        variation.options && variation.options.some((option: any) => 
+          option.value === optionValue && 
+          (option.inStock === true || (option.stockQuantity && option.stockQuantity > 0))
+        )
+      );
+    }
+    return true;
   };
 
   // Availability check similar to shop page
@@ -211,6 +288,34 @@ export default function DynamicFilters({
       );
     }
     return false;
+  };
+
+  // Check if a specific filter option is available for a product
+  const isFilterOptionAvailable = (product: any, filterId: string, optionValue: string) => {
+    // Get the product's filter data
+    const productFilterList = productFilters[product._id] || [];
+    const productFilter = productFilterList.find((pf: any) => pf.filterId === filterId);
+    
+    if (!productFilter) return false;
+    
+    // Check if the product has this specific option value
+    const hasOption = productFilter.values.includes(optionValue);
+    if (!hasOption) return false;
+    
+    // If "Auf Lager" filter is active, check if that specific variation is available
+    if (showAvailableOnly && product.variations && product.variations.length > 0) {
+      // Check if any variation with this option value is available
+      return product.variations.some((variation: any) => 
+        variation.options && variation.options.some((option: any) => 
+          option.value === optionValue && 
+          (option.inStock === true || (option.stockQuantity && option.stockQuantity > 0))
+        )
+      );
+    }
+    
+    // If "Auf Lager" filter is not active, or for non-variation filters, 
+    // if the product has the option, it's available
+    return true;
   };
 
   // Function to get min/max values for range filters
@@ -308,14 +413,6 @@ export default function DynamicFilters({
                     checked={(selectedFilters[filter._id!] || []).includes(option.value)}
                     onChange={(e) => {
                       const newValues = e.target.checked ? [option.value] : [];
-                      console.log('Select Filter Change:', {
-                        filterId: filter._id,
-                        filterName: filter.name,
-                        optionValue: option.value,
-                        checked: e.target.checked,
-                        newValues,
-                        currentSelectedFilters: selectedFilters[filter._id!] || []
-                      });
                       onFilterChange(filter._id!, newValues);
                     }}
                     className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
@@ -331,47 +428,70 @@ export default function DynamicFilters({
             </div>
           )}
           
-          {filter.type === 'multiselect' && (
-            <div className="space-y-1">
-              {filter.options
-                .map((option) => ({
-                  ...option,
-                  productCount: getProductCountForOption(filter._id!, option.value)
-                }))
-                .map((option) => (
-                <label key={option.value} className="flex items-center">
-                  <input
-                    type="checkbox"
-                    value={option.value}
-                    checked={(selectedFilters[filter._id!] || []).includes(option.value)}
-                    onChange={(e) => {
-                      const currentValues = selectedFilters[filter._id!] || [];
-                      const newValues = e.target.checked
-                        ? [...currentValues, option.value]
-                        : currentValues.filter(v => v !== option.value);
-                      console.log('Multiselect Filter Change:', {
-                        filterId: filter._id,
-                        filterName: filter.name,
-                        optionValue: option.value,
-                        checked: e.target.checked,
-                        currentValues,
-                        newValues,
-                        allSelectedFilters: selectedFilters
-                      });
-                      onFilterChange(filter._id!, newValues);
-                    }}
-                    className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                  />
-                  <span className="ml-1 text-sm text-gray-700 flex items-center justify-between w-full">
-                    <span>{option.name}</span>
-                    <span className="text-xs text-gray-500 bg-gray-100 w-6 h-6 rounded-full flex items-center justify-center">
-                      {getProductCountForOption(filter._id!, option.value)}
+          {filter.type === 'multiselect' && (() => {
+            const optionsWithCounts = filter.options
+              .map((option) => ({
+                ...option,
+                productCount: getProductCountForOption(filter._id!, option.value)
+              }));
+            
+            const isExpanded = expandedOptions[filter._id!] ?? false;
+            const hasMoreThanFive = optionsWithCounts.length > 5;
+            const visibleOptions = hasMoreThanFive && !isExpanded 
+              ? optionsWithCounts.slice(0, 5) 
+              : optionsWithCounts;
+            
+            return (
+              <div className="space-y-1">
+                {visibleOptions.map((option) => (
+                  <label key={option.value} className="flex items-center">
+                    <input
+                      type="checkbox"
+                      value={option.value}
+                      checked={(selectedFilters[filter._id!] || []).includes(option.value)}
+                      onChange={(e) => {
+                        const currentValues = selectedFilters[filter._id!] || [];
+                        const newValues = e.target.checked
+                          ? [...currentValues, option.value]
+                          : currentValues.filter(v => v !== option.value);
+                        onFilterChange(filter._id!, newValues);
+                      }}
+                      className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                    />
+                    <span className="ml-1 text-sm text-gray-700 flex items-center justify-between w-full">
+                      <span>{option.name}</span>
+                      <span className="text-xs text-gray-500 bg-gray-100 w-6 h-6 rounded-full flex items-center justify-center">
+                        {option.productCount}
+                      </span>
                     </span>
-                  </span>
-                </label>
-              ))}
-            </div>
-          )}
+                  </label>
+                ))}
+                
+                {hasMoreThanFive && (
+                  <button
+                    onClick={() => toggleOptionsExpansion(filter._id!)}
+                    className="text-sm text-blue-600 hover:text-blue-800 mt-2 flex items-center"
+                  >
+                    {isExpanded ? (
+                      <>
+                        <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 15l7-7 7 7" />
+                        </svg>
+                        Weniger anzeigen
+                      </>
+                    ) : (
+                      <>
+                        <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                        </svg>
+                        Mehr anzeigen ({optionsWithCounts.length - 5} weitere)
+                      </>
+                    )}
+                  </button>
+                )}
+              </div>
+            );
+          })()}
 
           {filter.type === 'text' && (
             <input
@@ -537,15 +657,6 @@ export default function DynamicFilters({
                         const newValues = isSelected
                           ? currentValues.filter(v => v !== option.value)
                           : [...currentValues, option.value];
-                        console.log('Color Filter Change:', {
-                          filterId: filter._id,
-                          filterName: filter.name,
-                          optionValue: option.value,
-                          isSelected,
-                          currentValues,
-                          newValues,
-                          allSelectedFilters: selectedFilters
-                        });
                         onFilterChange(filter._id!, newValues);
                       }}
                       className={`w-6 h-6 rounded-full border-2 transition-all hover:scale-110 ${

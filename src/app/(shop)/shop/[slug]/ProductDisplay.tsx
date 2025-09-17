@@ -20,7 +20,6 @@ interface ProductDisplayProps {
 export default function ProductDisplay({ product, descriptionHtml, recommendedProducts = [], category }: ProductDisplayProps) {
   const [selectedImageIndex, setSelectedImageIndex] = useState(0);
   const [quantity, setQuantity] = useState(1);
-  const [thumbnailOffset, setThumbnailOffset] = useState(0);
   const [isLightboxOpen, setIsLightboxOpen] = useState(false);
   const [isLightboxClosing, setIsLightboxClosing] = useState(false);
   const [activeTab, setActiveTab] = useState('description');
@@ -131,126 +130,13 @@ export default function ProductDisplay({ product, descriptionHtml, recommendedPr
   const isVideo = currentMedia && product.videos?.includes(currentMedia);
   const videoIndex = product.videos?.indexOf(currentMedia) || 0;
   const videoThumbnail = product.videoThumbnails?.[videoIndex];
-  const maxThumbnails = 3;
-  const canScrollUp = thumbnailOffset > 0;
-  const canScrollDown = thumbnailOffset + maxThumbnails < allMedia.length;
-
-  const scrollThumbnails = (direction: 'up' | 'down') => {
-    if (direction === 'up' && canScrollUp) {
-      setThumbnailOffset(prev => Math.max(0, prev - 1));
-    } else if (direction === 'down' && canScrollDown) {
-      setThumbnailOffset(prev => Math.min(allMedia.length - maxThumbnails, prev + 1));
-    }
-  };
-
-  const visibleThumbnails = allMedia.slice(thumbnailOffset, thumbnailOffset + maxThumbnails);
 
   return (
     <div className="max-w-7xl mx-auto px-4 py-10">
 
-      <div className="grid grid-cols-12 gap-8">
-        {/* Left: Thumbnail Images */}
-        <div className="col-span-2">
-          <div className="bg-white rounded-xl shadow-lg p-4">
-            <h3 className="text-sm font-semibold text-gray-700 mb-3 flex items-center">
-              <svg className="w-4 h-4 mr-2 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
-              </svg>
-              Galerie
-            </h3>
-            <div className="aspect-square flex flex-col relative">
-            {/* Up Arrow */}
-            <button
-              onClick={() => scrollThumbnails('up')}
-              disabled={!canScrollUp}
-              className={`absolute top-0 left-0 right-0 h-8 flex items-center justify-center rounded-lg border transition-all z-10 ${
-                canScrollUp 
-                  ? 'border-gray-300 hover:border-gray-400 text-gray-600 hover:text-gray-800 bg-white' 
-                  : 'border-gray-200 text-gray-300 cursor-not-allowed bg-gray-50'
-              }`}
-            >
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 15l7-7 7 7" />
-              </svg>
-            </button>
-
-            {/* Thumbnails Container - takes full height with padding for arrows */}
-            <div className="flex-1 flex flex-col gap-2 pt-10 pb-10">
-              {visibleThumbnails.map((media: string, index: number) => {
-                const actualIndex = thumbnailOffset + index;
-                const isVideoThumbnail = product.videos?.includes(media);
-                const videoIndex = product.videos?.indexOf(media) || 0;
-                const thumbnailUrl = product.videoThumbnails?.[videoIndex];
-                
-                return (
-                  <button
-                    key={actualIndex}
-                    onClick={() => setSelectedImageIndex(actualIndex)}
-                    className={`w-full h-34 rounded-lg overflow-hidden border-2 transition-all relative ${
-                      selectedImageIndex === actualIndex 
-                        ? 'border-blue-500 ring-2 ring-blue-200' 
-                        : 'border-gray-200 hover:border-gray-300'
-                    }`}
-                  >
-                    {isVideoThumbnail ? (
-                      <div className="w-full h-full bg-gray-100 flex items-center justify-center relative">
-                         {thumbnailUrl ? (
-                           <img
-                             src={thumbnailUrl}
-                             alt={`${product.title} video thumbnail`}
-                             className="w-full h-full object-cover absolute inset-0"
-                           />
-                         ) : (
-                          <svg className="w-8 h-8 text-gray-400" fill="currentColor" viewBox="0 0 24 24">
-                            <path d="M8 5v14l11-7z"/>
-                          </svg>
-                        )}
-                        <div className="absolute inset-0 flex items-center justify-center">
-                          <div className="w-12 h-12 bg-black bg-opacity-70 rounded-full flex items-center justify-center">
-                            <svg className="w-6 h-6 text-white ml-1" fill="currentColor" viewBox="0 0 24 24">
-                              <path d="M8 5v14l11-7z"/>
-                            </svg>
-                          </div>
-                        </div>
-                      </div>
-                    ) : (
-                      <img
-                        src={getOptimizedImageUrl(media, getContextualImageSize('thumbnail'), product.imageSizes, product.images?.indexOf(media) || 0)}
-                        alt={`${product.title} ${actualIndex + 1}`}
-                        className="w-full h-full object-cover"
-                        loading="lazy"
-                      />
-                    )}
-                    {isVideoThumbnail && (
-                      <div className="absolute top-1 right-1 bg-black bg-opacity-50 text-white text-xs px-1 rounded">
-                        Video
-                      </div>
-                    )}
-                  </button>
-                );
-              })}
-            </div>
-
-            {/* Down Arrow */}
-            <button
-              onClick={() => scrollThumbnails('down')}
-              disabled={!canScrollDown}
-              className={`absolute bottom-0 left-0 right-0 h-8 flex items-center justify-center rounded-lg border transition-all z-10 ${
-                canScrollDown 
-                  ? 'border-gray-300 hover:border-gray-400 text-gray-600 hover:text-gray-800 bg-white' 
-                  : 'border-gray-200 text-gray-300 cursor-not-allowed bg-gray-50'
-              }`}
-            >
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-              </svg>
-            </button>
-            </div>
-          </div>
-        </div>
-
-        {/* Center: Main Product Image/Video */}
-        <div className="col-span-5">
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
+        {/* Left: Main Product Image/Video */}
+        <div className="lg:col-span-7">
           <div className="bg-white rounded-xl shadow-lg p-4">
             <h3 className="text-sm font-semibold text-gray-700 mb-3 flex items-center">
               <svg className="w-4 h-4 mr-2 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -299,11 +185,75 @@ export default function ProductDisplay({ product, descriptionHtml, recommendedPr
               </div>
             )}
             </div>
+            
+            {/* Thumbnails below main image */}
+            <div className="mt-4">
+              <h3 className="text-sm font-semibold text-gray-700 mb-3 flex items-center">
+                <svg className="w-4 h-4 mr-2 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                </svg>
+                Galerie
+              </h3>
+              <div className="flex gap-2 overflow-x-auto pb-2">
+                {allMedia.map((media: string, index: number) => {
+                  const isVideoThumbnail = product.videos?.includes(media);
+                  const videoIndex = product.videos?.indexOf(media) || 0;
+                  const thumbnailUrl = product.videoThumbnails?.[videoIndex];
+                  
+                  return (
+                    <button
+                      key={index}
+                      onClick={() => setSelectedImageIndex(index)}
+                      className={`flex-shrink-0 w-20 h-20 rounded-lg overflow-hidden border-2 transition-all relative ${
+                        selectedImageIndex === index 
+                          ? 'border-blue-500 ring-2 ring-blue-200' 
+                          : 'border-gray-200 hover:border-gray-300'
+                      }`}
+                    >
+                      {isVideoThumbnail ? (
+                        <div className="w-full h-full bg-gray-100 flex items-center justify-center relative">
+                           {thumbnailUrl ? (
+                             <img
+                               src={thumbnailUrl}
+                               alt={`${product.title} video thumbnail`}
+                               className="w-full h-full object-cover absolute inset-0"
+                             />
+                           ) : (
+                            <svg className="w-6 h-6 text-gray-400" fill="currentColor" viewBox="0 0 24 24">
+                              <path d="M8 5v14l11-7z"/>
+                            </svg>
+                          )}
+                          <div className="absolute inset-0 flex items-center justify-center">
+                            <div className="w-8 h-8 bg-black bg-opacity-70 rounded-full flex items-center justify-center">
+                              <svg className="w-4 h-4 text-white ml-0.5" fill="currentColor" viewBox="0 0 24 24">
+                                <path d="M8 5v14l11-7z"/>
+                              </svg>
+                            </div>
+                          </div>
+                        </div>
+                      ) : (
+                        <img
+                          src={getOptimizedImageUrl(media, getContextualImageSize('thumbnail'), product.imageSizes, product.images?.indexOf(media) || 0)}
+                          alt={`${product.title} ${index + 1}`}
+                          className="w-full h-full object-cover"
+                          loading="lazy"
+                        />
+                      )}
+                      {isVideoThumbnail && (
+                        <div className="absolute top-1 right-1 bg-black bg-opacity-50 text-white text-xs px-1 rounded">
+                          Video
+                        </div>
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
           </div>
         </div>
 
         {/* Right: Product Info & Purchase */}
-        <div className="col-span-5">
+        <div className="lg:col-span-5">
           <div className="bg-white rounded-xl shadow-lg p-6">
             {/* Product Title */}
              <div className="mb-4">
@@ -400,8 +350,8 @@ export default function ProductDisplay({ product, descriptionHtml, recommendedPr
                               disabled={!optionInStock || optionStock <= 0}
                             >
                               {option.value} 
-                              {option.priceAdjustment > 0 && ` (+${(option.priceAdjustment / 100).toFixed(2)} €)`}
-                              {option.priceAdjustment < 0 && ` (${(option.priceAdjustment / 100).toFixed(2)} €)`}
+                              {option.priceAdjustment !== undefined && option.priceAdjustment > 0 && ` (+${(option.priceAdjustment / 100).toFixed(2)} €)`}
+                              {option.priceAdjustment !== undefined && option.priceAdjustment < 0 && ` (${(option.priceAdjustment / 100).toFixed(2)} €)`}
                               {optionStock > 0 && ` - ${optionStock} verfügbar`}
                               {(!optionInStock || optionStock <= 0) && ' - Nicht verfügbar'}
                             </option>

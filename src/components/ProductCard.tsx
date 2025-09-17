@@ -5,6 +5,7 @@ import Link from "next/link";
 import { getOptimizedImageUrl, getContextualImageSize } from "@/lib/image-utils";
 import { isVariationInStock } from "@/lib/variation-stock";
 import { TiShoppingCart } from "react-icons/ti";
+import { FaPlus } from "react-icons/fa";
 import { useCartStore } from "@/lib/store/cart";
 
 interface ProductCardProps {
@@ -254,12 +255,13 @@ export default function ProductCard({ product }: ProductCardProps) {
     <>
       <Link
         href={`/shop/${product.slug}`}
-        className="shop-grid-item block overflow-hidden"
+        className="shop-grid-item block overflow-hidden group"
         onMouseEnter={handleMouseEnter}
         onMouseLeave={handleMouseLeave}
         onClick={handleClick}
+        style={{ cursor: 'default' }}
       >
-      <div className="aspect-square bg-gray-100 relative overflow-hidden">
+      <div className="aspect-square bg-gray-100 relative overflow-hidden cursor-pointer">
         {images.length > 0 ? (
           <>
             {images.map((image, index) => (
@@ -306,7 +308,7 @@ export default function ProductCard({ product }: ProductCardProps) {
       </div>
       
       <div className="p-4 relative">
-        <div className="font-semibold text-gray-900 mb-2 line-clamp-2">
+        <div className="font-semibold text-gray-900 mb-2 line-clamp-2 cursor-pointer group-hover:underline transition-all duration-200" style={{ textUnderlineOffset: '4px', textDecorationThickness: '1px' }}>
           {product.title}
         </div>
         
@@ -316,13 +318,13 @@ export default function ProductCard({ product }: ProductCardProps) {
             {product.isOnSale && product.offerPrice ? (
               <div className="flex items-baseline gap-2">
                 <div className="flex items-baseline">
-                  <span className="text-2xl font-bold text-red-600">
+                  <span className="text-2xl font-bold text-gray-900">
                     {Math.floor(product.offerPrice / 100)}
                   </span>
-                  <span className="text-sm text-red-600 font-medium">
+                  <span className="text-sm text-gray-900 font-medium">
                     ,{(product.offerPrice % 100).toString().padStart(2, '0')}
                   </span>
-                  <span className="text-sm text-red-600 ml-1">€</span>
+                  <span className="text-sm text-gray-900 ml-1">€</span>
                 </div>
                 <span className="line-through text-gray-400 text-sm">
                   {(product.price / 100).toFixed(2)} €
@@ -359,12 +361,19 @@ export default function ProductCard({ product }: ProductCardProps) {
                 isOutOfStock()
                   ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
                   : product.variations && product.variations.length > 0
-                  ? 'bg-orange-500 text-white hover:bg-orange-600 shadow-lg hover:shadow-xl'
-                  : 'bg-blue-600 text-white hover:bg-blue-700 shadow-lg hover:shadow-xl'
+                  ? 'bg-blue-600 text-white hover:bg-blue-700 shadow-lg hover:shadow-xl cursor-pointer'
+                  : 'bg-blue-600 text-white hover:bg-blue-700 shadow-lg hover:shadow-xl cursor-pointer'
               }`}
               title={product.variations && product.variations.length > 0 ? 'Optionen auswählen' : 'In den Warenkorb'}
             >
-              <TiShoppingCart className="w-4 h-4" />
+              {product.variations && product.variations.length > 0 ? (
+                <div className="relative">
+                  <TiShoppingCart className="w-4 h-4" />
+                  <FaPlus className="w-2 h-2 absolute -top-1 -right-1 bg-white text-blue-600 rounded-full" />
+                </div>
+              ) : (
+                <TiShoppingCart className="w-4 h-4" />
+              )}
             </button>
           </div>
         </div>
@@ -432,8 +441,8 @@ export default function ProductCard({ product }: ProductCardProps) {
                           disabled={!optionInStock || optionStock <= 0}
                         >
                           {option.value} 
-                          {option.priceAdjustment && option.priceAdjustment > 0 && ` (+${(option.priceAdjustment / 100).toFixed(2)} €)`}
-                          {option.priceAdjustment && option.priceAdjustment < 0 && ` (${(option.priceAdjustment / 100).toFixed(2)} €)`}
+                          {option.priceAdjustment !== undefined && option.priceAdjustment > 0 && ` (+${(option.priceAdjustment / 100).toFixed(2)} €)`}
+                          {option.priceAdjustment !== undefined && option.priceAdjustment < 0 && ` (${(option.priceAdjustment / 100).toFixed(2)} €)`}
                           {optionStock > 0 && ` - ${optionStock} verfügbar`}
                           {(!optionInStock || optionStock <= 0) && ' - Nicht verfügbar'}
                         </option>
