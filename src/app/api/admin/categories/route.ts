@@ -2,19 +2,28 @@ import { NextRequest, NextResponse } from "next/server";
 import { connectToDatabase } from "@/lib/mongodb";
 import Category from "@/lib/models/Category";
 import { revalidatePath } from "next/cache";
+import { requireAdmin } from "@/lib/auth";
 
 export async function GET() {
+  const { response } = await requireAdmin();
+  if (response) return response;
   try {
+    console.log("API: Fetching categories...");
     await connectToDatabase();
     
-    // Get all categories (both parent and subcategories)
-    const allCategories = await Category.find({ isActive: true })
+    // Get all categories (both parent and subcategories) - for admin, show all categories
+    const allCategories = await Category.find({})
       .sort({ sortOrder: 1, name: 1 })
       .lean();
+    
+    console.log("API: Found categories:", allCategories.length);
     
     // Separate parent categories and subcategories
     const parentCategories = allCategories.filter(cat => !cat.parentId);
     const subcategories = allCategories.filter(cat => cat.parentId);
+    
+    console.log("API: Parent categories:", parentCategories.length);
+    console.log("API: Subcategories:", subcategories.length);
     
     // Group subcategories by parent
     const subcategoriesByParent = subcategories.reduce((acc, subcat) => {
@@ -32,14 +41,17 @@ export async function GET() {
       subcategories: subcategoriesByParent[(parent._id as any).toString()] || []
     }));
     
+    console.log("API: Returning categories with subcategories:", categoriesWithSubcategories.length);
     return NextResponse.json(categoriesWithSubcategories);
   } catch (error) {
-    console.error("Failed to fetch categories:", error);
+    console.error("API: Failed to fetch categories:", error);
     return NextResponse.json({ error: "Failed to fetch categories" }, { status: 500 });
   }
 }
 
 export async function POST(request: NextRequest) {
+  const { response } = await requireAdmin();
+  if (response) return response;
   try {
     await connectToDatabase();
     const body = await request.json();

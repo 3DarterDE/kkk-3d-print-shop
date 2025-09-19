@@ -18,12 +18,11 @@ export async function GET(request: NextRequest) {
     // Search in multiple fields using MongoDB text search and regex
     const searchRegex = new RegExp(query.trim(), 'i');
     
-    // First, get all products that match in title, tags, manufacturer, category, or subcategory
+    // First, get all products that match in title, tags, category, or subcategory
     const primaryProducts = await Product.find({
       $or: [
         { title: { $regex: searchRegex } },
         { tags: { $in: [searchRegex] } },
-        { manufacturer: { $regex: searchRegex } },
         { category: { $regex: searchRegex } },
         { subcategory: { $regex: searchRegex } }
       ]
@@ -40,7 +39,6 @@ export async function GET(request: NextRequest) {
           $nor: [
             { title: { $regex: searchRegex } },
             { tags: { $in: [searchRegex] } },
-            { manufacturer: { $regex: searchRegex } },
             { category: { $regex: searchRegex } },
             { subcategory: { $regex: searchRegex } }
           ]
@@ -98,7 +96,6 @@ export async function GET(request: NextRequest) {
         const title = product.title.toLowerCase();
         const description = (product.description || '').toLowerCase();
         const tags = (product.tags || []).map((tag: string) => tag.toLowerCase());
-        const manufacturer = (product.manufacturer || '').toLowerCase();
         
         // Exact title match - highest priority (score 1000)
         if (title === queryLower) score += 1000;
@@ -115,8 +112,6 @@ export async function GET(request: NextRequest) {
         // Tags contain query - medium priority (score 300)
         if (tags.some((tag: string) => tag.includes(queryLower))) score += 300;
         
-        // Manufacturer contains query - low priority (score 200)
-        if (manufacturer.includes(queryLower)) score += 200;
         
         // Top seller bonus (score 100)
         if (product.isTopSeller) score += 100;
@@ -164,7 +159,6 @@ export async function GET(request: NextRequest) {
         images: product.images || [],
         imageSizes: product.imageSizes || [],
         tags: product.tags || [],
-        manufacturer: product.manufacturer,
         category: categoryName,
         subcategory: product.subcategory,
         type: 'product'
@@ -194,7 +188,6 @@ export async function GET(request: NextRequest) {
         images: product.images || [],
         imageSizes: product.imageSizes || [],
         tags: product.tags || [],
-        manufacturer: product.manufacturer,
         category: categoryName,
         subcategory: product.subcategory,
         type: 'product',

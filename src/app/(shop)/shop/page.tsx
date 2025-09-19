@@ -48,7 +48,6 @@ export default function ShopPage({ searchParams }: { searchParams: Promise<{ cat
   const [resolvedSearchParams, setResolvedSearchParams] = useState<{ category?: string; subcategory?: string; search?: string; filter?: string }>({});
   const [loading, setLoading] = useState(true);
   const [sortBy, setSortBy] = useState<'default' | 'newest' | 'oldest' | 'price-low' | 'price-high' | 'name-asc' | 'name-desc'>('default');
-  const [categoryTopSellerPage, setCategoryTopSellerPage] = useState(0);
   const [searchQuery, setSearchQuery] = useState('');
   const [priceRange, setPriceRange] = useState<{ min: number; max: number }>({ min: 0, max: 1000 });
   const [selectedDynamicFilters, setSelectedDynamicFilters] = useState<Record<string, string[]>>({});
@@ -166,7 +165,7 @@ export default function ShopPage({ searchParams }: { searchParams: Promise<{ cat
       try {
         // Load critical data in parallel with proper caching
         const [productsResponse, cats] = await Promise.all([
-          fetch('/api/admin/products', { 
+          fetch('/api/shop/products', { 
             cache: 'no-store', // Always fetch fresh products to reflect stock changes immediately
             next: { revalidate: 0 } // No cache for products
           }),
@@ -209,10 +208,6 @@ export default function ShopPage({ searchParams }: { searchParams: Promise<{ cat
 
 
 
-  // Reset pagination when category, search query, price range, or dynamic filters change
-  useEffect(() => {
-    setCategoryTopSellerPage(0);
-  }, [resolvedSearchParams.category, searchQuery, priceRange, selectedDynamicFilters]);
 
 
 
@@ -269,12 +264,11 @@ export default function ShopPage({ searchParams }: { searchParams: Promise<{ cat
         const query = searchQuery.toLowerCase().trim();
         const titleMatch = p.title.toLowerCase().includes(query);
         const descriptionMatch = p.description && p.description.toLowerCase().includes(query);
-        const manufacturerMatch = p.manufacturer && p.manufacturer.toLowerCase().includes(query);
         const categoryMatch = p.category && p.category.toLowerCase().includes(query);
         const subcategoryMatch = p.subcategory && p.subcategory.toLowerCase().includes(query);
         const tagsMatch = p.tags && p.tags.some((tag: string) => tag.toLowerCase().includes(query));
         
-        if (!titleMatch && !descriptionMatch && !manufacturerMatch && !categoryMatch && !subcategoryMatch && !tagsMatch) {
+        if (!titleMatch && !descriptionMatch && !categoryMatch && !subcategoryMatch && !tagsMatch) {
           return false;
         }
       }
@@ -420,7 +414,7 @@ export default function ShopPage({ searchParams }: { searchParams: Promise<{ cat
     return filteredProducts.length;
   };
 
-  // Filter products by category, subcategory, manufacturer, and search query
+  // Filter products by category, subcategory, and search query
   const filteredProducts = allProducts.filter((p: any) => {
     const selectedCategory = resolvedSearchParams.category;
     const selectedSubcategory = resolvedSearchParams.subcategory;
@@ -430,13 +424,12 @@ export default function ShopPage({ searchParams }: { searchParams: Promise<{ cat
       const query = searchQuery.toLowerCase().trim();
       const titleMatch = p.title.toLowerCase().includes(query);
       const descriptionMatch = p.description && p.description.toLowerCase().includes(query);
-      const manufacturerMatch = p.manufacturer && p.manufacturer.toLowerCase().includes(query);
       const categoryMatch = p.category && p.category.toLowerCase().includes(query);
       const subcategoryMatch = p.subcategory && p.subcategory.toLowerCase().includes(query);
       const tagsMatch = p.tags && p.tags.some((tag: string) => tag.toLowerCase().includes(query));
       
       // Check if any field matches (but exclude recommended products)
-      if (!titleMatch && !descriptionMatch && !manufacturerMatch && !categoryMatch && !subcategoryMatch && !tagsMatch) {
+      if (!titleMatch && !descriptionMatch && !categoryMatch && !subcategoryMatch && !tagsMatch) {
         return false;
       }
     }
@@ -662,15 +655,14 @@ export default function ShopPage({ searchParams }: { searchParams: Promise<{ cat
       filteredProducts.forEach((p: any) => {
         const titleMatch = p.title.toLowerCase().includes(query);
         const descriptionMatch = p.description && p.description.toLowerCase().includes(query);
-        const manufacturerMatch = p.manufacturer && p.manufacturer.toLowerCase().includes(query);
         const categoryMatch = p.category && p.category.toLowerCase().includes(query);
         const subcategoryMatch = p.subcategory && p.subcategory.toLowerCase().includes(query);
         const tagsMatch = p.tags && p.tags.some((tag: string) => tag.toLowerCase().includes(query));
         
         
-        // Primary matches (title, tags, manufacturer, category, subcategory, description)
+        // Primary matches (title, tags, category, subcategory, description)
         // Include description in primary matches to avoid duplicates
-        const primaryMatch = titleMatch || manufacturerMatch || categoryMatch || subcategoryMatch || tagsMatch || descriptionMatch;
+        const primaryMatch = titleMatch || categoryMatch || subcategoryMatch || tagsMatch || descriptionMatch;
         
         // No description-only matches needed since description is now included in primary matches
         if (primaryMatch) {
@@ -733,12 +725,6 @@ export default function ShopPage({ searchParams }: { searchParams: Promise<{ cat
           }
         }
         
-        // Manufacturer filter - check URL params directly
-        const urlParams = new URLSearchParams(window.location.search);
-        const manufacturerParam = urlParams.get('manufacturer');
-        if (manufacturerParam) {
-          if (p.manufacturer !== manufacturerParam) return false;
-        }
         
         // Dynamic filters - Handle different filter types
         for (const [filterId, filterValues] of Object.entries(selectedDynamicFilters)) {
@@ -854,7 +840,7 @@ export default function ShopPage({ searchParams }: { searchParams: Promise<{ cat
 
   const products = [...sortedPrimaryProducts];
 
-  // Extract top sellers for display at the top (only if manufacturer filter and search allows them)
+  // Extract top sellers for display at the top (only if search allows them)
   const allTopSellers = allProducts.filter((p: any) => {
     if (!(p.isTopSeller || false)) return false;
     
@@ -863,12 +849,11 @@ export default function ShopPage({ searchParams }: { searchParams: Promise<{ cat
       const query = searchQuery.toLowerCase().trim();
       const titleMatch = p.title.toLowerCase().includes(query);
       const descriptionMatch = p.description && p.description.toLowerCase().includes(query);
-      const manufacturerMatch = p.manufacturer && p.manufacturer.toLowerCase().includes(query);
       const categoryMatch = p.category && p.category.toLowerCase().includes(query);
       const subcategoryMatch = p.subcategory && p.subcategory.toLowerCase().includes(query);
       const tagsMatch = p.tags && p.tags.some((tag: string) => tag.toLowerCase().includes(query));
       
-      if (!titleMatch && !descriptionMatch && !manufacturerMatch && !categoryMatch && !subcategoryMatch && !tagsMatch) {
+      if (!titleMatch && !descriptionMatch && !categoryMatch && !subcategoryMatch && !tagsMatch) {
         return false;
       }
     }
@@ -876,61 +861,6 @@ export default function ShopPage({ searchParams }: { searchParams: Promise<{ cat
     return true;
   });
   
-  // Extract category top sellers for display at the top when in category view
-  const allCategoryTopSellers = resolvedSearchParams.category 
-    ? allProducts.filter((p: any) => {
-        // Only show category top sellers that belong to the current category
-        const category = categories.find(c => c.slug === resolvedSearchParams.category);
-        if (!category) return false;
-        
-        // Check if product belongs to this category (direct or via subcategory)
-        const isDirectCategoryMatch = p.categoryId === category._id || p.category === resolvedSearchParams.category;
-        const isSubcategoryMatch = category.subcategories?.some(sub => 
-          p.subcategoryId === sub._id || (p.subcategoryIds && p.subcategoryIds.includes(sub._id))
-        );
-        
-        const belongsToCategory = isDirectCategoryMatch || isSubcategoryMatch;
-        
-        // Check if it's a subcategory view
-        const isSubcategoryView = resolvedSearchParams.subcategory !== undefined;
-        
-        if (isSubcategoryView) {
-          // For subcategory view, check if product belongs to the specific subcategory
-          const subcategory = category.subcategories?.find(s => s.slug === resolvedSearchParams.subcategory);
-          if (!subcategory) return false;
-          
-          const belongsToSubcategory = p.subcategoryId === subcategory._id || (p.subcategoryIds && p.subcategoryIds.includes(subcategory._id));
-          const isSubCategoryTopSeller = p.isSubCategoryTopSeller || false;
-          
-          if (!belongsToSubcategory || !isSubCategoryTopSeller) return false;
-        } else {
-          // For main category view, check if product belongs to this specific main category
-          const belongsToMainCategory = p.categoryId === category._id || p.category === resolvedSearchParams.category;
-          const isCategoryTopSeller = p.isCategoryTopSeller || false;
-          
-          if (!belongsToMainCategory || !isCategoryTopSeller) return false;
-        }
-        
-        // Search filter for category top sellers
-        if (searchQuery.trim()) {
-          const query = searchQuery.toLowerCase().trim();
-          const titleMatch = p.title.toLowerCase().includes(query);
-          const descriptionMatch = p.description && p.description.toLowerCase().includes(query);
-          const manufacturerMatch = p.manufacturer && p.manufacturer.toLowerCase().includes(query);
-          const categoryMatch = p.category && p.category.toLowerCase().includes(query);
-          const subcategoryMatch = p.subcategory && p.subcategory.toLowerCase().includes(query);
-          const tagsMatch = p.tags && p.tags.some((tag: string) => tag.toLowerCase().includes(query));
-          
-          if (!titleMatch && !descriptionMatch && !manufacturerMatch && !categoryMatch && !subcategoryMatch && !tagsMatch) {
-            return false;
-          }
-        }
-        
-        return true;
-      })
-    : [];
-  const categoryTopSellers = allCategoryTopSellers.slice(categoryTopSellerPage * 4, (categoryTopSellerPage + 1) * 4);
-  const totalCategoryTopSellerPages = Math.ceil(allCategoryTopSellers.length / 4);
 
   return (
     <>
@@ -1745,29 +1675,8 @@ export default function ShopPage({ searchParams }: { searchParams: Promise<{ cat
                 // Determine if this product should show as top seller
                 let isTopSeller = false;
                 
-                if (resolvedSearchParams.category) {
-                  // In category view: check if it's a subcategory view
-                  const isSubcategoryView = resolvedSearchParams.subcategory !== undefined;
-                  
-                  if (isSubcategoryView) {
-                    // In subcategory view: check if product belongs to this specific subcategory
-                    const category = categories.find(c => c.slug === resolvedSearchParams.category);
-                    const subcategory = category?.subcategories?.find(s => s.slug === resolvedSearchParams.subcategory);
-                    
-                    if (subcategory) {
-                      const belongsToSubcategory = p.subcategoryId === subcategory._id || (p.subcategoryIds && p.subcategoryIds.includes(subcategory._id));
-                      isTopSeller = belongsToSubcategory && (p.isSubCategoryTopSeller || false);
-                    }
-                  } else {
-                    // In main category view: check if product belongs to this specific main category
-                    const category = categories.find(c => c.slug === resolvedSearchParams.category);
-                    const belongsToMainCategory = category && (p.categoryId === category._id || p.category === resolvedSearchParams.category);
-                    isTopSeller = belongsToMainCategory && (p.isCategoryTopSeller || false);
-                  }
-                } else {
-                  // In "all products" view: only show global top sellers
-                  isTopSeller = p.isTopSeller || false;
-                }
+                // Always use global top seller status
+                isTopSeller = p.isTopSeller || false;
               
               return (
                 <ProductCard 

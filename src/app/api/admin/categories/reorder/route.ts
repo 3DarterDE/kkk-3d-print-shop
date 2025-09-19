@@ -6,15 +6,15 @@ import { revalidatePath } from "next/cache";
 export async function PUT(request: NextRequest) {
   try {
     await connectToDatabase();
-    const { categories } = await request.json();
+    const { categoryIds } = await request.json();
     
-    if (!categories || !Array.isArray(categories)) {
-      return NextResponse.json({ error: "Categories array is required" }, { status: 400 });
+    if (!categoryIds || !Array.isArray(categoryIds)) {
+      return NextResponse.json({ error: "CategoryIds array is required" }, { status: 400 });
     }
     
     // Update sortOrder for each category
-    for (let i = 0; i < categories.length; i++) {
-      const categoryId = categories[i];
+    for (let i = 0; i < categoryIds.length; i++) {
+      const categoryId = categoryIds[i];
       if (categoryId) {
         await Category.findByIdAndUpdate(categoryId, { sortOrder: i });
       }

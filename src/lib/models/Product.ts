@@ -2,6 +2,7 @@ import { Schema, model, models } from "mongoose";
 
 export interface ProductDocument {
   _id: string;
+  sku: string; // Artikelnummer/SKU - für Kunden sichtbar
   slug: string;
   title: string;
   description: string;
@@ -21,8 +22,6 @@ export interface ProductDocument {
   categoryId?: string;
   subcategoryId?: string;
   subcategoryIds?: string[];
-  manufacturer?: string; // Manufacturer ID
-  manufacturerName?: string; // Manufacturer name for display
   properties: Array<{ name: string; value: string }>;
   variations?: {
     name: string; // e.g., "Gewicht", "Größe", "Farbe"
@@ -35,8 +34,7 @@ export interface ProductDocument {
   }[];
   recommendedProducts: string[]; // Array of product IDs
   isTopSeller: boolean;
-  isCategoryTopSeller: boolean;
-  isSubCategoryTopSeller: boolean;
+  isActive: boolean;
   inStock: boolean;
   stockQuantity: number;
   sortOrder: number;
@@ -46,6 +44,7 @@ export interface ProductDocument {
 
 const ProductSchema = new Schema<ProductDocument>(
   {
+    sku: { type: String, required: true, unique: true, index: true },
     slug: { type: String, required: true, unique: true, index: true },
     title: { type: String, required: true, index: true },
     description: { type: String, required: false },
@@ -65,8 +64,6 @@ const ProductSchema = new Schema<ProductDocument>(
   categoryId: { type: String, index: true },
   subcategoryId: { type: String, index: true },
   subcategoryIds: { type: [String], default: [], index: true },
-  manufacturer: { type: String, index: true },
-  manufacturerName: { type: String },
   properties: {
     type: [{
       name: { type: String, required: true },
@@ -85,9 +82,8 @@ const ProductSchema = new Schema<ProductDocument>(
   }],
   recommendedProducts: { type: [String], default: [] },
   isTopSeller: { type: Boolean, default: false, index: true },
-  isCategoryTopSeller: { type: Boolean, default: false, index: true },
-  isSubCategoryTopSeller: { type: Boolean, default: false, index: true },
-    inStock: { type: Boolean, default: true, index: true },
+  isActive: { type: Boolean, default: true, index: true },
+  inStock: { type: Boolean, default: true, index: true },
     stockQuantity: { type: Number, default: 0, min: 0, index: true },
     sortOrder: { type: Number, default: 0, index: true },
   },
@@ -105,10 +101,7 @@ ProductSchema.pre('save', function(next) {
 // Create compound indexes for better query performance
 ProductSchema.index({ category: 1, inStock: 1 });
 ProductSchema.index({ categoryId: 1, inStock: 1 });
-ProductSchema.index({ manufacturer: 1, inStock: 1 });
 ProductSchema.index({ isTopSeller: 1, inStock: 1 });
-ProductSchema.index({ isCategoryTopSeller: 1, inStock: 1 });
-ProductSchema.index({ isSubCategoryTopSeller: 1, inStock: 1 });
 ProductSchema.index({ createdAt: -1 });
 ProductSchema.index({ isOnSale: 1, inStock: 1 });
 ProductSchema.index({ stockQuantity: 1, inStock: 1 });

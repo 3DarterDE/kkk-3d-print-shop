@@ -7,28 +7,7 @@ export async function GET() {
   try {
     await connectToDatabase();
     
-    // Create a simple schema for filters if it doesn't exist
-    const FilterSchema = new mongoose.Schema({
-      name: String,
-      type: String,
-      options: [{
-        name: String,
-        value: String,
-        sortOrder: Number,
-        color: String
-      }],
-      sortOrder: Number,
-      createdAt: Date,
-      updatedAt: Date
-    });
-    
-    // Force schema update by deleting the existing model
-    if (mongoose.models.Filter) {
-      delete mongoose.models.Filter;
-    }
-    
-    const FilterModel = mongoose.model('Filter', FilterSchema);
-    const filters = await FilterModel.find({}).sort({ sortOrder: 1 });
+    const filters = await Filter.find({}).sort({ sortOrder: 1 });
     
     console.log('Returning filters:', JSON.stringify(filters, null, 2));
     
@@ -46,28 +25,7 @@ export async function POST(request: NextRequest) {
     
     console.log('Received filter data:', JSON.stringify(data, null, 2));
     
-    const FilterSchema = new mongoose.Schema({
-      name: String,
-      type: String,
-      options: [{
-        name: String,
-        value: String,
-        sortOrder: Number,
-        color: String
-      }],
-      sortOrder: Number,
-      createdAt: Date,
-      updatedAt: Date
-    });
-    
-    // Force schema update by deleting the existing model
-    if (mongoose.models.Filter) {
-      delete mongoose.models.Filter;
-    }
-    
-    const FilterModel = mongoose.model('Filter', FilterSchema);
-    
-    const filter = new FilterModel({
+    const filter = new Filter({
       ...data,
       createdAt: new Date(),
       updatedAt: new Date()
@@ -87,28 +45,7 @@ export async function PUT(request: NextRequest) {
     const data = await request.json();
     const { _id, ...updateData } = data;
     
-    const FilterSchema = new mongoose.Schema({
-      name: String,
-      type: String,
-      options: [{
-        name: String,
-        value: String,
-        sortOrder: Number,
-        color: String
-      }],
-      sortOrder: Number,
-      createdAt: Date,
-      updatedAt: Date
-    });
-    
-    // Force schema update by deleting the existing model
-    if (mongoose.models.Filter) {
-      delete mongoose.models.Filter;
-    }
-    
-    const FilterModel = mongoose.model('Filter', FilterSchema);
-    
-    const result = await FilterModel.findByIdAndUpdate(
+    const result = await Filter.findByIdAndUpdate(
       _id,
       { ...updateData, updatedAt: new Date() },
       { new: true }
@@ -118,7 +55,7 @@ export async function PUT(request: NextRequest) {
       return NextResponse.json({ error: 'Filter not found' }, { status: 404 });
     }
     
-    return NextResponse.json({ success: true });
+    return NextResponse.json(result);
   } catch (error) {
     console.error('Error updating filter:', error);
     return NextResponse.json({ error: 'Failed to update filter' }, { status: 500 });
@@ -135,27 +72,6 @@ export async function DELETE(request: NextRequest) {
       return NextResponse.json({ error: 'Filter ID is required' }, { status: 400 });
     }
     
-    const FilterSchema = new mongoose.Schema({
-      name: String,
-      type: String,
-      options: [{
-        name: String,
-        value: String,
-        sortOrder: Number,
-        color: String
-      }],
-      sortOrder: Number,
-      createdAt: Date,
-      updatedAt: Date
-    });
-    
-    // Force schema update by deleting the existing model
-    if (mongoose.models.Filter) {
-      delete mongoose.models.Filter;
-    }
-    
-    const FilterModel = mongoose.model('Filter', FilterSchema);
-    
     // Also delete all product filters that use this filter
     const ProductFilterSchema = new mongoose.Schema({
       productId: String,
@@ -169,7 +85,7 @@ export async function DELETE(request: NextRequest) {
     const ProductFilterModel = mongoose.models.ProductFilter || mongoose.model('ProductFilter', ProductFilterSchema);
     await ProductFilterModel.deleteMany({ filterId: id });
     
-    const result = await FilterModel.findByIdAndDelete(id);
+    const result = await Filter.findByIdAndDelete(id);
     
     if (!result) {
       return NextResponse.json({ error: 'Filter not found' }, { status: 404 });

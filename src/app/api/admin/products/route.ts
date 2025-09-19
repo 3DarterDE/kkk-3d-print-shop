@@ -2,11 +2,14 @@ import { NextRequest, NextResponse } from "next/server";
 import { connectToDatabase } from "@/lib/mongodb";
 import { Product } from "@/lib/models/Product";
 import { revalidatePath } from "next/cache";
+import { requireAdmin } from "@/lib/auth";
 
 export const revalidate = 0; // No cache - always fetch fresh data
 
 // GET all products
 export async function GET() {
+  const { response } = await requireAdmin();
+  if (response) return response;
   try {
     await connectToDatabase();
     
@@ -33,6 +36,8 @@ export async function GET() {
 
 // POST new product
 export async function POST(request: NextRequest) {
+  const { response } = await requireAdmin();
+  if (response) return response;
   try {
     const body = await request.json();
     await connectToDatabase();
@@ -43,9 +48,6 @@ export async function POST(request: NextRequest) {
       body.sortOrder = count;
     }
     
-    console.log("Creating product with sortOrder:", body.sortOrder);
-    console.log("Properties received:", body.properties);
-    
     // Create product with explicit sortOrder and properties
     const productData = {
       ...body,
@@ -53,13 +55,9 @@ export async function POST(request: NextRequest) {
       properties: body.properties || []
     };
     
-    console.log("Product data before save:", productData);
-    
     // Use insertOne to ensure sortOrder is saved
     const result = await Product.collection.insertOne(productData);
     const product = await Product.findById(result.insertedId);
-    
-    console.log("Saved product:", product?.toObject());
     
     // Invalidate cache for shop page and top sellers APIs
     revalidatePath('/shop');

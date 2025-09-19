@@ -19,7 +19,6 @@ interface SearchResult {
   images?: string[];
   imageSizes?: { main: string; thumb: string; small: string };
   tags?: string[];
-  manufacturer?: string;
   category?: string;
   subcategory?: string;
   description?: string;

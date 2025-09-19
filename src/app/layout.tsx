@@ -6,6 +6,7 @@ import CategoryNavigation from "@/components/CategoryNavigation";
 import Breadcrumb from "@/components/Breadcrumb";
 import Footer from "@/components/Footer";
 import CartValidationProvider from "../components/CartValidationProvider";
+import VerificationRedirect from "@/components/VerificationRedirect";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -47,6 +48,7 @@ export default function RootLayout({
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
       >
         <CartValidationProvider>
+          <VerificationRedirect />
           <Navbar />
           <CategoryNavigation />
           <main className="pt-16">{children}</main>

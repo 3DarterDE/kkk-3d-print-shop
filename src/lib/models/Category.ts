@@ -8,7 +8,6 @@ export interface CategoryDocument extends Document {
   sortOrder: number;
   parentId?: string;
   subcategories?: CategoryDocument[];
-  topSellerProducts?: string[]; // Array of product IDs
   image?: string; // Main image URL
   imageSizes?: {
     main: string;
@@ -27,7 +26,6 @@ const CategorySchema = new Schema<CategoryDocument>(
     isActive: { type: Boolean, default: true },
     sortOrder: { type: Number, default: 0 },
     parentId: { type: Schema.Types.ObjectId, ref: 'Category', default: null },
-    topSellerProducts: { type: [String], default: [] },
     image: { type: String },
     imageSizes: {
       main: { type: String },

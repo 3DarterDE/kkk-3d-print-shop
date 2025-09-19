@@ -8,8 +8,7 @@ export async function GET() {
   try {
     await connectToDatabase();
     
-    // First, ensure all categories are active
-    await Category.updateMany({}, { isActive: true });
+    // Don't automatically set all categories to active - respect the isActive field
     
     // Get ALL categories first
     const allCategories = await Category.find({ isActive: true })

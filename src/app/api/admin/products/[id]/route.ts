@@ -16,17 +16,17 @@ export async function PUT(
     const body = await request.json();
     await connectToDatabase();
     
-    // If only sortOrder is being updated, do a simple update
-    if (Object.keys(body).length === 1 && body.sortOrder !== undefined) {
-      console.log(`Updating product ${id} with sortOrder ${body.sortOrder}`);
+    // If only sortOrder or isActive is being updated, do a simple update
+    if (Object.keys(body).length === 1 && (body.sortOrder !== undefined || body.isActive !== undefined)) {
+      console.log(`Updating product ${id} with:`, body);
       
       // Convert string id to ObjectId
       const objectId = new mongoose.Types.ObjectId(id);
       
-      // Use direct MongoDB operation to ensure sortOrder is saved
+      // Use direct MongoDB operation to ensure the field is saved
       const result = await Product.collection.updateOne(
         { _id: objectId },
-        { $set: { sortOrder: body.sortOrder } }
+        { $set: body }
       );
       
       console.log(`Update result:`, result);

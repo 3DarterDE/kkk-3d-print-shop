@@ -1,28 +1,31 @@
-import { NextRequest, NextResponse } from 'next/server';
-import { connectToDatabase } from '@/lib/mongodb';
-import { ObjectId } from 'mongodb';
+import { NextRequest, NextResponse } from "next/server";
+import { connectToDatabase } from "@/lib/mongodb";
+import { Filter } from "@/lib/models/Filter";
+import { revalidatePath } from "next/cache";
 
 export async function PUT(request: NextRequest) {
   try {
-    const { db } = await connectToDatabase();
-    const { filterIds } = await request.json();
+    await connectToDatabase();
+    const { filters } = await request.json();
     
-    if (!Array.isArray(filterIds)) {
-      return NextResponse.json({ error: 'filterIds must be an array' }, { status: 400 });
+    if (!filters || !Array.isArray(filters)) {
+      return NextResponse.json({ error: "Filters array is required" }, { status: 400 });
     }
     
-    const bulkOps = filterIds.map((id, index) => ({
-      updateOne: {
-        filter: { _id: new ObjectId(id) },
-        update: { $set: { sortOrder: index } }
+    // Update sortOrder for each filter
+    for (const filter of filters) {
+      if (filter.id && filter.sortOrder !== undefined) {
+        await Filter.findByIdAndUpdate(filter.id, { sortOrder: filter.sortOrder });
       }
-    }));
+    }
     
-    await db.collection('filters').bulkWrite(bulkOps);
+    // Invalidate cache for shop page and filters API
+    revalidatePath('/shop');
+    revalidatePath('/api/shop/filters');
     
-    return NextResponse.json({ success: true });
+    return NextResponse.json({ success: true, message: "Filters reordered successfully" });
   } catch (error) {
-    console.error('Error reordering filters:', error);
-    return NextResponse.json({ error: 'Failed to reorder filters' }, { status: 500 });
+    console.error("Failed to reorder filters:", error);
+    return NextResponse.json({ error: "Failed to reorder filters" }, { status: 500 });
   }
 }

@@ -17,7 +17,7 @@ export const fetchAllProducts = cache(async (): Promise<ProductDocument[]> => {
   const connectTime = Date.now() - start;
   
   const queryStart = Date.now();
-  const products = await Product.find({})
+  const products = await Product.find({ isActive: true })
     .select('_id slug title price offerPrice isOnSale isTopSeller images imageSizes tags categoryId subcategoryId subcategoryIds sortOrder createdAt')
     .sort({ sortOrder: 1, createdAt: -1 })
     .lean();
