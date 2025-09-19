@@ -1,10 +1,10 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useAuth } from '@/lib/hooks/useAuth';
 
-export default function ActivatePage() {
+function ActivatePageContent() {
   const { user, loading, needsVerification } = useAuth();
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -256,5 +256,13 @@ export default function ActivatePage() {
         )}
       </div>
     </div>
+  );
+}
+
+export default function ActivatePage() {
+  return (
+    <Suspense fallback={<div>Loading...</div>}>
+      <ActivatePageContent />
+    </Suspense>
   );
 }

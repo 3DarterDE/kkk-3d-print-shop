@@ -13,7 +13,7 @@ export interface IVerificationCode {
 const VerificationCodeSchema = new Schema<IVerificationCode>({
   email: { type: String, required: true, index: true },
   code: { type: String, required: true, index: true },
-  expiresAt: { type: Date, required: true, index: { expireAfterSeconds: 0 } },
+  expiresAt: { type: Date, required: true },
   used: { type: Boolean, default: false, index: true },
 }, { timestamps: true });
 
