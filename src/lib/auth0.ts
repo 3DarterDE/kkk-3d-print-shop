@@ -23,7 +23,7 @@ export const auth0 = new Auth0Client({
 		backChannelLogout: '/api/auth/backchannel-logout',
 	},
 	// Redirect strategy after Auth0 callback completes
-	onCallback: async (error, ctx, session) => {
+	onCallback: async (error, ctx, session: any) => {
 		// In case of error, fall back to default behavior
 		if (error) {
 			const dest = ctx.returnTo || '/';
