@@ -177,18 +177,20 @@ export default function ShopPage({ searchParams }: { searchParams: Promise<{ cat
         // Set data immediately
         setAllProducts(products);
         setCategories(cats);
-        
-        // Load product filters and all filters
-        await Promise.all([
-          loadProductFilters(products),
-          loadAllFilters()
-        ]);
-        
         // Initialize price range based on all products (will be updated when category changes)
         const calculatedRange = calculatePriceRange(products);
         setPriceRange(calculatedRange);
-        
+
+        // Allow the page to render products immediately
         setLoading(false);
+
+        // Load product filters and all filters in the background without blocking initial render
+        Promise.all([
+          loadProductFilters(products),
+          loadAllFilters()
+        ]).catch((err) => {
+          console.error('Failed to load filters (non-blocking):', err);
+        });
         
       } catch (error) {
         console.error('Failed to load shop data:', error);
@@ -826,13 +828,18 @@ export default function ShopPage({ searchParams }: { searchParams: Promise<{ cat
 
   if (loading) {
     return (
-  <div className="max-w-7xl mx-auto pl-3 pr-2 sm:px-4 py-10">
-        <div className="flex items-center justify-center min-h-[400px]">
-          <div className="text-center">
-            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
-            <h1 className="text-2xl font-bold text-gray-900 mb-2">Shop wird geladen...</h1>
-            <p className="text-gray-600">Bitte warten Sie einen Moment</p>
-          </div>
+      <div className="max-w-7xl mx-auto pl-3 pr-2 sm:px-4 py-10">
+        {/* Skeleton grid while initial data loads (no blocking text) */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-x-3 gap-y-6">
+          {Array.from({ length: 9 }).map((_, i) => (
+            <div key={i} className="animate-pulse">
+              <div className="aspect-square bg-gray-100 rounded-lg" />
+              <div className="mt-3 space-y-2">
+                <div className="h-4 bg-gray-100 rounded w-3/4" />
+                <div className="h-4 bg-gray-100 rounded w-1/2" />
+              </div>
+            </div>
+          ))}
         </div>
       </div>
     );
