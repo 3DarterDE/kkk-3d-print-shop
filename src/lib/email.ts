@@ -320,3 +320,111 @@ export async function sendVerificationEmail({ name, email, verificationUrl, code
   }
 }
 
+export interface ReturnEmailItem {
+  name: string;
+  quantity: number;
+  variations?: Record<string, string>;
+}
+
+export async function sendReturnReceivedEmail(params: {
+  name?: string;
+  email?: string;
+  orderNumber: string;
+  items: ReturnEmailItem[];
+}) {
+  const { name, email, orderNumber, items } = params;
+  if (!email) return { success: false, error: 'Missing email' };
+  const mailOptions: SendMailOptions = {
+    from: `"3DarterDE" <${process.env.SMTP_FROM || process.env.SMTP_USER}>`,
+    to: email,
+    subject: `Rücksendung eingegangen – Bestellung ${orderNumber}`,
+    headers: {
+      'X-Mailer': '3DarterDE System',
+    } as any,
+    text: `Hallo ${name || ''}!
+
+wir haben deine Rücksendeanfrage zu Bestellung ${orderNumber} erhalten.
+
+Artikel:
+${items.map(i => `• ${i.name} x${i.quantity}${i.variations ? ` (${Object.entries(i.variations).map(([k,v])=>`${k}: ${v}`).join(', ')})` : ''}`).join('\n')}
+
+Sobald wir die Rücksendung geprüft haben, erhältst du eine Bestätigung und die Rückerstattung wird veranlasst.
+
+Dein 3DarterDE Team`,
+    html: `
+      <div style="font-family:Arial,sans-serif;color:#111;line-height:1.5;">
+        <h2>Rücksendung eingegangen</h2>
+        <p>Hallo ${name || ''},</p>
+        <p>wir haben deine Rücksendeanfrage zu Bestellung <strong>${orderNumber}</strong> erhalten.</p>
+        <h3>Artikel</h3>
+        <ul>
+          ${items.map(i => `<li>${i.name} × ${i.quantity}${i.variations ? ` – ${Object.entries(i.variations).map(([k,v])=>`${k}: ${v}`).join(', ')}` : ''}</li>`).join('')}
+        </ul>
+        <p>Sobald wir die Rücksendung geprüft haben, erhältst du eine Bestätigung und die Rückerstattung wird veranlasst.</p>
+        <p>Dein 3DarterDE Team</p>
+      </div>
+    `,
+  };
+  try {
+    await transporter.sendMail(mailOptions);
+    return { success: true };
+  } catch (error) {
+    console.error('Error sending return received email:', error);
+    return { success: false, error };
+  }
+}
+
+export async function sendReturnCompletedEmail(params: {
+  name?: string;
+  email?: string;
+  orderNumber: string;
+  acceptedItems: ReturnEmailItem[];
+  rejectedItems?: ReturnEmailItem[];
+}) {
+  const { name, email, orderNumber, acceptedItems, rejectedItems } = params;
+  if (!email) return { success: false, error: 'Missing email' };
+  const mailOptions: SendMailOptions = {
+    from: `"3DarterDE" <${process.env.SMTP_FROM || process.env.SMTP_USER}>`,
+    to: email,
+    subject: `Rücksendung abgeschlossen – Bestellung ${orderNumber}`,
+    headers: {
+      'X-Mailer': '3DarterDE System',
+    } as any,
+    text: `Hallo ${name || ''}!
+
+deine Rücksendung zu Bestellung ${orderNumber} wurde geprüft.
+
+Akzeptiert:
+${acceptedItems.map(i => `• ${i.name} x${i.quantity}${i.variations ? ` (${Object.entries(i.variations).map(([k,v])=>`${k}: ${v}`).join(', ')})` : ''}`).join('\n')}
+${(rejectedItems && rejectedItems.length) ? `\nNicht akzeptiert:\n${rejectedItems.map(i => `• ${i.name} x${i.quantity}${i.variations ? ` (${Object.entries(i.variations).map(([k,v])=>`${k}: ${v}`).join(', ')})` : ''}`).join('\n')}` : ''}
+
+Die Rückerstattung für die akzeptierten Artikel wird jetzt veranlasst.`,
+    html: `
+      <div style="font-family:Arial,sans-serif;color:#111;line-height:1.5;">
+        <h2>Rücksendung abgeschlossen</h2>
+        <p>Hallo ${name || ''},</p>
+        <p>deine Rücksendung zu Bestellung <strong>${orderNumber}</strong> wurde geprüft.</p>
+        <h3>Akzeptiert</h3>
+        <ul>
+          ${acceptedItems.map(i => `<li>${i.name} × ${i.quantity}${i.variations ? ` – ${Object.entries(i.variations).map(([k,v])=>`${k}: ${v}`).join(', ')}` : ''}</li>`).join('')}
+        </ul>
+        ${rejectedItems && rejectedItems.length ? `
+          <h3>Nicht akzeptiert</h3>
+          <ul>
+            ${rejectedItems.map(i => `<li>${i.name} × ${i.quantity}${i.variations ? ` – ${Object.entries(i.variations).map(([k,v])=>`${k}: ${v}`).join(', ')}` : ''}</li>`).join('')}
+          </ul>
+        ` : ''}
+        <p>Die Rückerstattung für die akzeptierten Artikel wird jetzt veranlasst.</p>
+        <p>Dein 3DarterDE Team</p>
+      </div>
+    `,
+  };
+  try {
+    await transporter.sendMail(mailOptions);
+    return { success: true };
+  } catch (error) {
+    console.error('Error sending return completed email:', error);
+    return { success: false, error };
+  }
+}
+

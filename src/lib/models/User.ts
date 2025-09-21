@@ -26,6 +26,8 @@ export interface IUser {
     country?: string;
   };
   paymentMethod?: 'card' | 'paypal' | 'bank';
+  newsletterSubscribed?: boolean;
+  newsletterSubscribedAt?: Date;
   isAdmin: boolean;
   isVerified?: boolean;
   createdAt?: Date;
@@ -61,6 +63,8 @@ const UserSchema = new Schema<IUser>({
     enum: ['card', 'paypal', 'bank'],
     default: 'card'
   },
+  newsletterSubscribed: { type: Boolean, default: false },
+  newsletterSubscribedAt: { type: Date },
   isAdmin: { type: Boolean, default: false, index: true },
   isVerified: { type: Boolean, default: false },
 }, { timestamps: true });

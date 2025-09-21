@@ -38,6 +38,10 @@ type OrdersResponse = {
 export default function OrdersPage() {
   const { orders, loading, error } = useUserData();
   const [expandedOrder, setExpandedOrder] = useState<string | null>(null);
+  const [returnModalOrderId, setReturnModalOrderId] = useState<string | null>(null);
+  const [returnSelections, setReturnSelections] = useState<Record<string, number>>({});
+  const [returnSubmitting, setReturnSubmitting] = useState(false);
+  const [returnError, setReturnError] = useState<string | null>(null);
 
   // Orders werden bereits vom Context geladen, kein useEffect nötig
 
@@ -82,6 +86,22 @@ export default function OrdersPage() {
           bg: 'bg-red-50',
           icon: '❌',
           description: 'Diese Bestellung wurde storniert'
+        };
+      case 'return_requested':
+        return {
+          text: 'Rücksendung angefordert',
+          color: 'text-amber-700',
+          bg: 'bg-amber-50',
+          icon: '↩️',
+          description: 'Rücksendung wurde angefragt. Wir prüfen deine Rücksendung.'
+        };
+      case 'return_completed':
+        return {
+          text: 'Rücksendung abgeschlossen',
+          color: 'text-purple-700',
+          bg: 'bg-purple-50',
+          icon: '✅',
+          description: 'Rücksendung ist abgeschlossen. Rückerstattung wird/ist veranlasst.'
         };
       default:
         return {
@@ -315,7 +335,7 @@ export default function OrdersPage() {
                                           <h4 className="font-semibold text-slate-800 mb-4">Bestellte Artikel</h4>
                                           <div className="space-y-4">
                                             {order.items.map((item, index) => (
-                                              <div key={index} className="flex items-center space-x-4">
+                                              <div key={`${item.productId}-${index}`} className="flex items-center space-x-4">
                                                 {item.image && (
                                                   <img 
                                                     src={item.image} 
@@ -378,6 +398,20 @@ export default function OrdersPage() {
                                               Bestellung stornieren
                                             </button>
                                           )}
+                                          {order.status === 'shipped' && (
+                                            <button
+                                              onClick={() => {
+                                                setReturnModalOrderId(order._id);
+                                                // init selections by line index to support same product with different variations
+                                                const init: Record<string, number> = {};
+                                                order.items.forEach((_, idx) => { init[String(idx)] = 0; });
+                                                setReturnSelections(init);
+                                              }}
+                                              className="px-4 py-2 text-sm font-medium text-purple-700 bg-purple-50 rounded-lg hover:bg-purple-100 transition-colors"
+                                            >
+                                              Artikel zurücksenden
+                                            </button>
+                                          )}
                                           <button className="px-4 py-2 text-sm font-medium text-blue-600 bg-blue-50 rounded-lg hover:bg-blue-100 transition-colors">
                                             Bestellung drucken
                                           </button>
@@ -401,6 +435,115 @@ export default function OrdersPage() {
           </div>
         </div>
       </div>
+
+      {/* Return Modal */}
+      {returnModalOrderId && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+          <div className="bg-white rounded-2xl w-full max-w-2xl shadow-xl overflow-hidden">
+            <div className="flex items-center justify-between p-4 border-b">
+              <h3 className="text-lg font-semibold text-slate-800">Artikel zurücksenden</h3>
+              <button
+                onClick={() => { setReturnModalOrderId(null); setReturnError(null); }}
+                className="text-slate-500 hover:text-slate-700"
+                aria-label="Schließen"
+              >
+                ✕
+              </button>
+            </div>
+            <div className="p-4 space-y-4 max-h-[70vh] overflow-y-auto">
+              {orders.filter(o => o._id === returnModalOrderId).map(order => (
+                <div key={order._id} className="space-y-4">
+                  {order.items.map((item, index) => {
+                    const key = String(index);
+                    const selectedQty = returnSelections[key] ?? 0;
+                    return (
+                      <div key={`${item.productId}-${index}`} className="flex items-center gap-4 border rounded-xl p-3">
+                        {item.image && (
+                          <img src={item.image} alt={item.name} className="w-14 h-14 object-cover rounded-lg" />
+                        )}
+                        <div className="flex-1 min-w-0">
+                          <div className="font-medium text-slate-800 truncate">{item.name}</div>
+                          {item.variations && Object.keys(item.variations).length > 0 && (
+                            <div className="text-xs text-slate-500">
+                              {Object.entries(item.variations).map(([k,v]) => (
+                                <span key={k} className="mr-2">{k}: {v}</span>
+                              ))}
+                            </div>
+                          )}
+                          <div className="text-xs text-slate-500">Gekauft: {item.quantity}×</div>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <label className="text-xs text-slate-600">Menge:</label>
+                          <select
+                            className="border rounded-lg px-2 py-1 text-sm"
+                            value={selectedQty}
+                            onChange={(e) => {
+                              const value = parseInt(e.target.value, 10) || 0;
+                              setReturnSelections((prev) => ({ ...prev, [key]: value }));
+                            }}
+                          >
+                            {Array.from({ length: item.quantity + 1 }, (_, i) => i).map(i => (
+                              <option key={i} value={i}>{i}</option>
+                            ))}
+                          </select>
+                        </div>
+                      </div>
+                    );
+                  })}
+                  <div>
+                    {returnError && (
+                      <div className="text-sm text-red-600 mb-2">{returnError}</div>
+                    )}
+                    <div className="flex justify-end gap-2">
+                      <button
+                        onClick={() => { setReturnModalOrderId(null); setReturnError(null); }}
+                        className="px-4 py-2 text-sm rounded-lg bg-slate-100 text-slate-700 hover:bg-slate-200"
+                      >
+                        Abbrechen
+                      </button>
+                      <button
+                        disabled={returnSubmitting}
+                        onClick={async () => {
+                          setReturnError(null);
+                          const payloadItems = order.items
+                            .map((it, idx) => ({ productId: it.productId, quantity: returnSelections[String(idx)] || 0, variations: it.variations || undefined }))
+                            .filter(it => it.quantity > 0);
+                          if (payloadItems.length === 0) {
+                            setReturnError('Bitte mindestens einen Artikel auswählen.');
+                            return;
+                          }
+                          try {
+                            setReturnSubmitting(true);
+                            const res = await fetch('/api/returns', {
+                              method: 'POST',
+                              headers: { 'Content-Type': 'application/json' },
+                              body: JSON.stringify({ orderId: order._id, items: payloadItems })
+                            });
+                            const data = await res.json();
+                            if (!res.ok) {
+                              setReturnError(data.error || 'Fehler beim Absenden der Rücksendung');
+                            } else {
+                              setReturnModalOrderId(null);
+                              alert('Rücksendung eingereicht. Du erhältst eine Bestätigungs-E-Mail.');
+                            }
+                          } catch (e) {
+                            setReturnError('Netzwerkfehler. Bitte erneut versuchen.');
+                          } finally {
+                            setReturnSubmitting(false);
+                          }
+                        }}
+                        className="px-4 py-2 text-sm rounded-lg bg-purple-600 text-white hover:bg-purple-700 disabled:opacity-50"
+                      >
+                        {returnSubmitting ? 'Sende...' : 'Rücksendung absenden'}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

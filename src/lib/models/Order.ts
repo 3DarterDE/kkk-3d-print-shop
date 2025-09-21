@@ -30,7 +30,7 @@ export interface ITrackingInfo {
 export interface IOrder extends Document {
   orderNumber: string;
   userId: string;
-  status: 'pending' | 'processing' | 'shipped' | 'delivered' | 'cancelled';
+  status: 'pending' | 'processing' | 'shipped' | 'delivered' | 'cancelled' | 'return_requested' | 'return_completed';
   total: number;
   items: IOrderItem[];
   shippingAddress: IShippingAddress;
@@ -90,7 +90,7 @@ const OrderSchema = new Schema<IOrder>({
   },
   status: { 
     type: String, 
-    enum: ['pending', 'processing', 'shipped', 'delivered', 'cancelled'],
+    enum: ['pending', 'processing', 'shipped', 'delivered', 'cancelled', 'return_requested', 'return_completed'],
     default: 'pending' 
   },
   total: { 

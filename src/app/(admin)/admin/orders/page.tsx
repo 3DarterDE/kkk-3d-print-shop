@@ -291,6 +291,20 @@ export default function AdminOrdersPage() {
           bg: 'bg-red-100',
           icon: '❌'
         };
+      case 'return_requested':
+        return {
+          text: 'Rücksendung angefordert',
+          color: 'text-amber-700',
+          bg: 'bg-amber-100',
+          icon: '↩️'
+        };
+      case 'return_completed':
+        return {
+          text: 'Rücksendung abgeschlossen',
+          color: 'text-purple-700',
+          bg: 'bg-purple-100',
+          icon: '✅'
+        };
       default:
         return {
           text: status,
