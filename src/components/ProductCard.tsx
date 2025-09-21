@@ -292,7 +292,9 @@ export default function ProductCard({ product }: ProductCardProps) {
                     className={`absolute inset-0 w-full h-full object-cover transition-opacity duration-300 ease-in-out ${
                       index === currentImageIndex ? 'opacity-100' : 'opacity-0'
                     }`}
-                    loading="lazy"
+                    loading={index === 0 ? 'eager' : 'lazy'}
+                    decoding="async"
+                    fetchPriority={index === 0 ? 'high' : 'auto'}
                   />
                 ))}
               </>
@@ -422,7 +424,9 @@ export default function ProductCard({ product }: ProductCardProps) {
                     className={`absolute inset-0 w-full h-full object-cover transition-opacity duration-300 ease-in-out ${
                       index === currentImageIndex ? 'opacity-100' : 'opacity-0'
                     }`}
-                    loading="lazy"
+                    loading={index === 0 ? 'eager' : 'lazy'}
+                    decoding="async"
+                    fetchPriority={index === 0 ? 'high' : 'auto'}
                   />
                 ))}
               </>

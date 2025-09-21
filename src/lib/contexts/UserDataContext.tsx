@@ -1,5 +1,7 @@
 "use client";
 import React, { createContext, useContext, useState, useEffect, useCallback, useMemo } from 'react';
+import { useAuth } from '@/lib/hooks/useAuth';
+import { usePathname } from 'next/navigation';
 
 type UserProfile = {
   name?: string;
@@ -71,6 +73,8 @@ export function UserDataProvider({ children }: { children: React.ReactNode }) {
   const [orders, setOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<Error | null>(null);
+  const { isAuthenticated } = useAuth();
+  const pathname = usePathname();
 
   const fetchUser = useCallback(async () => {
     try {
@@ -97,9 +101,29 @@ export function UserDataProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     const loadData = async () => {
+      // Skip entirely when not authenticated to avoid unnecessary API load
+      if (!isAuthenticated) {
+        setLoading(false);
+        return;
+      }
+
       setLoading(true);
       try {
-        await Promise.all([fetchUser(), fetchOrders()]);
+        // Only fetch orders on pages that actually need them
+        const shouldFetchOrders = Boolean(
+          pathname && (
+            pathname.startsWith('/profile') ||
+            pathname.startsWith('/orders') ||
+            pathname.startsWith('/checkout') ||
+            pathname.startsWith('/account')
+          )
+        );
+
+        if (shouldFetchOrders) {
+          await Promise.all([fetchUser(), fetchOrders()]);
+        } else {
+          await fetchUser();
+        }
       } catch (err) {
         setError(err as Error);
       } finally {
@@ -107,7 +131,7 @@ export function UserDataProvider({ children }: { children: React.ReactNode }) {
       }
     };
     loadData();
-  }, []);
+  }, [isAuthenticated, pathname, fetchUser, fetchOrders]);
 
   const refetchUser = useCallback(async () => {
     setLoading(true);
