@@ -1,5 +1,6 @@
 "use client";
 import { useEffect, useState } from "react";
+import { useAuth } from '@/lib/hooks/useAuth';
 import Link from "next/link";
 import { useUserData } from "@/lib/contexts/UserDataContext";
 
@@ -64,6 +65,7 @@ type ProfileResponse = {
 
 export default function ProfilePage() {
   const { user, orders, loading, error, refetchUser } = useUserData();
+  const { loading: authLoading, isAuthenticated } = useAuth();
   const [isEditing, setIsEditing] = useState(false);
   const [editingSection, setEditingSection] = useState<'contact' | 'billing' | 'shipping' | 'payment' | null>(null);
   const [saving, setSaving] = useState(false);
@@ -266,7 +268,7 @@ export default function ProfilePage() {
     }
   };
 
-  if (loading && !user) {
+  if ((authLoading || loading) && !user) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-slate-50 to-blue-50">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-4 py-8">
@@ -302,7 +304,25 @@ export default function ProfilePage() {
     );
   }
 
-  if (error || !user) {
+  if (!authLoading && !isAuthenticated) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-center">
+          <div className="text-amber-500 text-5xl mb-4">🔒</div>
+          <h2 className="text-2xl font-bold text-gray-900 mb-2">Anmeldung erforderlich</h2>
+          <p className="text-gray-600 mb-4">Bitte melde dich an, um dein Profil zu sehen.</p>
+          <a
+            href="/api/auth/login"
+            className="bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700 transition-colors"
+          >
+            Jetzt anmelden
+          </a>
+        </div>
+      </div>
+    );
+  }
+
+  if (error) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="text-center">
@@ -315,6 +335,17 @@ export default function ProfilePage() {
           >
             Erneut versuchen
           </button>
+        </div>
+      </div>
+    );
+  }
+
+  // Fallback skeleton if noch kein Nutzerobjekt vorliegt, aber auch kein Fehler
+  if (!user) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-slate-50 to-blue-50">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-4 py-8">
+          <div className="animate-pulse h-32 bg-gray-100 rounded-2xl" />
         </div>
       </div>
     );
