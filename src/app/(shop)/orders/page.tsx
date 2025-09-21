@@ -118,10 +118,26 @@ export default function OrdersPage() {
   if (loading && orders.length === 0) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-slate-50 to-blue-50">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-4 py-8">
-          <div className="text-center">
-            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
-            <p className="text-gray-600">Lade Bestellungen...</p>
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-4">
+          <div className="flex flex-col lg:flex-row gap-4 lg:gap-6">
+            {/* Sidebar skeleton */}
+            <div className="w-full lg:w-72 mt-4 lg:mt-8 self-start bg-white/80 backdrop-blur-sm shadow-lg border border-white/20 rounded-2xl p-6 animate-pulse">
+              <div className="h-5 bg-gray-100 rounded w-1/2 mb-4"></div>
+              <div className="space-y-3">
+                <div className="h-9 bg-gray-100 rounded"></div>
+                <div className="h-9 bg-gray-100 rounded"></div>
+                <div className="h-9 bg-gray-100 rounded"></div>
+              </div>
+            </div>
+
+            {/* Main content skeleton */}
+            <div className="flex-1 py-4 lg:py-8 animate-pulse">
+              <div className="mb-6 lg:mb-10">
+                <div className="rounded-2xl p-8 bg-gray-100 h-28"></div>
+              </div>
+
+              <div className="bg-white/70 border border-white/30 rounded-2xl p-6 h-72"></div>
+            </div>
           </div>
         </div>
       </div>
