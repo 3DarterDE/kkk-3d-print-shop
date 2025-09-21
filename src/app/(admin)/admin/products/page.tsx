@@ -1292,21 +1292,28 @@ export default function ProductsPage() {
                               inStock: e.target.checked,
                               stockQuantity: e.target.checked ? formData.stockQuantity : '0'
                             })}
-                            className="rounded border-gray-300 text-blue-600 shadow-sm focus:border-blue-300 focus:ring focus:ring-blue-200 focus:ring-opacity-50"
+                            disabled={variations.length > 0 && variations.some(v => v.options.length > 0)}
+                            className={`rounded border-gray-300 text-blue-600 shadow-sm focus:border-blue-300 focus:ring focus:ring-blue-200 focus:ring-opacity-50 ${
+                              variations.length > 0 && variations.some(v => v.options.length > 0) ? 'opacity-50 cursor-not-allowed' : ''
+                            }`}
                           />
-                          <span className="ml-2 text-sm text-gray-700">Auf Lager</span>
+                          <span className={`ml-2 text-sm ${variations.length > 0 && variations.some(v => v.options.length > 0) ? 'text-gray-400' : 'text-gray-700'}`}>
+                            Auf Lager {variations.length > 0 && variations.some(v => v.options.length > 0) ? '(wird über Varianten gesteuert)' : ''}
+                          </span>
                         </label>
                       </div>
 
                       <div>
-                        <label className="block text-sm font-medium text-gray-700">Lagerbestand</label>
+                        <label className={`block text-sm font-medium ${variations.length > 0 && variations.some(v => v.options.length > 0) ? 'text-gray-400' : 'text-gray-700'}`}>
+                          Lagerbestand {variations.length > 0 && variations.some(v => v.options.length > 0) ? '(wird über Varianten gesteuert)' : ''}
+                        </label>
                         <input
                           type="number"
                           value={formData.inStock ? formData.stockQuantity : '0'}
                           onChange={(e) => setFormData({ ...formData, stockQuantity: e.target.value })}
-                          disabled={!formData.inStock}
+                          disabled={!formData.inStock || (variations.length > 0 && variations.some(v => v.options.length > 0))}
                           className={`mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 ${
-                            !formData.inStock ? 'bg-gray-100 text-gray-500 cursor-not-allowed' : ''
+                            !formData.inStock || (variations.length > 0 && variations.some(v => v.options.length > 0)) ? 'bg-gray-100 text-gray-500 cursor-not-allowed' : ''
                           }`}
                         />
                       </div>
@@ -1774,7 +1781,15 @@ export default function ProductsPage() {
                         <h4 className="text-lg font-medium text-gray-900">Produktvarianten</h4>
                         <button
                           type="button"
-                          onClick={() => setVariations([...variations, { name: '', options: [] }])}
+                          onClick={() => {
+                            setVariations([...variations, { name: '', options: [] }]);
+                            // Automatically set basic data to out of stock when variations are added
+                            setFormData(prev => ({
+                              ...prev,
+                              inStock: false,
+                              stockQuantity: '0'
+                            }));
+                          }}
                           className="inline-flex items-center px-3 py-2 border border-transparent text-sm leading-4 font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700"
                         >
                           <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1800,7 +1815,18 @@ export default function ProductsPage() {
                             />
                             <button
                               type="button"
-                              onClick={() => setVariations(variations.filter((_, i) => i !== variationIndex))}
+                              onClick={() => {
+                                const newVariations = variations.filter((_, i) => i !== variationIndex);
+                                setVariations(newVariations);
+                                // If no variations left, allow basic stock settings again
+                                if (newVariations.length === 0) {
+                                  setFormData(prev => ({
+                                    ...prev,
+                                    inStock: true,
+                                    stockQuantity: '1'
+                                  }));
+                                }
+                              }}
                               className="px-3 py-2 border border-red-300 text-red-700 rounded-md hover:bg-red-50"
                             >
                               Entfernen
@@ -1821,6 +1847,12 @@ export default function ProductsPage() {
                                     stockQuantity: 0
                                   });
                                   setVariations(newVariations);
+                                  // Automatically set basic data to out of stock when variation options are added
+                                  setFormData(prev => ({
+                                    ...prev,
+                                    inStock: false,
+                                    stockQuantity: '0'
+                                  }));
                                 }}
                                 className="text-sm text-blue-600 hover:text-blue-800"
                               >
@@ -1884,6 +1916,16 @@ export default function ProductsPage() {
                                       const newVariations = [...variations];
                                       newVariations[variationIndex].options = newVariations[variationIndex].options.filter((_, i) => i !== optionIndex);
                                       setVariations(newVariations);
+                                      
+                                      // Check if all variations are now empty
+                                      const hasAnyOptions = newVariations.some(v => v.options.length > 0);
+                                      if (!hasAnyOptions) {
+                                        setFormData(prev => ({
+                                          ...prev,
+                                          inStock: true,
+                                          stockQuantity: '1'
+                                        }));
+                                      }
                                     }}
                                     className="text-red-600 hover:text-red-800 text-sm"
                                   >

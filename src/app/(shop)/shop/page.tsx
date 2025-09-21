@@ -373,6 +373,16 @@ export default function ShopPage({ searchParams }: { searchParams: Promise<{ cat
     return result;
   };
 
+  // Helper to avoid invalid slider math and clamp percentages to [0,100]
+  const toPercent = (value: number, min: number, max: number) => {
+    const denom = max - min;
+    if (denom <= 0) return 0;
+    const pct = ((value - min) / denom) * 100;
+    return Math.max(0, Math.min(100, pct));
+  };
+
+  // Do not clamp user-selected priceRange when filters change; keep slider domain stable
+
   // Reset dynamic filters, search query, and price range when category changes
   useEffect(() => {
     setSelectedDynamicFilters({});
@@ -943,21 +953,21 @@ export default function ShopPage({ searchParams }: { searchParams: Promise<{ cat
                     <div className="relative">
                       <div className="relative h-2 bg-gray-200 rounded-lg mx-2">
                         {/* Active range track */}
-                        <div 
+                      <div 
                           className="absolute h-2 bg-blue-500 rounded-lg"
                           style={{
-                            left: `${((priceRange.min - calculateCurrentPriceRange().min) / (calculateCurrentPriceRange().max - calculateCurrentPriceRange().min)) * 100}%`,
-                            width: `${((priceRange.max - priceRange.min) / (calculateCurrentPriceRange().max - calculateCurrentPriceRange().min)) * 100}%`
+                          left: `${toPercent(priceRange.min, calculateCurrentPriceRange().min, calculateCurrentPriceRange().max)}%`,
+                          width: `${toPercent(priceRange.max, calculateCurrentPriceRange().min, calculateCurrentPriceRange().max) - toPercent(priceRange.min, calculateCurrentPriceRange().min, calculateCurrentPriceRange().max)}%`
                           }}
                         />
                         
                         {/* Min thumb */}
                         <div
                           className="absolute w-4 h-4 bg-blue-500 rounded-full cursor-pointer transform -translate-y-1 -translate-x-2 hover:scale-110 transition-transform"
-                          style={{
-                            left: `${((priceRange.min - calculateCurrentPriceRange().min) / (calculateCurrentPriceRange().max - calculateCurrentPriceRange().min)) * 100}%`,
-                            zIndex: 10
-                          }}
+                        style={{
+                          left: `${toPercent(priceRange.min, calculateCurrentPriceRange().min, calculateCurrentPriceRange().max)}%`,
+                          zIndex: 10
+                        }}
                           onMouseDown={(e) => {
                             e.preventDefault();
                             const startX = e.clientX;
@@ -966,9 +976,11 @@ export default function ShopPage({ searchParams }: { searchParams: Promise<{ cat
                             const minPrice = currentRange.min;
                             const maxPrice = currentRange.max;
                             const range = maxPrice - minPrice;
+                            const trackContainer = (e.currentTarget as HTMLElement).closest('.relative') as HTMLElement | null;
+                            const trackEl = trackContainer ? (trackContainer.querySelector('.h-2.bg-gray-200.rounded-lg') as HTMLElement | null) : null;
                             
                             const handleMouseMove = (e: MouseEvent) => {
-                              const rect = (e.target as Element).closest('.relative')?.getBoundingClientRect();
+                              const rect = trackEl ? trackEl.getBoundingClientRect() : null;
                               if (!rect) return;
                               
                               const deltaX = e.clientX - startX;
@@ -1003,10 +1015,10 @@ export default function ShopPage({ searchParams }: { searchParams: Promise<{ cat
                         {/* Max thumb */}
                         <div
                           className="absolute w-4 h-4 bg-blue-500 rounded-full cursor-pointer transform -translate-y-1 -translate-x-2 hover:scale-110 transition-transform"
-                          style={{
-                            left: `${((priceRange.max - calculateCurrentPriceRange().min) / (calculateCurrentPriceRange().max - calculateCurrentPriceRange().min)) * 100}%`,
-                            zIndex: 10
-                          }}
+                        style={{
+                          left: `${toPercent(priceRange.max, calculateCurrentPriceRange().min, calculateCurrentPriceRange().max)}%`,
+                          zIndex: 10
+                        }}
                           onMouseDown={(e) => {
                             e.preventDefault();
                             const startX = e.clientX;
@@ -1015,9 +1027,11 @@ export default function ShopPage({ searchParams }: { searchParams: Promise<{ cat
                             const minPrice = currentRange.min;
                             const maxPrice = currentRange.max;
                             const range = maxPrice - minPrice;
+                            const trackContainer = (e.currentTarget as HTMLElement).closest('.relative') as HTMLElement | null;
+                            const trackEl = trackContainer ? (trackContainer.querySelector('.h-2.bg-gray-200.rounded-lg') as HTMLElement | null) : null;
                             
                             const handleMouseMove = (e: MouseEvent) => {
-                              const rect = (e.target as Element).closest('.relative')?.getBoundingClientRect();
+                              const rect = trackEl ? trackEl.getBoundingClientRect() : null;
                               if (!rect) return;
                               
                               const deltaX = e.clientX - startX;
@@ -1050,10 +1064,10 @@ export default function ShopPage({ searchParams }: { searchParams: Promise<{ cat
                         />
                       </div>
                       
-                      {/* Min/Max labels */}
+                      {/* Min/Max labels (show domain min/max under thumbs) */}
                       <div className="flex justify-between text-xs text-gray-500 mt-2 mx-2">
-                        <span>{(priceRange.min / 100).toFixed(0)} €</span>
-                        <span>{(priceRange.max / 100).toFixed(0)} €</span>
+                        <span>{(calculateCurrentPriceRange().min / 100).toFixed(0)} €</span>
+                        <span>{(calculateCurrentPriceRange().max / 100).toFixed(0)} €</span>
                       </div>
                     </div>
                     
@@ -1114,9 +1128,6 @@ export default function ShopPage({ searchParams }: { searchParams: Promise<{ cat
                     />
                     <span className="ml-1 text-sm text-gray-700 flex items-center justify-between w-full">
                       <span>Nur Top Seller anzeigen</span>
-                      <span className="text-xs text-gray-500 bg-gray-100 w-6 h-6 rounded-full flex items-center justify-center">
-                        {getStandardFilterCount('topseller')}
-                      </span>
                     </span>
                   </label>
                 </div>
@@ -1150,9 +1161,6 @@ export default function ShopPage({ searchParams }: { searchParams: Promise<{ cat
                     />
                     <span className="ml-1 text-sm text-gray-700 flex items-center justify-between w-full">
                       <span>Im Angebot</span>
-                      <span className="text-xs text-gray-500 bg-gray-100 w-6 h-6 rounded-full flex items-center justify-center">
-                        {getStandardFilterCount('sale')}
-                      </span>
                     </span>
                   </label>
                 </div>
@@ -1186,9 +1194,6 @@ export default function ShopPage({ searchParams }: { searchParams: Promise<{ cat
                     />
                     <span className="ml-1 text-sm text-gray-700 flex items-center justify-between w-full">
                       <span>Auf Lager</span>
-                      <span className="text-xs text-gray-500 bg-gray-100 w-6 h-6 rounded-full flex items-center justify-center">
-                        {getStandardFilterCount('available')}
-                      </span>
                     </span>
                   </label>
                 </div>
@@ -1231,8 +1236,8 @@ export default function ShopPage({ searchParams }: { searchParams: Promise<{ cat
                       <div 
                         className="absolute h-2 bg-blue-500 rounded-lg"
                         style={{
-                          left: `${((priceRange.min - calculateCurrentPriceRange().min) / (calculateCurrentPriceRange().max - calculateCurrentPriceRange().min)) * 100}%`,
-                          width: `${((priceRange.max - priceRange.min) / (calculateCurrentPriceRange().max - calculateCurrentPriceRange().min)) * 100}%`
+                          left: `${toPercent(priceRange.min, calculateCurrentPriceRange().min, calculateCurrentPriceRange().max)}%`,
+                          width: `${toPercent(priceRange.max, calculateCurrentPriceRange().min, calculateCurrentPriceRange().max) - toPercent(priceRange.min, calculateCurrentPriceRange().min, calculateCurrentPriceRange().max)}%`
                         }}
                       />
                       
@@ -1240,7 +1245,7 @@ export default function ShopPage({ searchParams }: { searchParams: Promise<{ cat
                       <div
                         className="absolute w-4 h-4 bg-blue-500 rounded-full cursor-pointer transform -translate-y-1 -translate-x-2 hover:scale-110 transition-transform"
                         style={{
-                          left: `${((priceRange.min - calculateCurrentPriceRange().min) / (calculateCurrentPriceRange().max - calculateCurrentPriceRange().min)) * 100}%`,
+                          left: `${toPercent(priceRange.min, calculateCurrentPriceRange().min, calculateCurrentPriceRange().max)}%`,
                           zIndex: 10
                         }}
                         onMouseDown={(e) => {
@@ -1251,9 +1256,14 @@ export default function ShopPage({ searchParams }: { searchParams: Promise<{ cat
                           const minPrice = currentRange.min;
                           const maxPrice = currentRange.max;
                           const range = maxPrice - minPrice;
+                          const trackContainer = (e.currentTarget as HTMLElement).closest('.relative') as HTMLElement | null;
+                          let trackEl = trackContainer ? (trackContainer.querySelector('.h-2.bg-gray-200.rounded-lg') as HTMLElement | null) : null;
+                          if (!trackEl && trackContainer && trackContainer.classList.contains('h-2') && trackContainer.classList.contains('bg-gray-200')) {
+                            trackEl = trackContainer;
+                          }
                           
                           const handleMouseMove = (e: MouseEvent) => {
-                            const rect = (e.target as Element).closest('.relative')?.getBoundingClientRect();
+                            const rect = trackEl ? trackEl.getBoundingClientRect() : null;
                             if (!rect) return;
                             
                             const deltaX = e.clientX - startX;
@@ -1290,7 +1300,7 @@ export default function ShopPage({ searchParams }: { searchParams: Promise<{ cat
                       <div
                         className="absolute w-4 h-4 bg-blue-500 rounded-full cursor-pointer transform -translate-y-1 -translate-x-2 hover:scale-110 transition-transform"
                         style={{
-                          left: `${((priceRange.max - calculateCurrentPriceRange().min) / (calculateCurrentPriceRange().max - calculateCurrentPriceRange().min)) * 100}%`,
+                          left: `${toPercent(priceRange.max, calculateCurrentPriceRange().min, calculateCurrentPriceRange().max)}%`,
                           zIndex: 10
                         }}
                         onMouseDown={(e) => {
@@ -1301,9 +1311,14 @@ export default function ShopPage({ searchParams }: { searchParams: Promise<{ cat
                           const minPrice = currentRange.min;
                           const maxPrice = currentRange.max;
                           const range = maxPrice - minPrice;
+                          const trackContainer = (e.currentTarget as HTMLElement).closest('.relative') as HTMLElement | null;
+                          let trackEl = trackContainer ? (trackContainer.querySelector('.h-2.bg-gray-200.rounded-lg') as HTMLElement | null) : null;
+                          if (!trackEl && trackContainer && trackContainer.classList.contains('h-2') && trackContainer.classList.contains('bg-gray-200')) {
+                            trackEl = trackContainer;
+                          }
                           
                           const handleMouseMove = (e: MouseEvent) => {
-                            const rect = (e.target as Element).closest('.relative')?.getBoundingClientRect();
+                            const rect = trackEl ? trackEl.getBoundingClientRect() : null;
                             if (!rect) return;
                             
                             const deltaX = e.clientX - startX;
@@ -1339,8 +1354,8 @@ export default function ShopPage({ searchParams }: { searchParams: Promise<{ cat
                     
                     {/* Min/Max labels */}
                     <div className="flex justify-between text-xs text-gray-500 mt-2 mx-2">
-                      <span>{(priceRange.min / 100).toFixed(0)} €</span>
-                      <span>{(priceRange.max / 100).toFixed(0)} €</span>
+                    <span>{(calculateCurrentPriceRange().min / 100).toFixed(0)} €</span>
+                    <span>{(calculateCurrentPriceRange().max / 100).toFixed(0)} €</span>
                     </div>
                   </div>
                   
@@ -1401,9 +1416,6 @@ export default function ShopPage({ searchParams }: { searchParams: Promise<{ cat
                   />
                   <span className="ml-1 text-sm text-gray-700 flex items-center justify-between w-full">
                     <span>Nur Top Seller anzeigen</span>
-                    <span className="text-xs text-gray-500 bg-gray-100 w-6 h-6 rounded-full flex items-center justify-center">
-                      {getStandardFilterCount('topseller')}
-                    </span>
                   </span>
                 </label>
               </div>
@@ -1437,9 +1449,6 @@ export default function ShopPage({ searchParams }: { searchParams: Promise<{ cat
                   />
                   <span className="ml-1 text-sm text-gray-700 flex items-center justify-between w-full">
                     <span>Im Angebot</span>
-                    <span className="text-xs text-gray-500 bg-gray-100 w-6 h-6 rounded-full flex items-center justify-center">
-                      {getStandardFilterCount('sale')}
-                    </span>
                   </span>
                 </label>
               </div>
@@ -1473,9 +1482,6 @@ export default function ShopPage({ searchParams }: { searchParams: Promise<{ cat
                   />
                   <span className="ml-1 text-sm text-gray-700 flex items-center justify-between w-full">
                     <span>Auf Lager</span>
-                    <span className="text-xs text-gray-500 bg-gray-100 w-6 h-6 rounded-full flex items-center justify-center">
-                      {getStandardFilterCount('available')}
-                    </span>
                   </span>
                 </label>
               </div>

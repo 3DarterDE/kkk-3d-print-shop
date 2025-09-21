@@ -28,6 +28,7 @@ export async function GET(request: NextRequest) {
       ]
       // Show all products, including out of stock ones
     })
+    .select('_id slug title price offerPrice isOnSale isTopSeller inStock stockQuantity images imageSizes tags categoryId subcategoryId subcategoryIds variations createdAt updatedAt')
     .limit(limit)
     .lean();
 
@@ -46,6 +47,7 @@ export async function GET(request: NextRequest) {
       ]
       // Show all products, including out of stock ones
     })
+    .select('_id slug title price offerPrice isOnSale isTopSeller inStock stockQuantity images imageSizes tags categoryId subcategoryId subcategoryIds variations createdAt updatedAt')
     .limit(5) // Limit description-only matches to 5
     .lean();
 
@@ -69,6 +71,7 @@ export async function GET(request: NextRequest) {
       ]
       // Show all products, including out of stock ones
     })
+    .select('_id slug title price offerPrice isOnSale isTopSeller inStock stockQuantity images imageSizes tags categoryId subcategoryId subcategoryIds variations createdAt updatedAt')
     .limit(limit)
     .lean();
 
@@ -86,6 +89,44 @@ export async function GET(request: NextRequest) {
       product => !primaryProductIds.has((product as any)._id.toString())
     );
 
+    // Helper function to check if product or any of its variations are available
+    const isProductAvailable = (product: any) => {
+      // Check main product stock
+      if (product.inStock) return true;
+      
+      // Check if any variation is available
+      if (product.variations && product.variations.length > 0) {
+        return product.variations.some((variation: any) => 
+          variation.options && variation.options.some((option: any) => 
+            option.inStock === true || (option.stockQuantity && option.stockQuantity > 0)
+          )
+        );
+      }
+      
+      return false;
+    };
+
+    // Debug logging for the first few products
+    if (uniquePrimaryProducts.length > 0) {
+      console.log('=== SEARCH DEBUG ===');
+      console.log('Query:', query);
+      uniquePrimaryProducts.slice(0, 5).forEach((product, index) => {
+        const isAvailable = isProductAvailable(product);
+        console.log(`${index + 1}. ${product.title}`);
+        console.log(`   - isTopSeller: ${product.isTopSeller}`);
+        console.log(`   - inStock: ${product.inStock}`);
+        console.log(`   - isAvailable: ${isAvailable}`);
+        console.log(`   - variations: ${product.variations ? product.variations.length : 0}`);
+        if (product.variations && product.variations.length > 0) {
+          console.log(`   - variation details:`, product.variations.map((v: any) => ({
+            name: v.name,
+            options: v.options?.map((o: any) => ({ value: o.value, inStock: o.inStock, stockQuantity: o.stockQuantity }))
+          })));
+        }
+      });
+      console.log('==================');
+    }
+
     // Sort primary products by relevance with better prioritization
     const sortedPrimaryProducts = uniquePrimaryProducts.sort((a, b) => {
       const queryLower = query.toLowerCase();
@@ -96,31 +137,68 @@ export async function GET(request: NextRequest) {
         const title = product.title.toLowerCase();
         const description = (product.description || '').toLowerCase();
         const tags = (product.tags || []).map((tag: string) => tag.toLowerCase());
+        const isAvailable = isProductAvailable(product);
         
-        // Exact title match - highest priority (score 1000)
-        if (title === queryLower) score += 1000;
+        // PRIORITY 1: Available top sellers get highest priority
+        if (product.isTopSeller && isAvailable) {
+          score += 10000; // Very high base score for available top sellers
+          
+          // Add text relevance on top of top seller bonus
+          if (title === queryLower) score += 1000;
+          else if (title.startsWith(queryLower)) score += 800;
+          else if (title.includes(queryLower)) score += 600;
+          else if (description.includes(queryLower)) score += 400;
+          else if (tags.some((tag: string) => tag.includes(queryLower))) score += 300;
+          
+          return score;
+        }
         
-        // Title starts with query - very high priority (score 800)
-        else if (title.startsWith(queryLower)) score += 800;
+        // PRIORITY 2: Available products (not top sellers)
+        if (isAvailable) {
+          score += 5000; // High base score for available products
+          
+          // Add text relevance on top of availability bonus
+          if (title === queryLower) score += 1000;
+          else if (title.startsWith(queryLower)) score += 800;
+          else if (title.includes(queryLower)) score += 600;
+          else if (description.includes(queryLower)) score += 400;
+          else if (tags.some((tag: string) => tag.includes(queryLower))) score += 300;
+          
+          return score;
+        }
         
-        // Title contains query - high priority (score 600)
-        else if (title.includes(queryLower)) score += 600;
+        // PRIORITY 3: Out-of-stock top sellers (lower priority than available products)
+        if (product.isTopSeller) {
+          score += 2000; // Lower base score for out-of-stock top sellers
+          
+          // Add text relevance on top of top seller bonus
+          if (title === queryLower) score += 1000;
+          else if (title.startsWith(queryLower)) score += 800;
+          else if (title.includes(queryLower)) score += 600;
+          else if (description.includes(queryLower)) score += 400;
+          else if (tags.some((tag: string) => tag.includes(queryLower))) score += 300;
+          
+          return score;
+        }
         
-        // Description contains query - medium priority (score 400)
-        if (description.includes(queryLower)) score += 400;
-        
-        // Tags contain query - medium priority (score 300)
-        if (tags.some((tag: string) => tag.includes(queryLower))) score += 300;
-        
-        
-        // Top seller bonus (score 100)
-        if (product.isTopSeller) score += 100;
+        // PRIORITY 4: Out-of-stock products (lowest priority)
+        // Much lower text relevance scores for out-of-stock products
+        if (title === queryLower) score += 100;
+        else if (title.startsWith(queryLower)) score += 80;
+        else if (title.includes(queryLower)) score += 60;
+        else if (description.includes(queryLower)) score += 40;
+        else if (tags.some((tag: string) => tag.includes(queryLower))) score += 30;
         
         return score;
       };
       
       const scoreA = getMatchScore(a);
       const scoreB = getMatchScore(b);
+      
+      // Debug logging for sorting
+      if (query.toLowerCase().includes('autodart')) {
+        console.log(`Comparing: "${a.title}" (${scoreA}) vs "${b.title}" (${scoreB})`);
+      }
       
       // Sort by score (highest first)
       if (scoreA !== scoreB) return scoreB - scoreA;

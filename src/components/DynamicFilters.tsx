@@ -39,7 +39,7 @@ export default function DynamicFilters({
   const [initialProducts, setInitialProducts] = useState<any[]>([]);
   // Snapshot der ursprünglichen productFilters damit Counts stabil bleiben
   const [initialProductFilters, setInitialProductFilters] = useState<Record<string, any[]>>({});
-  const [basePriceRange, setBasePriceRange] = useState<{min:number; max:number} | null>(null);
+  // Entfernt: basePriceRange Snapshot, damit Counter stets den aktuellen Preisbereich berücksichtigen
 
   // Toggle filter expansion
   const toggleFilter = (filterId: string) => {
@@ -86,12 +86,7 @@ export default function DynamicFilters({
     fetchFilters();
   }, []); // Only run once on mount
 
-  // Merke dir den ersten vollständigen Preisbereich als Basis für unselektierte Facet-Counts
-  useEffect(() => {
-    if (!basePriceRange && priceRange) {
-      setBasePriceRange({ ...priceRange });
-    }
-  }, [priceRange, basePriceRange]);
+  // Hinweis: Kein Price-Range-Snapshot mehr – Counter folgen immer dem aktuellen Preisbereich
 
   // Reset initial products snapshot when view/category changes
   useEffect(() => {
@@ -149,15 +144,16 @@ export default function DynamicFilters({
     // Verwende Snapshot der ursprünglichen productFilters falls vorhanden, sonst aktuelle
     const productFiltersSource = Object.keys(initialProductFilters).length > 0 ? initialProductFilters : productFilters;
 
-    const filterMeta = allFilters.find(f => f._id === filterId);
-    const filterType = filterMeta?.type;
-    const currentVals = selectedFilters[filterId] || [];
-    const isOptionSelected = currentVals.includes(optionValue);
+  const filterIdStr = String(filterId);
+  const filterMeta = allFilters.find(f => String(f._id) === filterIdStr);
+  const filterType = filterMeta?.type;
+  const currentVals = selectedFilters[filterIdStr] || [];
+  const isOptionSelected = currentVals.includes(optionValue);
 
     // Andere Filter ohne diesen
     const otherFilters: Record<string, string[]> = {};
     for (const [fid, vals] of Object.entries(selectedFilters)) {
-      if (fid !== filterId) otherFilters[fid] = vals;
+      if (fid !== filterIdStr) otherFilters[fid] = vals;
     }
 
     // Produkte, die alle aktuellen Filter (inkl. OR innerhalb eines Filters) erfüllen (für ausgewählte Optionen Anzeige der aktuellen Treffer)
@@ -183,19 +179,12 @@ export default function DynamicFilters({
       return displayedProductsCache;
     };
 
-    if (isOptionSelected) {
-      const displayed = getDisplayedProducts();
-      const count = displayed.filter(p => {
-        const pfl = productFiltersSource[p._id] || [];
-        const pf = pfl.find((pf: any) => pf.filterId === filterId);
-        return pf && pf.values.includes(optionValue);
-      }).length;
-      return count;
-    }
+    // Wichtig: Zählung innerhalb des gleichen Filters ignoriert immer die aktuelle Auswahl
+    // (Counter sollen innerhalb des Facets stabil bleiben), aber respektiert Preis & andere Filter
 
     const filteredProducts = productsToCheck.filter(product => {
-      // Apply price filter first
-      const pr = basePriceRange || priceRange; // Für unselektierte Counts Basisbereich nutzen
+      // Apply price filter first – immer aktuellen Bereich nutzen
+      const pr = priceRange;
       const effectivePrice = getEffectivePrice(product);
       if (effectivePrice < pr.min || effectivePrice > pr.max) {
         return false;
@@ -224,10 +213,10 @@ export default function DynamicFilters({
       if (showSaleItems && !product.isOnSale) return false;
       if (showAvailableOnly && !isProductAvailable(product)) return false;
 
-      // Nur andere Filter prüfen
+      // Nur andere Filter prüfen (dieses Filter bewusst auslassen für stabile Facet-Counts)
       if (!passesFilters(product, otherFilters, productFiltersSource)) return false;
-      const pfl = productFiltersSource[product._id] || [];
-      const pf = pfl.find((pf: any) => pf.filterId === filterId);
+  const pfl = productFiltersSource[product._id] || [];
+  const pf = pfl.find((pf: any) => String(pf.filterId) === filterIdStr);
       if (!pf) return false;
       if (filterType === 'range') return false;
       return pf.values.includes(optionValue);
@@ -238,11 +227,12 @@ export default function DynamicFilters({
 
   // Prüft ob ein Produkt alle angegebenen Filter (OR innerhalb eines Filters, AND zwischen Filtern) erfüllt
   const passesFilters = (product: any, filtersToApply: Record<string, string[]>, source: Record<string, any[]>) => {
-    for (const [fid, vals] of Object.entries(filtersToApply)) {
+    for (const [fidRaw, vals] of Object.entries(filtersToApply)) {
+      const fid = String(fidRaw);
       if (!vals || vals.length === 0) continue;
-      const meta = allFilters.find(f => f._id === fid);
+      const meta = allFilters.find(f => String(f._id) === fid);
       const pfl = source[product._id] || [];
-      const pf = pfl.find((pf: any) => pf.filterId === fid);
+      const pf = pfl.find((pf: any) => String(pf.filterId) === fid);
       if (!pf) return false;
       if (meta?.type === 'range') {
         const minValue = parseFloat(vals[0]);
@@ -367,20 +357,21 @@ export default function DynamicFilters({
       {filters
         .sort((a, b) => (a.sortOrder || 0) - (b.sortOrder || 0))
         .map((filter) => {
-        const isExpanded = expandedFilters[filter._id!] ?? true; // Default to expanded
-        const hasActiveFilter = (selectedFilters[filter._id!] || []).length > 0;
+  const filterKey = String(filter._id!);
+  const isExpanded = expandedFilters[filterKey] ?? true; // Default to expanded
+  const hasActiveFilter = (selectedFilters[filterKey] || []).length > 0;
         
         return (
-          <div key={filter._id} className="border-b border-gray-200 pb-4">
+          <div key={filterKey} className="border-b border-gray-200 pb-4">
             <button
-              onClick={() => toggleFilter(filter._id!)}
+              onClick={() => toggleFilter(filterKey)}
               className="flex items-center justify-between w-full text-left mb-3 hover:text-blue-600 transition-colors"
             >
               <h3 className="text-lg font-semibold">{filter.name}</h3>
               <div className="flex items-center space-x-2">
                 {hasActiveFilter && (
                   <span className="text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded-full">
-                    {(selectedFilters[filter._id!] || []).length}
+                    {(selectedFilters[filterKey] || []).length}
                   </span>
                 )}
                 <svg
@@ -410,19 +401,16 @@ export default function DynamicFilters({
                     type="radio"
                     name={`filter-${filter._id}`}
                     value={option.value}
-                    checked={(selectedFilters[filter._id!] || []).includes(option.value)}
+                    checked={(selectedFilters[String(filter._id!)] || []).includes(option.value)}
                     onChange={(e) => {
                       const newValues = e.target.checked ? [option.value] : [];
-                      onFilterChange(filter._id!, newValues);
+                      onFilterChange(String(filter._id!), newValues);
                     }}
                     className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
                   />
-                  <span className="ml-1 text-sm text-gray-700 flex items-center justify-between w-full">
-                    <span>{option.name}</span>
-                    <span className="text-xs text-gray-500 bg-gray-100 w-6 h-6 rounded-full flex items-center justify-center">
-                      {getProductCountForOption(filter._id!, option.value)}
+                    <span className="ml-1 text-sm text-gray-700 flex items-center justify-between w-full">
+                      <span>{option.name}</span>
                     </span>
-                  </span>
                 </label>
               ))}
             </div>
@@ -432,10 +420,10 @@ export default function DynamicFilters({
             const optionsWithCounts = filter.options
               .map((option: any) => ({
                 ...option,
-                productCount: getProductCountForOption(filter._id!, option.value)
+                productCount: getProductCountForOption(String(filter._id!), option.value)
               }));
             
-            const isExpanded = expandedOptions[filter._id!] ?? false;
+            const isExpanded = expandedOptions[filterKey] ?? false;
             const hasMoreThanFive = optionsWithCounts.length > 5;
             const visibleOptions = hasMoreThanFive && !isExpanded 
               ? optionsWithCounts.slice(0, 5) 
@@ -448,28 +436,25 @@ export default function DynamicFilters({
                     <input
                       type="checkbox"
                       value={option.value}
-                      checked={(selectedFilters[filter._id!] || []).includes(option.value)}
+                      checked={(selectedFilters[String(filter._id!)] || []).includes(option.value)}
                       onChange={(e) => {
-                        const currentValues = selectedFilters[filter._id!] || [];
+                        const currentValues = selectedFilters[String(filter._id!)] || [];
                         const newValues = e.target.checked
                           ? [...currentValues, option.value]
                           : currentValues.filter(v => v !== option.value);
-                        onFilterChange(filter._id!, newValues);
+                        onFilterChange(String(filter._id!), newValues);
                       }}
                       className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
                     />
                     <span className="ml-1 text-sm text-gray-700 flex items-center justify-between w-full">
                       <span>{option.name}</span>
-                      <span className="text-xs text-gray-500 bg-gray-100 w-6 h-6 rounded-full flex items-center justify-center">
-                        {option.productCount}
-                      </span>
                     </span>
                   </label>
                 ))}
                 
                 {hasMoreThanFive && (
                   <button
-                    onClick={() => toggleOptionsExpansion(filter._id!)}
+                    onClick={() => toggleOptionsExpansion(filterKey)}
                     className="text-sm text-blue-600 hover:text-blue-800 mt-2 flex items-center"
                   >
                     {isExpanded ? (
@@ -497,10 +482,10 @@ export default function DynamicFilters({
             <input
               type="text"
               placeholder={`${filter.name} eingeben...`}
-              value={(selectedFilters[filter._id!] || [])[0] || ''}
+              value={(selectedFilters[String(filter._id!)] || [])[0] || ''}
               onChange={(e) => {
                 const newValues = e.target.value ? [e.target.value] : [];
-                onFilterChange(filter._id!, newValues);
+                onFilterChange(String(filter._id!), newValues);
               }}
               className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
             />
@@ -510,18 +495,18 @@ export default function DynamicFilters({
             <input
               type="number"
               placeholder={`${filter.name} eingeben...`}
-              value={(selectedFilters[filter._id!] || [])[0] || ''}
+              value={(selectedFilters[String(filter._id!)] || [])[0] || ''}
               onChange={(e) => {
                 const newValues = e.target.value ? [e.target.value] : [];
-                onFilterChange(filter._id!, newValues);
+                onFilterChange(String(filter._id!), newValues);
               }}
               className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
             />
           )}
 
           {filter.type === 'range' && (() => {
-            const rangeValues = getRangeValues(filter._id!);
-            const currentValues = selectedFilters[filter._id!] || [];
+            const rangeValues = getRangeValues(String(filter._id!));
+            const currentValues = selectedFilters[String(filter._id!)] || [];
             const minValue = currentValues[0] ? parseFloat(currentValues[0]) : rangeValues.min;
             const maxValue = currentValues[1] ? parseFloat(currentValues[1]) : rangeValues.max;
             
@@ -565,9 +550,9 @@ export default function DynamicFilters({
                           
                           // Check if values are back to original range - if so, remove filter
                           if (clampedValue === rangeValues.min && maxValue === rangeValues.max) {
-                            onFilterChange(filter._id!, []);
+                            onFilterChange(String(filter._id!), []);
                           } else {
-                            onFilterChange(filter._id!, [clampedValue.toString(), maxValue.toString()]);
+                            onFilterChange(String(filter._id!), [clampedValue.toString(), maxValue.toString()]);
                           }
                         };
                         
@@ -606,9 +591,9 @@ export default function DynamicFilters({
                           
                           // Check if values are back to original range - if so, remove filter
                           if (minValue === rangeValues.min && clampedValue === rangeValues.max) {
-                            onFilterChange(filter._id!, []);
+                            onFilterChange(String(filter._id!), []);
                           } else {
-                            onFilterChange(filter._id!, [minValue.toString(), clampedValue.toString()]);
+                            onFilterChange(String(filter._id!), [minValue.toString(), clampedValue.toString()]);
                           }
                         };
                         
@@ -648,16 +633,16 @@ export default function DynamicFilters({
                   productCount: getProductCountForOption(filter._id!, option.value)
                 }))
                 .map((option: any) => {
-                  const isSelected = (selectedFilters[filter._id!] || []).includes(option.value);
+                  const isSelected = (selectedFilters[String(filter._id!)] || []).includes(option.value);
                   return (
                     <button
                       key={option.value}
                       onClick={() => {
-                        const currentValues = selectedFilters[filter._id!] || [];
+                        const currentValues = selectedFilters[String(filter._id!)] || [];
                         const newValues = isSelected
                           ? currentValues.filter(v => v !== option.value)
                           : [...currentValues, option.value];
-                        onFilterChange(filter._id!, newValues);
+                        onFilterChange(String(filter._id!), newValues);
                       }}
                       className={`w-6 h-6 rounded-full border-2 transition-all hover:scale-110 ${
                         isSelected 
@@ -665,7 +650,7 @@ export default function DynamicFilters({
                           : 'border-gray-300 hover:border-gray-500'
                       }`}
                       style={{ backgroundColor: option.color || '#000000' }}
-                      title={`${option.name} (${getProductCountForOption(filter._id!, option.value)})`}
+                      title={option.name}
                     />
                   );
                 })}
@@ -673,9 +658,9 @@ export default function DynamicFilters({
           )}
 
                 {/* Clear filter button */}
-                {(selectedFilters[filter._id!] || []).length > 0 && (
+                {(selectedFilters[String(filter._id!)] || []).length > 0 && (
                   <button
-                    onClick={() => onFilterChange(filter._id!, [])}
+                    onClick={() => onFilterChange(String(filter._id!), [])}
                     className="mt-2 text-xs text-blue-600 hover:text-blue-800"
                   >
                     Filter zurücksetzen
