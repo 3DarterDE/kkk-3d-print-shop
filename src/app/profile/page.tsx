@@ -1,13 +1,60 @@
 "use client";
 import { useEffect, useState } from "react";
+import Link from "next/link";
+import { useUserData } from "@/lib/contexts/UserDataContext";
 
 type UserProfile = {
   name?: string;
+  firstName?: string;
+  lastName?: string;
   email?: string;
+  phone?: string;
+  dateOfBirth?: string;
+  address?: {
+    street?: string;
+    houseNumber?: string;
+    addressLine2?: string;
+    city?: string;
+    postalCode?: string;
+    country?: string;
+  };
+  billingAddress?: {
+    street?: string;
+    houseNumber?: string;
+    addressLine2?: string;
+    city?: string;
+    postalCode?: string;
+    country?: string;
+  };
+  paymentMethod?: 'card' | 'paypal' | 'bank';
   isAdmin?: boolean;
+  isVerified?: boolean;
   createdAt?: string;
 };
-type Order = { _id: string };
+
+type Order = { 
+  _id: string;
+  orderNumber: string;
+  status: 'pending' | 'processing' | 'shipped' | 'delivered' | 'cancelled';
+  total: number;
+  items: {
+    productId: string;
+    name: string;
+    price: number;
+    quantity: number;
+    image?: string;
+    variations?: Record<string, string>;
+  }[];
+  shippingAddress: {
+    street: string;
+    houseNumber: string;
+    city: string;
+    postalCode: string;
+    country: string;
+  };
+  createdAt: string;
+  updatedAt: string;
+};
 type Address = { _id: string; street?: string; city?: string };
 type ProfileResponse = {
   user: UserProfile;
@@ -16,48 +63,846 @@ type ProfileResponse = {
 };
 
 export default function ProfilePage() {
-  const [data, setData] = useState<ProfileResponse | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<Error | null>(null);
+  const { user, orders, loading, error, refetchUser } = useUserData();
+  const [isEditing, setIsEditing] = useState(false);
+  const [editingSection, setEditingSection] = useState<'contact' | 'billing' | 'shipping' | 'payment' | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [saveMessage, setSaveMessage] = useState<{ type: 'success' | 'error', text: string } | null>(null);
+  const [useSameAddress, setUseSameAddress] = useState(false);
+
+  // Form state
+  const [formData, setFormData] = useState({
+    firstName: '',
+    lastName: '',
+    phone: '',
+    dateOfBirth: '',
+    address: {
+      street: '',
+      houseNumber: '',
+      addressLine2: '',
+      city: '',
+      postalCode: '',
+      country: 'Deutschland'
+    },
+    billingAddress: {
+      street: '',
+      houseNumber: '',
+      addressLine2: '',
+      city: '',
+      postalCode: '',
+      country: 'Deutschland'
+    },
+    paymentMethod: 'card' as 'card' | 'paypal' | 'bank'
+  });
 
   useEffect(() => {
-    fetch("/api/profile")
-      .then((res) => res.json())
-      .then(setData)
-      .catch(setError)
-      .finally(() => setLoading(false));
-  }, []);
+    if (user) {
+      setFormData({
+        firstName: user.firstName || '',
+        lastName: user.lastName || '',
+        phone: user.phone || '',
+        dateOfBirth: user.dateOfBirth ? new Date(user.dateOfBirth).toISOString().split('T')[0] : '',
+        address: {
+          street: user.address?.street || '',
+          houseNumber: user.address?.houseNumber || '',
+          addressLine2: user.address?.addressLine2 || '',
+          city: user.address?.city || '',
+          postalCode: user.address?.postalCode || '',
+          country: user.address?.country || 'Deutschland'
+        },
+        billingAddress: {
+          street: user.billingAddress?.street || '',
+          houseNumber: user.billingAddress?.houseNumber || '',
+          addressLine2: user.billingAddress?.addressLine2 || '',
+          city: user.billingAddress?.city || '',
+          postalCode: user.billingAddress?.postalCode || '',
+          country: user.billingAddress?.country || 'Deutschland'
+        },
+        paymentMethod: user.paymentMethod || 'card'
+      });
+      
+      // Check if addresses are the same
+      if (user.address && user.billingAddress) {
+        const addressesMatch = JSON.stringify(user.address) === JSON.stringify(user.billingAddress);
+        setUseSameAddress(addressesMatch);
+      }
+    }
+  }, [user]);
 
-  if (loading) return <div className="p-8">Lade Profil...</div>;
-  if (error || !data) return <div className="p-8 text-red-600">Fehler beim Laden des Profils.</div>;
+  const getStatusInfo = (status: string) => {
+    switch (status) {
+      case 'pending':
+        return {
+          text: 'Ausstehend',
+          color: 'text-amber-600',
+          bg: 'bg-amber-100'
+        };
+      case 'processing':
+        return {
+          text: 'In Bearbeitung',
+          color: 'text-blue-600',
+          bg: 'bg-blue-100'
+        };
+      case 'shipped':
+        return {
+          text: 'Versandt',
+          color: 'text-purple-600',
+          bg: 'bg-purple-100'
+        };
+      case 'delivered':
+        return {
+          text: 'Geliefert',
+          color: 'text-green-600',
+          bg: 'bg-green-100'
+        };
+      case 'cancelled':
+        return {
+          text: 'Storniert',
+          color: 'text-red-600',
+          bg: 'bg-red-100'
+        };
+      default:
+        return {
+          text: status,
+          color: 'text-gray-600',
+          bg: 'bg-gray-100'
+        };
+    }
+  };
 
-  const { user, orders, addresses } = data;
+  const formatDate = (dateString: string) => {
+    return new Date(dateString).toLocaleDateString('de-DE', {
+      year: '2-digit',
+      month: '2-digit',
+      day: '2-digit'
+    });
+  };
+
+  const handleInputChange = (field: string, value: string) => {
+    if (field.includes('.')) {
+      const [parent, child] = field.split('.');
+      setFormData(prev => ({
+        ...prev,
+        [parent]: {
+          ...prev[parent as keyof typeof prev] as any,
+          [child]: value
+        }
+      }));
+    } else {
+      setFormData(prev => ({
+        ...prev,
+        [field]: value
+      }));
+    }
+  };
+
+  const handleSave = async () => {
+    setSaving(true);
+    setSaveMessage(null);
+
+    try {
+      const updateData = {
+        firstName: formData.firstName,
+        lastName: formData.lastName,
+        phone: formData.phone,
+        dateOfBirth: formData.dateOfBirth || null,
+        address: formData.address,
+        billingAddress: useSameAddress ? formData.address : formData.billingAddress,
+        paymentMethod: formData.paymentMethod
+      };
+
+      const response = await fetch('/api/profile/update', {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(updateData),
+      });
+
+      const result = await response.json();
+
+      if (result.success) {
+        setSaveMessage({ type: 'success', text: 'Profil erfolgreich aktualisiert!' });
+        setIsEditing(false);
+        await refetchUser(); // Reload data
+      } else {
+        setSaveMessage({ type: 'error', text: result.error || 'Fehler beim Speichern' });
+      }
+    } catch (err) {
+      setSaveMessage({ type: 'error', text: 'Fehler beim Speichern des Profils' });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleCancel = () => {
+    setIsEditing(false);
+    setSaveMessage(null);
+    // Reset form to original data
+    if (user) {
+      setFormData({
+        firstName: user.firstName || '',
+        lastName: user.lastName || '',
+        phone: user.phone || '',
+        dateOfBirth: user.dateOfBirth ? new Date(user.dateOfBirth).toISOString().split('T')[0] : '',
+        address: {
+          street: user.address?.street || '',
+          houseNumber: user.address?.houseNumber || '',
+          addressLine2: user.address?.addressLine2 || '',
+          city: user.address?.city || '',
+          postalCode: user.address?.postalCode || '',
+          country: user.address?.country || 'Deutschland'
+        },
+        billingAddress: {
+          street: user.billingAddress?.street || '',
+          houseNumber: user.billingAddress?.houseNumber || '',
+          addressLine2: user.billingAddress?.addressLine2 || '',
+          city: user.billingAddress?.city || '',
+          postalCode: user.billingAddress?.postalCode || '',
+          country: user.billingAddress?.country || 'Deutschland'
+        },
+        paymentMethod: user.paymentMethod || 'card'
+      });
+    }
+  };
+
+  if (loading && !user) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+          <p className="text-gray-600">Lade Profil...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (error || !user) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-center">
+          <div className="text-red-500 text-6xl mb-4">⚠️</div>
+          <h2 className="text-2xl font-bold text-gray-900 mb-2">Fehler beim Laden</h2>
+          <p className="text-gray-600 mb-4">Das Profil konnte nicht geladen werden.</p>
+          <button 
+            onClick={refetchUser}
+            className="bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700 transition-colors"
+          >
+            Erneut versuchen
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   return (
-    <div className="max-w-2xl mx-auto p-8">
-      <h1 className="text-2xl font-bold mb-4">Mein Profil</h1>
-      <div className="mb-6 border rounded p-4 bg-gray-50">
-        <div><b>Name:</b> {user.name}</div>
-        <div><b>E-Mail:</b> {user.email}</div>
-        <div><b>Mitglied seit:</b> {user.createdAt ? new Date(user.createdAt).toLocaleDateString() : "-"}</div>
-        {user.isAdmin && <div className="inline-block px-2 py-1 bg-green-200 text-green-900 rounded text-xs font-bold mt-2">Admin</div>}
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-blue-50">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-4">
+        <div className="flex flex-col lg:flex-row gap-4 lg:gap-6">
+          {/* Sidebar Navigation */}
+          <div className="w-full lg:w-72 mt-4 lg:mt-8 self-start bg-white/80 backdrop-blur-sm shadow-lg border border-white/20 rounded-2xl">
+            <div className="p-6">
+              <div className="mb-6">
+                <h2 className="text-xl font-bold text-slate-800 mb-2">Mein Konto</h2>
+                <div className="w-12 h-1 bg-gradient-to-r from-blue-800 to-blue-500 rounded-full"></div>
+              </div>
+              <nav className="space-y-2">
+                <a href="#" className="flex items-center px-4 py-3 text-sm font-medium text-white bg-gradient-to-r from-blue-800 to-blue-600 rounded-xl shadow-md hover:shadow-lg transition-all duration-200">
+                  <div className="w-2 h-2 bg-white rounded-full mr-3"></div>
+                  Benutzerkonto Übersicht
+                </a>
+                <Link href="/orders" prefetch className="flex items-center px-4 py-3 text-sm font-medium text-slate-600 hover:text-blue-600 hover:bg-blue-50 rounded-xl transition-all duration-200 group">
+                  <div className="w-2 h-2 bg-slate-300 rounded-full mr-3 group-hover:bg-blue-500 transition-colors"></div>
+                  Meine Bestellungen
+                </Link>
+                <a href="#" className="flex items-center px-4 py-3 text-sm font-medium text-slate-600 hover:text-blue-600 hover:bg-blue-50 rounded-xl transition-all duration-200 group">
+                  <div className="w-2 h-2 bg-slate-300 rounded-full mr-3 group-hover:bg-blue-500 transition-colors"></div>
+                  Mein Wunschzettel
+                </a>
+                <a href="#" className="flex items-center px-4 py-3 text-sm font-medium text-slate-600 hover:text-blue-600 hover:bg-blue-50 rounded-xl transition-all duration-200 group">
+                  <div className="w-2 h-2 bg-slate-300 rounded-full mr-3 group-hover:bg-blue-500 transition-colors"></div>
+                  Newsletter
+                </a>
+              </nav>
+            </div>
+          </div>
+
+          {/* Main Content */}
+          <div className="flex-1 py-4 lg:py-8">
+          {/* Header */}
+          <div className="mb-6 lg:mb-10">
+            <div className="bg-gradient-to-r from-blue-800 to-blue-600 rounded-2xl p-4 sm:p-6 lg:p-8 text-white shadow-xl">
+              <h1 className="text-2xl sm:text-3xl lg:text-4xl font-bold mb-2 lg:mb-3">
+                Willkommen zurück, {user.firstName}!
+              </h1>
+              <p className="text-blue-100 text-sm sm:text-base lg:text-lg">
+                Verwalte deine Kontoinformationen und behalte den Überblick über deine Bestellungen.
+              </p>
+            </div>
+          </div>
+
+          {/* Save Message */}
+          {saveMessage && (
+            <div className={`mb-6 p-4 rounded-xl shadow-md ${
+              saveMessage.type === 'success' 
+                ? 'bg-emerald-50 border border-emerald-200 text-emerald-800' 
+                : 'bg-rose-50 border border-rose-200 text-rose-800'
+            }`}>
+              <div className="flex items-center">
+                <div className={`w-2 h-2 rounded-full mr-3 ${saveMessage.type === 'success' ? 'bg-emerald-500' : 'bg-rose-500'}`}></div>
+                {saveMessage.text}
+              </div>
+            </div>
+          )}
+
+          {/* Account Information Cards */}
+          <div className="mb-6 lg:mb-10">
+            <div className="flex items-center mb-4 lg:mb-6">
+              <h2 className="text-xl sm:text-2xl font-bold text-slate-800">Kontoinformationen</h2>
+              <div className="ml-2 sm:ml-4 w-8 sm:w-16 h-1 bg-gradient-to-r from-blue-800 to-blue-500 rounded-full"></div>
+            </div>
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 lg:gap-6">
+              {/* Contact Data Card */}
+              <div className="bg-white/70 backdrop-blur-sm border border-white/30 rounded-2xl p-4 sm:p-6 relative shadow-lg hover:shadow-xl transition-all duration-300 group">
+                <button
+                  onClick={() => {
+                    setEditingSection('contact');
+                    setIsEditing(true);
+                  }}
+                  className="absolute top-2 right-2 sm:top-4 sm:right-4 text-blue-600 text-xs sm:text-sm font-medium hover:text-blue-700 bg-blue-50 px-2 sm:px-3 py-1 rounded-lg hover:bg-blue-100 transition-colors"
+                >
+                  Bearbeiten
+                </button>
+                <div className="flex items-center mb-4">
+                  <div className="w-10 h-10 bg-gradient-to-r from-blue-800 to-blue-600 rounded-xl flex items-center justify-center mr-3">
+                    <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                    </svg>
+                  </div>
+                  <h3 className="text-lg font-semibold text-slate-800">Kontaktdaten</h3>
+                </div>
+                <div className="space-y-3">
+                  <div className="flex items-center">
+                    <div className="w-2 h-2 bg-blue-500 rounded-full mr-3"></div>
+                    <p className="text-slate-700 font-medium">{user.firstName} {user.lastName}</p>
+                  </div>
+                  <div className="flex items-center">
+                    <div className="w-2 h-2 bg-blue-500 rounded-full mr-3"></div>
+                    <p className="text-slate-700">{user.email}</p>
+                  </div>
+                  <div className="flex items-center">
+                    <div className="w-2 h-2 bg-blue-500 rounded-full mr-3"></div>
+                    <p className="text-slate-700">{user.phone || '-'}</p>
+                  </div>
+                  <a href="#" className="text-blue-600 text-sm hover:text-blue-700 font-medium inline-flex items-center group-hover:underline">
+                    Passwort ändern
+                    <svg className="w-4 h-4 ml-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                    </svg>
+                  </a>
+                </div>
+              </div>
+
+              {/* Shipping Address Card */}
+              <div className="bg-white/70 backdrop-blur-sm border border-white/30 rounded-2xl p-4 sm:p-6 relative shadow-lg hover:shadow-xl transition-all duration-300 group">
+                <button
+                  onClick={() => {
+                    setEditingSection('shipping');
+                    setIsEditing(true);
+                  }}
+                  className="absolute top-2 right-2 sm:top-4 sm:right-4 text-blue-600 text-xs sm:text-sm font-medium hover:text-blue-700 bg-blue-50 px-2 sm:px-3 py-1 rounded-lg hover:bg-blue-100 transition-colors"
+                >
+                  Bearbeiten
+                </button>
+                <div className="flex items-center mb-4">
+                  <div className="w-10 h-10 bg-gradient-to-r from-blue-500 to-blue-300 rounded-xl flex items-center justify-center mr-3">
+                    <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+                    </svg>
+                  </div>
+                  <h3 className="text-lg font-semibold text-slate-800">Versandadresse</h3>
+                </div>
+                <div className="space-y-2">
+                  <p className="text-slate-700 font-medium">{user.firstName} {user.lastName}</p>
+                  <p className="text-slate-600">
+                    {user.address?.street} {user.address?.houseNumber}
+                    {user.address?.addressLine2 && `, ${user.address.addressLine2}`}
+                  </p>
+                  <p className="text-slate-600">
+                    {user.address?.postalCode} {user.address?.city}
+                  </p>
+                  <p className="text-slate-600">{user.address?.country || 'Deutschland'}</p>
+                </div>
+              </div>
+
+              {/* Billing Address Card */}
+              <div className="bg-white/70 backdrop-blur-sm border border-white/30 rounded-2xl p-4 sm:p-6 relative shadow-lg hover:shadow-xl transition-all duration-300 group">
+                <button
+                  onClick={() => {
+                    setEditingSection('billing');
+                    setIsEditing(true);
+                  }}
+                  className="absolute top-2 right-2 sm:top-4 sm:right-4 text-blue-600 text-xs sm:text-sm font-medium hover:text-blue-700 bg-blue-50 px-2 sm:px-3 py-1 rounded-lg hover:bg-blue-100 transition-colors"
+                >
+                  Bearbeiten
+                </button>
+                <div className="flex items-center mb-4">
+                  <div className="w-10 h-10 bg-gradient-to-r from-blue-600 to-blue-400 rounded-xl flex items-center justify-center mr-3">
+                    <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                    </svg>
+                  </div>
+                  <h3 className="text-lg font-semibold text-slate-800">Rechnungsadresse</h3>
+                </div>
+                <div className="space-y-2">
+                  <p className="text-slate-700 font-medium">{user.firstName} {user.lastName}</p>
+                  <p className="text-slate-600">
+                    {user.billingAddress?.street} {user.billingAddress?.houseNumber}
+                    {user.billingAddress?.addressLine2 && `, ${user.billingAddress.addressLine2}`}
+                  </p>
+                  <p className="text-slate-600">
+                    {user.billingAddress?.postalCode} {user.billingAddress?.city}
+                  </p>
+                  <p className="text-slate-600">{user.billingAddress?.country || 'Deutschland'}</p>
+                </div>
+              </div>
+
+              {/* Payment Method Card */}
+              <div className="bg-white/70 backdrop-blur-sm border border-white/30 rounded-2xl p-4 sm:p-6 relative shadow-lg hover:shadow-xl transition-all duration-300 group">
+                <button 
+                  onClick={() => {
+                    setEditingSection('payment');
+                    setIsEditing(true);
+                  }}
+                  className="absolute top-2 right-2 sm:top-4 sm:right-4 text-blue-600 text-xs sm:text-sm font-medium hover:text-blue-700 bg-blue-50 px-2 sm:px-3 py-1 rounded-lg hover:bg-blue-100 transition-colors"
+                >
+                  Bearbeiten
+                </button>
+                <div className="flex items-center mb-4">
+                  <div className="w-10 h-10 bg-gradient-to-r from-green-700 to-green-500 rounded-xl flex items-center justify-center mr-3">
+                    <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" />
+                    </svg>
+                  </div>
+                  <h3 className="text-lg font-semibold text-slate-800">Zahlungsmethode</h3>
+                </div>
+                <div className="flex items-center">
+                  {user?.paymentMethod ? (
+                    <div className="flex items-center">
+                      <div className="w-8 h-8 bg-green-100 rounded-lg flex items-center justify-center mr-3">
+                        {user.paymentMethod === 'card' && (
+                          <svg className="w-4 h-4 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" />
+                          </svg>
+                        )}
+                        {user.paymentMethod === 'paypal' && (
+                          <svg className="w-4 h-4 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z" />
+                          </svg>
+                        )}
+                        {user.paymentMethod === 'bank' && (
+                          <svg className="w-4 h-4 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
+                          </svg>
+                        )}
+                      </div>
+                      <span className="text-slate-800 font-medium">
+                        {user.paymentMethod === 'card' && 'Kreditkarte'}
+                        {user.paymentMethod === 'paypal' && 'PayPal'}
+                        {user.paymentMethod === 'bank' && 'Banküberweisung'}
+                      </span>
+                    </div>
+                  ) : (
+                    <p className="text-slate-600">Keine Zahlungsmethode hinterlegt</p>
+                  )}
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Recent Orders */}
+          <div>
+            <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center mb-4 lg:mb-6 gap-4">
+              <div className="flex items-center">
+                <h2 className="text-xl sm:text-2xl font-bold text-slate-800">Letzte Bestellungen</h2>
+                <div className="ml-2 sm:ml-4 w-8 sm:w-16 h-1 bg-gradient-to-r from-blue-800 to-blue-500 rounded-full"></div>
+              </div>
+              <Link href="/orders" prefetch className="text-blue-600 text-sm font-medium hover:text-blue-700 bg-blue-50 px-4 py-2 rounded-lg hover:bg-blue-100 transition-colors self-start sm:self-auto">
+                Alle ansehen
+              </Link>
+            </div>
+            <div className="bg-white/70 backdrop-blur-sm border border-white/30 rounded-2xl overflow-hidden shadow-lg">
+              <div className="overflow-x-auto">
+                <table className="min-w-full divide-y divide-slate-200">
+                  <thead className="bg-gradient-to-r from-slate-50 to-blue-50">
+                    <tr>
+                      <th className="px-3 sm:px-6 py-4 text-left text-xs font-semibold text-slate-600 uppercase tracking-wider">Bestellung #</th>
+                      <th className="px-3 sm:px-6 py-4 text-left text-xs font-semibold text-slate-600 uppercase tracking-wider hidden sm:table-cell">Datum</th>
+                      <th className="px-3 sm:px-6 py-4 text-left text-xs font-semibold text-slate-600 uppercase tracking-wider hidden md:table-cell">Senden an</th>
+                      <th className="px-3 sm:px-6 py-4 text-left text-xs font-semibold text-slate-600 uppercase tracking-wider">Bestellwert</th>
+                      <th className="px-3 sm:px-6 py-4 text-left text-xs font-semibold text-slate-600 uppercase tracking-wider">Status</th>
+                    </tr>
+                  </thead>
+                  <tbody className="bg-white/50 divide-y divide-slate-200">
+                    {orders.length === 0 ? (
+                      <tr>
+                        <td colSpan={5} className="px-3 sm:px-6 py-12 text-center">
+                        <div className="flex flex-col items-center">
+                          <div className="w-16 h-16 bg-slate-100 rounded-full flex items-center justify-center mb-4">
+                            <svg className="w-8 h-8 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
+                            </svg>
+                          </div>
+                          <p className="text-slate-500 font-medium">Noch keine Bestellungen vorhanden</p>
+                          <p className="text-slate-400 text-sm mt-1">Deine Bestellungen werden hier angezeigt</p>
+                        </div>
+                      </td>
+                    </tr>
+                  ) : (
+                      orders.slice(0, 5).map((order, index) => {
+                        const statusInfo = getStatusInfo(order.status);
+                        return (
+                          <tr key={order._id} className="hover:bg-blue-50/50 transition-colors">
+                            <td className="px-3 sm:px-6 py-4 whitespace-nowrap">
+                              <span className="text-xs sm:text-sm font-semibold text-slate-800 bg-slate-100 px-2 sm:px-3 py-1 rounded-full">
+                                {order.orderNumber}
+                              </span>
+                            </td>
+                            <td className="px-3 sm:px-6 py-4 whitespace-nowrap text-xs sm:text-sm text-slate-600 hidden sm:table-cell">
+                              {formatDate(order.createdAt)}
+                            </td>
+                                <td className="px-3 sm:px-6 py-4 whitespace-nowrap text-xs sm:text-sm text-slate-600 hidden md:table-cell">
+                                  {order.shippingAddress.street} {order.shippingAddress.houseNumber}
+                                </td>
+                            <td className="px-3 sm:px-6 py-4 whitespace-nowrap text-xs sm:text-sm font-semibold text-slate-800">
+                              €{order.total.toFixed(2)}
+                            </td>
+                            <td className="px-3 sm:px-6 py-4 whitespace-nowrap">
+                              <div className="flex flex-col sm:flex-row sm:items-center gap-2">
+                                <span className={`inline-flex items-center px-2 sm:px-3 py-1 rounded-full text-xs font-medium ${statusInfo.bg} ${statusInfo.color}`}>
+                                  {statusInfo.text}
+                                </span>
+                                <Link href={`/orders#${order._id}`} prefetch className="text-blue-600 hover:text-blue-700 text-xs sm:text-sm font-medium hover:underline">
+                                  Ansehen
+                                </Link>
+                              </div>
+                            </td>
+                          </tr>
+                        );
+                      })
+                  )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
-      <h2 className="text-xl font-semibold mt-8 mb-2">Bestellhistorie</h2>
-      {orders.length === 0 ? <div>Keine Bestellungen vorhanden.</div> : (
-        <ul className="space-y-2">
-          {orders.map((order) => (
-            <li key={order._id} className="border rounded p-2">Bestellung {order._id}</li>
-          ))}
-        </ul>
+
+      {/* Edit Modal */}
+      {isEditing && (
+        <div className="fixed inset-0 bg-black/20 backdrop-blur-sm flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-4 sm:p-6 w-full max-w-2xl mx-4 max-h-[90vh] overflow-y-auto">
+            <div className="flex justify-between items-center mb-4">
+              <h3 className="text-base sm:text-lg font-semibold text-gray-900">
+                {editingSection === 'contact' && 'Kontaktdaten bearbeiten'}
+                {editingSection === 'shipping' && 'Versandadresse bearbeiten'}
+                {editingSection === 'billing' && 'Rechnungsadresse bearbeiten'}
+                {editingSection === 'payment' && 'Zahlungsmethode bearbeiten'}
+              </h3>
+              <button
+                onClick={handleCancel}
+                className="text-gray-400 hover:text-gray-600"
+              >
+                ✕
+              </button>
+            </div>
+            
+            <div className="space-y-4">
+              {/* Contact Data Section */}
+              {editingSection === 'contact' && (
+                <>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Vorname</label>
+                      <input
+                        type="text"
+                        value={formData.firstName}
+                        onChange={(e) => handleInputChange('firstName', e.target.value)}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Nachname</label>
+                      <input
+                        type="text"
+                        value={formData.lastName}
+                        onChange={(e) => handleInputChange('lastName', e.target.value)}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">E-Mail</label>
+                      <p className="text-gray-900 py-2 text-sm">{user.email}</p>
+                      <p className="text-xs text-gray-500">E-Mail kann nicht geändert werden</p>
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Telefon</label>
+                      <input
+                        type="tel"
+                        value={formData.phone}
+                        onChange={(e) => handleInputChange('phone', e.target.value)}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm"
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Geburtsdatum</label>
+                    <input
+                      type="date"
+                      value={formData.dateOfBirth}
+                      onChange={(e) => handleInputChange('dateOfBirth', e.target.value)}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm"
+                    />
+                  </div>
+                </>
+              )}
+
+              {/* Shipping Address Section */}
+              {editingSection === 'shipping' && (
+                <div>
+                  <h4 className="text-base font-semibold text-gray-900 mb-3">Versandadresse</h4>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    <div className="md:col-span-1">
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Straße</label>
+                      <input
+                        type="text"
+                        value={formData.address.street}
+                        onChange={(e) => handleInputChange('address.street', e.target.value)}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm"
+                      />
+                    </div>
+                    <div className="md:col-span-1">
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Hausnummer</label>
+                      <input
+                        type="text"
+                        value={formData.address.houseNumber}
+                        onChange={(e) => handleInputChange('address.houseNumber', e.target.value)}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm"
+                      />
+                    </div>
+                    <div className="md:col-span-2">
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Adresszusatz</label>
+                      <input
+                        type="text"
+                        value={formData.address.addressLine2}
+                        onChange={(e) => handleInputChange('address.addressLine2', e.target.value)}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm"
+                        placeholder="Wohnung, Etage, etc. (optional)"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">PLZ</label>
+                      <input
+                        type="text"
+                        value={formData.address.postalCode}
+                        onChange={(e) => handleInputChange('address.postalCode', e.target.value)}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Stadt</label>
+                      <input
+                        type="text"
+                        value={formData.address.city}
+                        onChange={(e) => handleInputChange('address.city', e.target.value)}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Land</label>
+                      <select
+                        value={formData.address.country}
+                        onChange={(e) => handleInputChange('address.country', e.target.value)}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm"
+                      >
+                        <option value="Deutschland">Deutschland</option>
+                        <option value="Österreich">Österreich</option>
+                        <option value="Schweiz">Schweiz</option>
+                      </select>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Billing Address Section */}
+              {editingSection === 'billing' && (
+                <div>
+                  <div className="flex items-center justify-between mb-3">
+                    <h4 className="text-base font-semibold text-gray-900">Rechnungsadresse</h4>
+                    <label className="flex items-center">
+                      <input
+                        type="checkbox"
+                        checked={useSameAddress}
+                        onChange={(e) => setUseSameAddress(e.target.checked)}
+                        className="mr-2"
+                      />
+                      <span className="text-sm text-gray-700">Gleich wie Versandadresse</span>
+                    </label>
+                  </div>
+                  
+                  {useSameAddress ? (
+                    <p className="text-gray-500 italic text-sm">Rechnungsadresse ist identisch mit der Versandadresse</p>
+                  ) : (
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                      <div className="md:col-span-1">
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Straße</label>
+                        <input
+                          type="text"
+                          value={formData.billingAddress.street}
+                          onChange={(e) => handleInputChange('billingAddress.street', e.target.value)}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm"
+                        />
+                      </div>
+                      <div className="md:col-span-1">
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Hausnummer</label>
+                        <input
+                          type="text"
+                          value={formData.billingAddress.houseNumber}
+                          onChange={(e) => handleInputChange('billingAddress.houseNumber', e.target.value)}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm"
+                        />
+                      </div>
+                      <div className="md:col-span-2">
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Adresszusatz</label>
+                        <input
+                          type="text"
+                          value={formData.billingAddress.addressLine2}
+                          onChange={(e) => handleInputChange('billingAddress.addressLine2', e.target.value)}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm"
+                          placeholder="Wohnung, Etage, etc. (optional)"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">PLZ</label>
+                        <input
+                          type="text"
+                          value={formData.billingAddress.postalCode}
+                          onChange={(e) => handleInputChange('billingAddress.postalCode', e.target.value)}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Stadt</label>
+                        <input
+                          type="text"
+                          value={formData.billingAddress.city}
+                          onChange={(e) => handleInputChange('billingAddress.city', e.target.value)}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Land</label>
+                        <select
+                          value={formData.billingAddress.country}
+                          onChange={(e) => handleInputChange('billingAddress.country', e.target.value)}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm"
+                        >
+                          <option value="Deutschland">Deutschland</option>
+                          <option value="Österreich">Österreich</option>
+                          <option value="Schweiz">Schweiz</option>
+                        </select>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Payment Method Section */}
+              {editingSection === 'payment' && (
+                <div>
+                  <h4 className="text-base font-semibold text-gray-900 mb-4">Zahlungsmethode</h4>
+                  <div className="space-y-3">
+                    <div className="flex items-center p-3 border border-gray-300 rounded-lg">
+                      <input
+                        type="radio"
+                        id="card"
+                        name="paymentMethod"
+                        value="card"
+                        checked={formData.paymentMethod === 'card'}
+                        onChange={(e) => handleInputChange('paymentMethod', e.target.value)}
+                        className="w-4 h-4 text-blue-600"
+                      />
+                      <label htmlFor="card" className="ml-3 flex items-center">
+                        <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" />
+                        </svg>
+                        Kreditkarte
+                      </label>
+                    </div>
+                    <div className="flex items-center p-3 border border-gray-300 rounded-lg">
+                      <input
+                        type="radio"
+                        id="paypal"
+                        name="paymentMethod"
+                        value="paypal"
+                        checked={formData.paymentMethod === 'paypal'}
+                        onChange={(e) => handleInputChange('paymentMethod', e.target.value)}
+                        className="w-4 h-4 text-blue-600"
+                      />
+                      <label htmlFor="paypal" className="ml-3 flex items-center">
+                        <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z" />
+                        </svg>
+                        PayPal
+                      </label>
+                    </div>
+                    <div className="flex items-center p-3 border border-gray-300 rounded-lg">
+                      <input
+                        type="radio"
+                        id="bank"
+                        name="paymentMethod"
+                        value="bank"
+                        checked={formData.paymentMethod === 'bank'}
+                        onChange={(e) => handleInputChange('paymentMethod', e.target.value)}
+                        className="w-4 h-4 text-blue-600"
+                      />
+                      <label htmlFor="bank" className="ml-3 flex items-center">
+                        <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
+                        </svg>
+                        Banküberweisung
+                      </label>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            <div className="flex justify-end space-x-3 mt-6 pt-4 border-t">
+              <button
+                onClick={handleCancel}
+                className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 rounded-md hover:bg-gray-200"
+              >
+                Abbrechen
+              </button>
+              <button
+                onClick={handleSave}
+                disabled={saving}
+                className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700 disabled:opacity-50"
+              >
+                {saving ? 'Speichern...' : 'Speichern'}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
-      <h2 className="text-xl font-semibold mt-8 mb-2">Adressen</h2>
-      {addresses.length === 0 ? <div>Keine Adressen hinterlegt.</div> : (
-        <ul className="space-y-2">
-          {addresses.map((addr) => (
-            <li key={addr._id} className="border rounded p-2">{addr.street}, {addr.city}</li>
-          ))}
-        </ul>
-      )}
+      </div>
     </div>
   );
 }

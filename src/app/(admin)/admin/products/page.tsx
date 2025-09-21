@@ -389,20 +389,21 @@ export default function ProductsPage() {
       const responseData = await response.json();
       const productId = editingProduct ? editingProduct._id : responseData._id;
       
-      // Save product filters if any are selected
+      // Always delete existing product filters first
+      console.log('Deleting existing product filters for product:', productId);
+      const deleteResponse = await fetch(`/api/admin/product-filters?productId=${productId}`, {
+        method: 'DELETE'
+      });
+      console.log('Delete response:', deleteResponse.ok);
+      if (deleteResponse.ok) {
+        const deleteResult = await deleteResponse.json();
+        console.log('Deleted filters:', deleteResult.deletedCount);
+      }
+      
+      // Save new product filters if any are selected
       if (selectedProductFilters.length > 0) {
         console.log('Saving product filters:', selectedProductFilters);
         console.log('Product ID:', productId);
-        
-        // Delete existing product filters first
-        const deleteResponse = await fetch(`/api/admin/product-filters?productId=${productId}`, {
-          method: 'DELETE'
-        });
-        console.log('Delete response:', deleteResponse.ok);
-        if (deleteResponse.ok) {
-          const deleteResult = await deleteResponse.json();
-          console.log('Deleted filters:', deleteResult.deletedCount);
-        }
         
         // Save new product filters
         for (const productFilter of selectedProductFilters) {

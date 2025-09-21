@@ -30,9 +30,9 @@ export default function DynamicFilters({
   showAvailableOnly = false,
   specialFilter
 }: DynamicFiltersProps) {
-  const [filters, setFilters] = useState<Filter[]>([]);
+  const [filters, setFilters] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
-  const [allFilters, setAllFilters] = useState<Filter[]>([]);
+  const [allFilters, setAllFilters] = useState<any[]>([]);
   const [originalRangeValues, setOriginalRangeValues] = useState<Record<string, { min: number; max: number }>>({});
   const [expandedFilters, setExpandedFilters] = useState<Record<string, boolean>>({});
   const [expandedOptions, setExpandedOptions] = useState<Record<string, boolean>>({});
@@ -125,7 +125,7 @@ export default function DynamicFilters({
 
     const timeoutId = setTimeout(() => {
       if (initialProducts.length > 0 && Object.keys(productFilters).length > 0) {
-        const relevantFilters = allFilters.filter((filter: Filter) => {
+        const relevantFilters = allFilters.filter((filter: any) => {
           return initialProducts.some(product => {
             const productFilterList = productFilters[product._id] || [];
             return productFilterList.some(pf => pf.filterId === filter._id?.toString());
@@ -400,11 +400,11 @@ export default function DynamicFilters({
           {filter.type === 'select' && (
             <div className="space-y-1">
               {filter.options
-                .map((option) => ({
+                .map((option: any) => ({
                   ...option,
                   productCount: getProductCountForOption(filter._id!, option.value)
                 }))
-                .map((option) => (
+                .map((option: any) => (
                 <label key={option.value} className="flex items-center">
                   <input
                     type="radio"
@@ -430,7 +430,7 @@ export default function DynamicFilters({
           
           {filter.type === 'multiselect' && (() => {
             const optionsWithCounts = filter.options
-              .map((option) => ({
+              .map((option: any) => ({
                 ...option,
                 productCount: getProductCountForOption(filter._id!, option.value)
               }));
@@ -443,7 +443,7 @@ export default function DynamicFilters({
             
             return (
               <div className="space-y-1">
-                {visibleOptions.map((option) => (
+                {visibleOptions.map((option: any) => (
                   <label key={option.value} className="flex items-center">
                     <input
                       type="checkbox"
@@ -643,11 +643,11 @@ export default function DynamicFilters({
           {filter.type === 'color' && (
             <div className="flex flex-wrap gap-2">
               {filter.options
-                .map((option) => ({
+                .map((option: any) => ({
                   ...option,
                   productCount: getProductCountForOption(filter._id!, option.value)
                 }))
-                .map((option) => {
+                .map((option: any) => {
                   const isSelected = (selectedFilters[filter._id!] || []).includes(option.value);
                   return (
                     <button

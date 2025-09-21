@@ -170,6 +170,7 @@ export default function ProductCard({ product }: ProductCardProps) {
 
   const handleAddToCartFromModal = () => {
     if (!isOutOfStock()) {
+      const currentStock = getCurrentStockQuantity();
       addItem({
         slug: product.slug,
         title: product.title,
@@ -178,7 +179,7 @@ export default function ProductCard({ product }: ProductCardProps) {
         variations: selectedVariations,
         image: product.images[0],
         imageSizes: product.imageSizes,
-        stockQuantity: product.stockQuantity
+        stockQuantity: currentStock
       });
       setIsModalOpen(false);
       setSelectedVariations({});
@@ -201,17 +202,28 @@ export default function ProductCard({ product }: ProductCardProps) {
     
     // Find the selected option for each variation and get its stock
     let minStock = Infinity;
+    let hasValidSelection = false;
+    
     product.variations.forEach((variation: any) => {
-      const selectedOption = variation.options.find((option: any) => 
-        option.value === selectedVariations[variation.name]
-      );
-      if (selectedOption) {
-        const optionStock = selectedOption.stockQuantity !== undefined ? selectedOption.stockQuantity : product.stockQuantity;
-        minStock = Math.min(minStock, optionStock || 0);
+      const selectedValue = selectedVariations[variation.name];
+      if (selectedValue) {
+        hasValidSelection = true;
+        const selectedOption = variation.options.find((option: any) => 
+          option.value === selectedValue
+        );
+        if (selectedOption) {
+          const optionStock = selectedOption.stockQuantity !== undefined ? selectedOption.stockQuantity : (product.stockQuantity || 0);
+          minStock = Math.min(minStock, optionStock);
+        }
       }
     });
     
-    return minStock === Infinity ? 0 : minStock;
+    // If no valid selection or no variations selected, return 0
+    if (!hasValidSelection || minStock === Infinity) {
+      return 0;
+    }
+    
+    return minStock;
   };
 
   // Check if current variation combination is in stock

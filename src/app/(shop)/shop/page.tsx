@@ -1641,8 +1641,8 @@ export default function ShopPage({ searchParams }: { searchParams: Promise<{ cat
                 )}
               </div>
               
-              {/* Products Count and Sort Dropdown in same row */}
-              <div className="flex items-center justify-between">
+              {/* Products Count */}
+              <div className="flex items-center">
                 <p className="text-sm text-gray-600">
                   <span className="font-semibold text-lg">{sortedPrimaryProducts.length}</span> Artikel
                   {resolvedSearchParams.category && (
@@ -1651,22 +1651,23 @@ export default function ShopPage({ searchParams }: { searchParams: Promise<{ cat
                     </span>
                   )}
                 </p>
-                
-                {/* Sort Dropdown - rechts neben Artikel-Anzahl */}
-                <select
-                  value={sortBy}
-                  onChange={(e) => setSortBy(e.target.value as any)}
-                  className="px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
-                >
-                  <option value="default">Standard</option>
-                  <option value="newest">Neueste zuerst</option>
-                  <option value="oldest">Älteste zuerst</option>
-                  <option value="price-low">Niedrigster Preis</option>
-                  <option value="price-high">Höchster Preis</option>
-                  <option value="name-asc">Name A-Z</option>
-                  <option value="name-desc">Name Z-A</option>
-                </select>
               </div>
+            </div>
+            {/* Sort Dropdown - own right-aligned column in the row */}
+            <div className="mt-2 sm:mt-0 sm:ml-auto">
+              <select
+                value={sortBy}
+                onChange={(e) => setSortBy(e.target.value as any)}
+                className="px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+              >
+                <option value="default">Standard</option>
+                <option value="newest">Neueste zuerst</option>
+                <option value="oldest">Älteste zuerst</option>
+                <option value="price-low">Niedrigster Preis</option>
+                <option value="price-high">Höchster Preis</option>
+                <option value="name-asc">Name A-Z</option>
+                <option value="name-desc">Name Z-A</option>
+              </select>
             </div>
           </div>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-x-3 gap-y-0 md:gap-y-6 pl-0 pr-0 md:pl-0 md:pr-4">

@@ -58,7 +58,8 @@ export const useCartStore = create<CartState>()(
             const newQuantity = currentQuantity + item.quantity;
             const maxAllowed = exists.stockQuantity || 0;
             
-            if (newQuantity > maxAllowed) {
+            // Only adjust if maxAllowed is greater than 0 and newQuantity exceeds it
+            if (maxAllowed > 0 && newQuantity > maxAllowed) {
               // Adjust to maximum allowed quantity
               set({
                 items: get().items.map((i) =>
@@ -67,7 +68,17 @@ export const useCartStore = create<CartState>()(
                     : i
                 ),
               });
+            } else if (maxAllowed === 0) {
+              // If no stock limit, just add the quantity
+              set({
+                items: get().items.map((i) =>
+                  `${i.slug}-${JSON.stringify(i.variations || {})}` === itemKey 
+                    ? { ...i, quantity: newQuantity } 
+                    : i
+                ),
+              });
             } else {
+              // Normal case: add quantity
               set({
                 items: get().items.map((i) =>
                   `${i.slug}-${JSON.stringify(i.variations || {})}` === itemKey 
@@ -108,6 +119,7 @@ export const useCartStore = create<CartState>()(
               if (item.slug === slug && JSON.stringify(item.variations) === JSON.stringify(variations)) {
                 // Check if new quantity exceeds stock
                 const maxAllowed = item.stockQuantity || 0;
+                // Only limit if maxAllowed is greater than 0
                 const adjustedQuantity = maxAllowed > 0 ? Math.min(newQuantity, maxAllowed) : newQuantity;
                 return { ...item, quantity: adjustedQuantity };
               }
