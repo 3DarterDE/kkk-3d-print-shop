@@ -56,6 +56,7 @@ export default function ShopPage({ searchParams }: { searchParams: Promise<{ cat
   const [isPriceFilterModified, setIsPriceFilterModified] = useState(false);
   const [showTopSellers, setShowTopSellers] = useState(false);
   const [showSaleItems, setShowSaleItems] = useState(false);
+  const [showNewItems, setShowNewItems] = useState(false);
   const [showAvailableOnly, setShowAvailableOnly] = useState(false);
   const [initialViewProducts, setInitialViewProducts] = useState<any[]>([]);
   // Mobile filter overlay state
@@ -139,7 +140,7 @@ export default function ShopPage({ searchParams }: { searchParams: Promise<{ cat
           category: urlParams.get('category') || undefined,
           subcategory: urlParams.get('subcategory') || undefined,
           search: urlParams.get('search') || undefined,
-          filter: urlParams.get('filter') || undefined,
+          filter: undefined, // remove URL-based special filter entirely
         };
         setResolvedSearchParams(params);
       }
@@ -207,6 +208,42 @@ export default function ShopPage({ searchParams }: { searchParams: Promise<{ cat
       setSearchQuery(resolvedSearchParams.search);
     }
   }, [resolvedSearchParams.search]);
+
+  // Remove any URL-driven special filter syncing (all local now)
+
+  // Helper functions to update local state only (no URL changes)
+  const updateTopSellersFilter = (enabled: boolean) => {
+    setShowTopSellers(enabled);
+  };
+
+  const updateSaleFilter = (enabled: boolean) => {
+    setShowSaleItems(enabled);
+  };
+
+  const updateNewItemsFilter = (enabled: boolean) => {
+    setShowNewItems(enabled);
+  };
+
+  // Listen for top bar events to toggle these local filters
+  useEffect(() => {
+    const onShopToggleFilter = (e: Event) => {
+      const detail = (e as CustomEvent).detail as { filter: 'topseller' | 'sale' | 'neu'; action: 'toggle' };
+      if (!detail) return;
+      switch (detail.filter) {
+        case 'topseller':
+          updateTopSellersFilter(!showTopSellers);
+          break;
+        case 'sale':
+          updateSaleFilter(!showSaleItems);
+          break;
+        case 'neu':
+          updateNewItemsFilter(!showNewItems);
+          break;
+      }
+    };
+    window.addEventListener('shop-toggle-filter', onShopToggleFilter as EventListener);
+    return () => window.removeEventListener('shop-toggle-filter', onShopToggleFilter as EventListener);
+  }, [showTopSellers, showSaleItems, showNewItems]);
 
 
 
@@ -356,6 +393,12 @@ export default function ShopPage({ searchParams }: { searchParams: Promise<{ cat
       // Additional filter checkboxes
       if (showTopSellers && !p.isTopSeller) return false;
       if (showSaleItems && !p.isOnSale) return false;
+      if (showNewItems) {
+        const twoWeeksAgo = new Date();
+        twoWeeksAgo.setDate(twoWeeksAgo.getDate() - 14);
+        const productDate = new Date(p.createdAt || p.updatedAt);
+        if (productDate < twoWeeksAgo) return false;
+      }
       if (showAvailableOnly && !isProductAvailable(p)) return false;
       
       return true;
@@ -398,6 +441,11 @@ export default function ShopPage({ searchParams }: { searchParams: Promise<{ cat
       setSearchQuery('');
     }
     
+    // Reset filter states when category changes
+    setShowTopSellers(false);
+    setShowSaleItems(false);
+    setShowNewItems(false);
+    setShowAvailableOnly(false);
     setIsPriceFilterModified(false);
   }, [resolvedSearchParams.category, resolvedSearchParams.search]);
 
@@ -408,7 +456,7 @@ export default function ShopPage({ searchParams }: { searchParams: Promise<{ cat
   // debug removed
       setPriceRange(newPriceRange);
     }
-  }, [resolvedSearchParams, allProducts, categories, selectedDynamicFilters, showTopSellers, showSaleItems, showAvailableOnly, isPriceFilterModified]);
+  }, [resolvedSearchParams, allProducts, categories, selectedDynamicFilters, showTopSellers, showSaleItems, showNewItems, showAvailableOnly, isPriceFilterModified]);
 
   // Check if search query matches a category name
   const isCategorySearch = searchQuery.trim() && categories.some(cat => 
@@ -537,6 +585,12 @@ export default function ShopPage({ searchParams }: { searchParams: Promise<{ cat
     // Additional filter checkboxes
     if (showTopSellers && !p.isTopSeller) return false;
     if (showSaleItems && !p.isOnSale) return false;
+    if (showNewItems) {
+      const twoWeeksAgo = new Date();
+      twoWeeksAgo.setDate(twoWeeksAgo.getDate() - 14);
+      const productDate = new Date(p.createdAt || p.updatedAt);
+      if (productDate < twoWeeksAgo) return false;
+    }
     if (showAvailableOnly && !isProductAvailable(p)) return false;
     
     return true;
@@ -568,7 +622,7 @@ export default function ShopPage({ searchParams }: { searchParams: Promise<{ cat
   }, []);
 
   // Helper to count products for standard filters with current selections, based on initial snapshot
-  const getStandardFilterCount = (type: 'topseller' | 'sale' | 'available') => {
+  const getStandardFilterCount = (type: 'topseller' | 'sale' | 'new' | 'available') => {
     const base = initialViewProducts.length > 0 ? initialViewProducts : allProducts;
     return base.filter((p: any) => {
       // Price filter
@@ -624,11 +678,23 @@ export default function ShopPage({ searchParams }: { searchParams: Promise<{ cat
       // Apply other standard toggles except the current one being counted
       if (type !== 'topseller' && showTopSellers && !p.isTopSeller) return false;
       if (type !== 'sale' && showSaleItems && !p.isOnSale) return false;
+      if (type !== 'new' && showNewItems) {
+        const twoWeeksAgo = new Date();
+        twoWeeksAgo.setDate(twoWeeksAgo.getDate() - 14);
+        const productDate = new Date(p.createdAt || p.updatedAt);
+        if (productDate < twoWeeksAgo) return false;
+      }
       if (type !== 'available' && showAvailableOnly && !isProductAvailable(p)) return false;
 
       // Finally, require the attribute for the counted type
       if (type === 'topseller' && !p.isTopSeller) return false;
       if (type === 'sale' && !p.isOnSale) return false;
+      if (type === 'new') {
+        const twoWeeksAgo = new Date();
+        twoWeeksAgo.setDate(twoWeeksAgo.getDate() - 14);
+        const productDate = new Date(p.createdAt || p.updatedAt);
+        if (productDate < twoWeeksAgo) return false;
+      }
       if (type === 'available' && !isProductAvailable(p)) return false;
 
       return true;
@@ -929,11 +995,18 @@ export default function ShopPage({ searchParams }: { searchParams: Promise<{ cat
               </button>
             </div>
             {/* All filter content */}
-            <div className="space-y-4">
+            <div className="space-y-2">
               {/* Price Filter */}
               <div>
                 <div className="flex items-center justify-between mb-3">
-                  <h2 className="text-lg font-semibold">Preis</h2>
+                  <div className="flex items-center gap-2">
+                    <h2 className="text-lg font-semibold">Preis</h2>
+                    {isPriceFilterModified && (
+                      <span className="text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded-full font-medium">
+                        {(priceRange.min / 100).toFixed(0)} € - {(priceRange.max / 100).toFixed(0)} €
+                      </span>
+                    )}
+                  </div>
                   {isPriceFilterModified && (
                     <button
                       onClick={() => {
@@ -1071,16 +1144,10 @@ export default function ShopPage({ searchParams }: { searchParams: Promise<{ cat
                       </div>
                     </div>
                     
-                    {/* Current selection display */}
-                    <div className="text-center text-sm text-gray-600 mt-2">
-                      <span className="font-medium">{(priceRange.min / 100).toFixed(0)} €</span>
-                      <span className="mx-2">-</span>
-                      <span className="font-medium">{(priceRange.max / 100).toFixed(0)} €</span>
-                    </div>
                   </div>
                   
                   {/* Trennstrich */}
-                  <div className="border-b border-gray-200 mt-4"></div>
+                  <div className="border-b border-gray-200 mt-2"></div>
                 </div>
               </div>
               
@@ -1100,18 +1167,32 @@ export default function ShopPage({ searchParams }: { searchParams: Promise<{ cat
                 priceRange={priceRange}
                 showTopSellers={showTopSellers}
                 showSaleItems={showSaleItems}
+                showNewItems={showNewItems}
                 showAvailableOnly={showAvailableOnly}
                 specialFilter={resolvedSearchParams.filter}
               />
               
-              {/* Top Seller Filter */}
-              {initialViewProducts.some(p => p.isTopSeller) && (
+              {/* Highlights Filter */}
+              {(initialViewProducts.some(p => p.isTopSeller) || 
+                initialViewProducts.some(p => p.isOnSale) || 
+                initialViewProducts.some(p => {
+                  const twoWeeksAgo = new Date();
+                  twoWeeksAgo.setDate(twoWeeksAgo.getDate() - 14);
+                  const productDate = new Date(p.createdAt || p.updatedAt);
+                  return productDate >= twoWeeksAgo;
+                }) || 
+                initialViewProducts.some(p => isProductAvailable(p))) && (
               <div>
                 <div className="flex items-center justify-between mb-3">
-                  <h2 className="text-lg font-semibold">Top Seller</h2>
-                  {showTopSellers && (
+                  <h2 className="text-lg font-semibold">Highlights</h2>
+                  {(showTopSellers || showSaleItems || showNewItems || showAvailableOnly) && (
                     <button
-                      onClick={() => setShowTopSellers(false)}
+                      onClick={() => {
+                        updateTopSellersFilter(false);
+                        updateSaleFilter(false);
+                        updateNewItemsFilter(false);
+                        setShowAvailableOnly(false);
+                      }}
                       className="text-sm text-blue-600 hover:text-blue-800 hover:underline transition-colors"
                     >
                       Filter zurücksetzen
@@ -1119,84 +1200,74 @@ export default function ShopPage({ searchParams }: { searchParams: Promise<{ cat
                   )}
                 </div>
                 <div className="space-y-2">
-                  <label className="flex items-center">
-                    <input
-                      type="checkbox"
-                      checked={showTopSellers}
-                      onChange={(e) => setShowTopSellers(e.target.checked)}
-                      className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                    />
-                    <span className="ml-1 text-sm text-gray-700 flex items-center justify-between w-full">
-                      <span>Nur Top Seller anzeigen</span>
-                    </span>
-                  </label>
+                  {/* Top Seller */}
+                  {initialViewProducts.some(p => p.isTopSeller) && (
+                    <label className="flex items-center">
+                      <input
+                        type="checkbox"
+                        checked={showTopSellers}
+                        onChange={(e) => updateTopSellersFilter(e.target.checked)}
+                        className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                      />
+                      <span className="ml-1 text-sm text-gray-700 flex items-center justify-between w-full">
+                        <span>Top Seller</span>
+                      </span>
+                    </label>
+                  )}
+                  
+                  {/* Sale */}
+                  {initialViewProducts.some(p => p.isOnSale) && (
+                    <label className="flex items-center">
+                      <input
+                        type="checkbox"
+                        checked={showSaleItems}
+                        onChange={(e) => updateSaleFilter(e.target.checked)}
+                        className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                      />
+                      <span className="ml-1 text-sm text-gray-700 flex items-center justify-between w-full">
+                        <span>Im Angebot</span>
+                      </span>
+                    </label>
+                  )}
+                  
+                  {/* New Items */}
+                  {initialViewProducts.some(p => {
+                    const twoWeeksAgo = new Date();
+                    twoWeeksAgo.setDate(twoWeeksAgo.getDate() - 14);
+                    const productDate = new Date(p.createdAt || p.updatedAt);
+                    return productDate >= twoWeeksAgo;
+                  }) && (
+                    <label className="flex items-center">
+                      <input
+                        type="checkbox"
+                        checked={showNewItems}
+                        onChange={(e) => updateNewItemsFilter(e.target.checked)}
+                        className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                      />
+                      <span className="ml-1 text-sm text-gray-700 flex items-center justify-between w-full">
+                        <span>Neu (letzte 2 Wochen)</span>
+                      </span>
+                    </label>
+                  )}
+                  
+                  {/* Verfügbar */}
+                  {initialViewProducts.some(p => isProductAvailable(p)) && (
+                    <label className="flex items-center">
+                      <input
+                        type="checkbox"
+                        checked={showAvailableOnly}
+                        onChange={(e) => setShowAvailableOnly(e.target.checked)}
+                        className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                      />
+                      <span className="ml-1 text-sm text-gray-700 flex items-center justify-between w-full">
+                        <span>Auf Lager</span>
+                      </span>
+                    </label>
+                  )}
                 </div>
                 
                 {/* Trennstrich */}
-                <div className="border-b border-gray-200 mt-4"></div>
-              </div>
-              )}
-              
-              {/* Sale Filter */}
-              {initialViewProducts.some(p => p.isOnSale) && (
-              <div>
-                <div className="flex items-center justify-between mb-3">
-                  <h2 className="text-lg font-semibold">Sale</h2>
-                  {showSaleItems && (
-                    <button
-                      onClick={() => setShowSaleItems(false)}
-                      className="text-sm text-blue-600 hover:text-blue-800 hover:underline transition-colors"
-                    >
-                      Filter zurücksetzen
-                    </button>
-                  )}
-                </div>
-                <div className="space-y-2">
-                  <label className="flex items-center">
-                    <input
-                      type="checkbox"
-                      checked={showSaleItems}
-                      onChange={(e) => setShowSaleItems(e.target.checked)}
-                      className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                    />
-                    <span className="ml-1 text-sm text-gray-700 flex items-center justify-between w-full">
-                      <span>Im Angebot</span>
-                    </span>
-                  </label>
-                </div>
-                
-                {/* Trennstrich */}
-                <div className="border-b border-gray-200 mt-4"></div>
-              </div>
-              )}
-              
-              {/* Verfügbar Filter */}
-              {initialViewProducts.some(p => isProductAvailable(p)) && (
-              <div>
-                <div className="flex items-center justify-between mb-3">
-                  <h2 className="text-lg font-semibold">Verfügbar</h2>
-                  {showAvailableOnly && (
-                    <button
-                      onClick={() => setShowAvailableOnly(false)}
-                      className="text-sm text-blue-600 hover:text-blue-800 hover:underline transition-colors"
-                    >
-                      Filter zurücksetzen
-                    </button>
-                  )}
-                </div>
-                <div className="space-y-2">
-                  <label className="flex items-center">
-                    <input
-                      type="checkbox"
-                      checked={showAvailableOnly}
-                      onChange={(e) => setShowAvailableOnly(e.target.checked)}
-                      className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                    />
-                    <span className="ml-1 text-sm text-gray-700 flex items-center justify-between w-full">
-                      <span>Auf Lager</span>
-                    </span>
-                  </label>
-                </div>
+                <div className="border-b border-gray-200 mt-2"></div>
               </div>
               )}
             </div>
@@ -1208,11 +1279,18 @@ export default function ShopPage({ searchParams }: { searchParams: Promise<{ cat
       <div className="flex flex-col md:flex-row">
         {/* Filterleiste: mobil als Overlay, ab md links */}
         <div className="hidden md:block w-full md:w-80 md:flex-shrink-0 md:pr-8 mb-6 md:mb-0">
-          <div className="space-y-4">
+          <div className="space-y-2">
             {/* Price Filter */}
             <div>
               <div className="flex items-center justify-between mb-3">
-                <h2 className="text-lg font-semibold">Preis</h2>
+                <div className="flex items-center gap-2">
+                  <h2 className="text-lg font-semibold">Preis</h2>
+                  {isPriceFilterModified && (
+                    <span className="text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded-full font-medium">
+                      {(priceRange.min / 100).toFixed(0)} € - {(priceRange.max / 100).toFixed(0)} €
+                    </span>
+                  )}
+                </div>
                 {isPriceFilterModified && (
                   <button
                     onClick={() => {
@@ -1226,9 +1304,9 @@ export default function ShopPage({ searchParams }: { searchParams: Promise<{ cat
                   </button>
                 )}
               </div>
-              <div className="space-y-3">
+              <div className="space-y-2">
                 
-                <div className="space-y-3">
+                <div className="space-y-2">
                   {/* Range Slider Container */}
                   <div className="relative">
                     <div className="relative h-2 bg-gray-200 rounded-lg mx-2">
@@ -1359,16 +1437,10 @@ export default function ShopPage({ searchParams }: { searchParams: Promise<{ cat
                     </div>
                   </div>
                   
-                  {/* Current selection display */}
-                  <div className="text-center text-sm text-gray-600 mt-2">
-                    <span className="font-medium">{(priceRange.min / 100).toFixed(0)} €</span>
-                    <span className="mx-2">-</span>
-                    <span className="font-medium">{(priceRange.max / 100).toFixed(0)} €</span>
-                  </div>
                 </div>
                 
                 {/* Trennstrich */}
-                <div className="border-b border-gray-200 mt-4"></div>
+                <div className="border-b border-gray-200 mt-2"></div>
               </div>
             </div>
             
@@ -1388,18 +1460,32 @@ export default function ShopPage({ searchParams }: { searchParams: Promise<{ cat
               priceRange={priceRange}
               showTopSellers={showTopSellers}
               showSaleItems={showSaleItems}
+              showNewItems={showNewItems}
               showAvailableOnly={showAvailableOnly}
               specialFilter={resolvedSearchParams.filter}
             />
             
-            {/* Top Seller Filter - stable visibility and count based on initial view snapshot */}
-            {initialViewProducts.some(p => p.isTopSeller) && (
+            {/* Highlights Filter - stable visibility and count based on initial view snapshot */}
+            {(initialViewProducts.some(p => p.isTopSeller) || 
+              initialViewProducts.some(p => p.isOnSale) || 
+              initialViewProducts.some(p => {
+                const twoWeeksAgo = new Date();
+                twoWeeksAgo.setDate(twoWeeksAgo.getDate() - 14);
+                const productDate = new Date(p.createdAt || p.updatedAt);
+                return productDate >= twoWeeksAgo;
+              }) || 
+              initialViewProducts.some(p => isProductAvailable(p))) && (
             <div>
-              <div className="flex items-center justify-between mb-3">
-                <h2 className="text-lg font-semibold">Top Seller</h2>
-                {showTopSellers && (
+              <div className="flex items-center justify-between mb-2">
+                <h2 className="text-lg font-semibold">Highlights</h2>
+                {(showTopSellers || showSaleItems || showNewItems || showAvailableOnly) && (
                   <button
-                    onClick={() => setShowTopSellers(false)}
+                    onClick={() => {
+                      updateTopSellersFilter(false);
+                      updateSaleFilter(false);
+                      updateNewItemsFilter(false);
+                      setShowAvailableOnly(false);
+                    }}
                     className="text-sm text-blue-600 hover:text-blue-800 hover:underline transition-colors"
                   >
                     Filter zurücksetzen
@@ -1407,84 +1493,72 @@ export default function ShopPage({ searchParams }: { searchParams: Promise<{ cat
                 )}
               </div>
               <div className="space-y-2">
-                <label className="flex items-center">
-                  <input
-                    type="checkbox"
-                    checked={showTopSellers}
-                    onChange={(e) => setShowTopSellers(e.target.checked)}
-                    className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                  />
-                  <span className="ml-1 text-sm text-gray-700 flex items-center justify-between w-full">
-                    <span>Nur Top Seller anzeigen</span>
-                  </span>
-                </label>
+                {/* Top Seller */}
+                {initialViewProducts.some(p => p.isTopSeller) && (
+                  <label className="flex items-center">
+                    <input
+                      type="checkbox"
+                      checked={showTopSellers}
+                      onChange={(e) => updateTopSellersFilter(e.target.checked)}
+                      className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                    />
+                    <span className="ml-1 text-sm text-gray-700 flex items-center justify-between w-full">
+                      <span>Top Seller</span>
+                    </span>
+                  </label>
+                )}
+                
+                {/* Sale */}
+                {initialViewProducts.some(p => p.isOnSale) && (
+                  <label className="flex items-center">
+                    <input
+                      type="checkbox"
+                      checked={showSaleItems}
+                      onChange={(e) => updateSaleFilter(e.target.checked)}
+                      className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                    />
+                    <span className="ml-1 text-sm text-gray-700 flex items-center justify-between w-full">
+                      <span>Im Angebot</span>
+                    </span>
+                  </label>
+                )}
+                
+                {/* New Items */}
+                {initialViewProducts.some(p => {
+                  const twoWeeksAgo = new Date();
+                  twoWeeksAgo.setDate(twoWeeksAgo.getDate() - 14);
+                  const productDate = new Date(p.createdAt || p.updatedAt);
+                  return productDate >= twoWeeksAgo;
+                }) && (
+                  <label className="flex items-center">
+                    <input
+                      type="checkbox"
+                      checked={showNewItems}
+                      onChange={(e) => updateNewItemsFilter(e.target.checked)}
+                      className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                    />
+                    <span className="ml-1 text-sm text-gray-700 flex items-center justify-between w-full">
+                      <span>Neu (letzte 2 Wochen)</span>
+                    </span>
+                  </label>
+                )}
+                
+                {/* Verfügbar */}
+                {initialViewProducts.some(p => isProductAvailable(p)) && (
+                  <label className="flex items-center">
+                    <input
+                      type="checkbox"
+                      checked={showAvailableOnly}
+                      onChange={(e) => setShowAvailableOnly(e.target.checked)}
+                      className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                    />
+                    <span className="ml-1 text-sm text-gray-700 flex items-center justify-between w-full">
+                      <span>Auf Lager</span>
+                    </span>
+                  </label>
+                )}
               </div>
               
-              {/* Trennstrich */}
-              <div className="border-b border-gray-200 mt-4"></div>
-            </div>
-            )}
-            
-            {/* Sale Filter - stable visibility and count based on initial view snapshot */}
-            {initialViewProducts.some(p => p.isOnSale) && (
-            <div>
-              <div className="flex items-center justify-between mb-3">
-                <h2 className="text-lg font-semibold">Sale</h2>
-                {showSaleItems && (
-                  <button
-                    onClick={() => setShowSaleItems(false)}
-                    className="text-sm text-blue-600 hover:text-blue-800 hover:underline transition-colors"
-                  >
-                    Filter zurücksetzen
-                  </button>
-                )}
-              </div>
-              <div className="space-y-2">
-                <label className="flex items-center">
-                  <input
-                    type="checkbox"
-                    checked={showSaleItems}
-                    onChange={(e) => setShowSaleItems(e.target.checked)}
-                    className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                  />
-                  <span className="ml-1 text-sm text-gray-700 flex items-center justify-between w-full">
-                    <span>Im Angebot</span>
-                  </span>
-                </label>
-              </div>
-              
-              {/* Trennstrich */}
-              <div className="border-b border-gray-200 mt-4"></div>
-            </div>
-            )}
-            
-            {/* Verfügbar Filter - stable visibility and count based on initial view snapshot */}
-            {initialViewProducts.some(p => isProductAvailable(p)) && (
-            <div>
-              <div className="flex items-center justify-between mb-3">
-                <h2 className="text-lg font-semibold">Verfügbar</h2>
-                {showAvailableOnly && (
-                  <button
-                    onClick={() => setShowAvailableOnly(false)}
-                    className="text-sm text-blue-600 hover:text-blue-800 hover:underline transition-colors"
-                  >
-                    Filter zurücksetzen
-                  </button>
-                )}
-              </div>
-              <div className="space-y-2">
-                <label className="flex items-center">
-                  <input
-                    type="checkbox"
-                    checked={showAvailableOnly}
-                    onChange={(e) => setShowAvailableOnly(e.target.checked)}
-                    className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                  />
-                  <span className="ml-1 text-sm text-gray-700 flex items-center justify-between w-full">
-                    <span>Auf Lager</span>
-                  </span>
-                </label>
-              </div>
             </div>
             )}
             
@@ -1613,7 +1687,7 @@ export default function ShopPage({ searchParams }: { searchParams: Promise<{ cat
                   <div className="inline-flex items-center px-3 py-1 rounded-md text-sm bg-gray-100 text-gray-800 border border-gray-200">
                     <span className="mr-2">Top Seller</span>
                     <button
-                      onClick={() => setShowTopSellers(false)}
+                      onClick={() => updateTopSellersFilter(false)}
                       className="ml-1 hover:text-red-600 transition-colors"
                     >
                       <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1628,7 +1702,22 @@ export default function ShopPage({ searchParams }: { searchParams: Promise<{ cat
                   <div className="inline-flex items-center px-3 py-1 rounded-md text-sm bg-gray-100 text-gray-800 border border-gray-200">
                     <span className="mr-2">Sale</span>
                     <button
-                      onClick={() => setShowSaleItems(false)}
+                      onClick={() => updateSaleFilter(false)}
+                      className="ml-1 hover:text-red-600 transition-colors"
+                    >
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                      </svg>
+                    </button>
+                  </div>
+                )}
+                
+                {/* New Items Filter Button */}
+                {showNewItems && (
+                  <div className="inline-flex items-center px-3 py-1 rounded-md text-sm bg-gray-100 text-gray-800 border border-gray-200">
+                    <span className="mr-2">Neu</span>
+                    <button
+                      onClick={() => updateNewItemsFilter(false)}
                       className="ml-1 hover:text-red-600 transition-colors"
                     >
                       <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">

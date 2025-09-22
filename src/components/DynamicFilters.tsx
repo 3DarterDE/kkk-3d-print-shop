@@ -13,6 +13,7 @@ interface DynamicFiltersProps {
   priceRange?: { min: number; max: number };
   showTopSellers?: boolean;
   showSaleItems?: boolean;
+  showNewItems?: boolean;
   showAvailableOnly?: boolean;
   specialFilter?: string; // 'topseller' | 'sale' | 'neu' | undefined
 }
@@ -27,6 +28,7 @@ export default function DynamicFilters({
   priceRange = { min: 0, max: 1000 },
   showTopSellers = false,
   showSaleItems = false,
+  showNewItems = false,
   showAvailableOnly = false,
   specialFilter
 }: DynamicFiltersProps) {
@@ -45,7 +47,7 @@ export default function DynamicFilters({
   const toggleFilter = (filterId: string) => {
     setExpandedFilters(prev => ({
       ...prev,
-      [filterId]: !(prev[filterId] ?? true)
+      [filterId]: !(prev[filterId] ?? false)
     }));
   };
 
@@ -134,6 +136,40 @@ export default function DynamicFilters({
 
     return () => clearTimeout(timeoutId);
   }, [productFilters, allFilters, initialProducts, initialProductFilters]);
+
+  // Auto-expand top 3 filters with most products
+  useEffect(() => {
+    if (filters.length === 0) return;
+
+    // Calculate product count for each filter
+    const filterProductCounts = filters.map(filter => {
+      const filterId = String(filter._id);
+      let count = 0;
+      
+      initialProducts.forEach(product => {
+        const productFilterList = productFilters[product._id] || [];
+        const hasFilter = productFilterList.some(pf => pf.filterId === filterId);
+        if (hasFilter) count++;
+      });
+      
+      return { filterId, count };
+    });
+
+    // Sort by count (descending) and get top 3
+    const top3Filters = filterProductCounts
+      .sort((a, b) => b.count - a.count)
+      .slice(0, 3)
+      .map(f => f.filterId);
+
+    // Set expansion state: top 3 expanded, others collapsed
+    const newExpandedState: Record<string, boolean> = {};
+    filters.forEach(filter => {
+      const filterId = String(filter._id);
+      newExpandedState[filterId] = top3Filters.includes(filterId);
+    });
+    
+    setExpandedFilters(newExpandedState);
+  }, [filters, initialProducts, productFilters]);
 
   // Function to count products for each filter option
   const getProductCountForOption = (filterId: string, optionValue: string) => {
@@ -353,27 +389,39 @@ export default function DynamicFilters({
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-2">
       {filters
         .sort((a, b) => (a.sortOrder || 0) - (b.sortOrder || 0))
         .map((filter) => {
   const filterKey = String(filter._id!);
-  const isExpanded = expandedFilters[filterKey] ?? true; // Default to expanded
+  const isExpanded = expandedFilters[filterKey] ?? false; // Default to collapsed
   const hasActiveFilter = (selectedFilters[filterKey] || []).length > 0;
         
         return (
-          <div key={filterKey} className="border-b border-gray-200 pb-4">
+          <div key={filterKey} className={`border-b border-gray-200 ${isExpanded ? 'pb-2' : 'pb-0'}`}>
             <button
               onClick={() => toggleFilter(filterKey)}
-              className="flex items-center justify-between w-full text-left mb-3 hover:text-blue-600 transition-colors"
+              className="flex items-center justify-between w-full text-left mb-2 hover:text-blue-600 transition-colors"
             >
-              <h3 className="text-lg font-semibold">{filter.name}</h3>
-              <div className="flex items-center space-x-2">
-                {hasActiveFilter && (
+              <div className="flex items-center gap-2">
+                <h3 className="text-lg font-semibold">{filter.name}</h3>
+                {filter.type === 'range' && hasActiveFilter && (() => {
+                  const currentValues = selectedFilters[filterKey] || [];
+                  const minValue = currentValues[0] ? parseFloat(currentValues[0]) : 0;
+                  const maxValue = currentValues[1] ? parseFloat(currentValues[1]) : 0;
+                  return (
+                    <span className="text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded-full font-medium">
+                      {minValue.toFixed(0)} - {maxValue.toFixed(0)}
+                    </span>
+                  );
+                })()}
+                {filter.type !== 'range' && hasActiveFilter && (
                   <span className="text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded-full">
                     {(selectedFilters[filterKey] || []).length}
                   </span>
                 )}
+              </div>
+              <div className="flex items-center space-x-2">
                 <svg
                   className={`w-5 h-5 transform transition-transform ${isExpanded ? 'rotate-180' : ''}`}
                   fill="none"
@@ -512,7 +560,7 @@ export default function DynamicFilters({
             
             
             return (
-              <div className="space-y-3">
+              <div className="space-y-2">
                 {/* Range Slider Container */}
                 <div className="relative">
                   <div className="relative h-2 bg-gray-200 rounded-lg mx-2">
@@ -615,12 +663,6 @@ export default function DynamicFilters({
                   </div>
                 </div>
                 
-                {/* Current selection display */}
-                <div className="text-center text-sm text-gray-600">
-                  <span className="font-medium">{minValue.toFixed(0)}</span>
-                  <span className="mx-2">-</span>
-                  <span className="font-medium">{maxValue.toFixed(0)}</span>
-                </div>
               </div>
             );
           })()}

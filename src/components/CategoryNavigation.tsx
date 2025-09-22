@@ -20,15 +20,61 @@ interface Category {
 
 interface CategoryNavigationProps {
   className?: string;
+  onTopSellerToggle?: () => void;
+  onSaleToggle?: () => void;
+  onNewToggle?: () => void;
+  showTopSellers?: boolean;
+  showSaleItems?: boolean;
+  showNewItems?: boolean;
 }
 
-export default function CategoryNavigation({ className = "" }: CategoryNavigationProps) {
+export default function CategoryNavigation({ 
+  className = "",
+  onTopSellerToggle,
+  onSaleToggle,
+  onNewToggle,
+  showTopSellers = false,
+  showSaleItems = false,
+  showNewItems = false
+}: CategoryNavigationProps) {
   const [categories, setCategories] = useState<Category[]>([]);
   const [isVisible, setIsVisible] = useState(true);
   const [isHovered, setIsHovered] = useState(false);
   const [hoveredCategory, setHoveredCategory] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const router = useRouter();
+  
+
+  // Toggle functions that handle both URL navigation and callback
+  const handleTopSellerToggle = () => {
+    if (onTopSellerToggle) {
+      onTopSellerToggle();
+    } else {
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('shop-toggle-filter', { detail: { filter: 'topseller', action: 'toggle' } }));
+      }
+    }
+  };
+
+  const handleSaleToggle = () => {
+    if (onSaleToggle) {
+      onSaleToggle();
+    } else {
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('shop-toggle-filter', { detail: { filter: 'sale', action: 'toggle' } }));
+      }
+    }
+  };
+
+  const handleNewToggle = () => {
+    if (onNewToggle) {
+      onNewToggle();
+    } else {
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('shop-toggle-filter', { detail: { filter: 'neu', action: 'toggle' } }));
+      }
+    }
+  };
 
 
 
@@ -248,7 +294,7 @@ export default function CategoryNavigation({ className = "" }: CategoryNavigatio
           {/* Right side - Special filters */}
           <div className="flex items-center gap-2">
             <button
-              onClick={() => router.push('/shop?filter=topseller')}
+              onClick={handleTopSellerToggle}
               className="flex items-center gap-1 py-2 px-3 text-sm text-gray-700 hover:text-blue-600 hover:bg-blue-50 rounded-md transition-colors"
             >
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -258,7 +304,7 @@ export default function CategoryNavigation({ className = "" }: CategoryNavigatio
             </button>
 
             <button
-              onClick={() => router.push('/shop?filter=sale')}
+              onClick={handleSaleToggle}
               className="flex items-center gap-1 py-2 px-3 text-sm text-gray-700 hover:text-red-600 hover:bg-red-50 rounded-md transition-colors"
             >
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -268,7 +314,7 @@ export default function CategoryNavigation({ className = "" }: CategoryNavigatio
             </button>
 
             <button
-              onClick={() => router.push('/shop?filter=neu')}
+              onClick={handleNewToggle}
               className="flex items-center gap-1 py-2 px-3 text-sm text-gray-700 hover:text-green-600 hover:bg-green-50 rounded-md transition-colors"
             >
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">

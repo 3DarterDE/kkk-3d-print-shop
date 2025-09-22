@@ -137,6 +137,7 @@ export default function ProductsPage() {
     offerPrice: '',
     tags: '',
     isOnSale: false,
+    isTopSeller: false,
     inStock: true,
     stockQuantity: '0',
   });
@@ -337,6 +338,7 @@ export default function ProductsPage() {
       price: Math.round(parseFloat(formData.price || '0') * 100),
       offerPrice: formData.offerPrice ? Math.round(parseFloat(formData.offerPrice) * 100) : undefined,
       isOnSale: formData.isOnSale,
+      isTopSeller: formData.isTopSeller,
       category: formData.category,
       categoryId: formData.category,
       subcategoryId: formData.subcategory || undefined,
@@ -434,6 +436,7 @@ export default function ProductsPage() {
         offerPrice: '',
         tags: '',
         isOnSale: false,
+        isTopSeller: false,
         inStock: true,
         stockQuantity: '0',
       });
@@ -527,6 +530,7 @@ export default function ProductsPage() {
       offerPrice: product.offerPrice ? (product.offerPrice / 100).toString() : '',
       tags: product.tags ? product.tags.join(', ') : '',
       isOnSale: product.isOnSale || false,
+      isTopSeller: product.isTopSeller || false,
       inStock: product.inStock !== false,
       stockQuantity: product.stockQuantity?.toString() || '0',
     });
@@ -855,6 +859,9 @@ export default function ProductsPage() {
                   Status
                 </th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Top Seller
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Aktionen
                 </th>
               </tr>
@@ -933,6 +940,15 @@ export default function ProductsPage() {
                     >
                       {product.isActive ? 'Aktiv' : 'Inaktiv'}
                     </button>
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                      product.isTopSeller 
+                        ? 'bg-yellow-100 text-yellow-800' 
+                        : 'bg-gray-100 text-gray-800'
+                    }`}>
+                      {product.isTopSeller ? 'Ja' : 'Nein'}
+                    </span>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
                     <div className="flex space-x-2">
@@ -1104,6 +1120,7 @@ export default function ProductsPage() {
                         offerPrice: '',
                         tags: '',
                         isOnSale: false,
+                        isTopSeller: false,
                         inStock: true,
                         stockQuantity: '0',
                       });
@@ -1282,6 +1299,15 @@ export default function ProductsPage() {
                             className="rounded border-gray-300 text-blue-600 shadow-sm focus:border-blue-300 focus:ring focus:ring-blue-200 focus:ring-opacity-50"
                           />
                           <span className="ml-2 text-sm text-gray-700">Im Angebot</span>
+                        </label>
+                        <label className="flex items-center">
+                          <input
+                            type="checkbox"
+                            checked={formData.isTopSeller}
+                            onChange={(e) => setFormData({ ...formData, isTopSeller: e.target.checked })}
+                            className="rounded border-gray-300 text-blue-600 shadow-sm focus:border-blue-300 focus:ring focus:ring-blue-200 focus:ring-opacity-50"
+                          />
+                          <span className="ml-2 text-sm text-gray-700">Top Seller</span>
                         </label>
                         <label className="flex items-center">
                           <input
@@ -2058,6 +2084,7 @@ export default function ProductsPage() {
                           offerPrice: '',
                           tags: '',
                           isOnSale: false,
+                          isTopSeller: false,
                           inStock: true,
                           stockQuantity: '0',
                         });
