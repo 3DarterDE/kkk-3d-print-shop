@@ -7,10 +7,11 @@ interface BreadcrumbProps {
   className?: string;
   category?: string;
   subcategory?: string;
+  brand?: string;
   productName?: string;
 }
 
-export default function Breadcrumb({ className = "", category: propCategory, subcategory: propSubcategory, productName }: BreadcrumbProps) {
+export default function Breadcrumb({ className = "", category: propCategory, subcategory: propSubcategory, brand: propBrand, productName }: BreadcrumbProps) {
   const searchParams = useSearchParams();
   const pathname = usePathname();
 
@@ -25,6 +26,7 @@ export default function Breadcrumb({ className = "", category: propCategory, sub
 
   const category = propCategory || searchParams.get('category') || pathCategory || null;
   const subcategory = propSubcategory || searchParams.get('subcategory') || pathSubcategory || null;
+  const brand = propBrand || searchParams.get('brand') || null;
   const filter = searchParams.get('filter');
 
   // Get category name from URL or use slug
@@ -81,6 +83,21 @@ export default function Breadcrumb({ className = "", category: propCategory, sub
     breadcrumbs.push({ 
       name: getSubcategoryName(subcategory), 
       href: `/shop/${category}/${subcategory}` 
+    });
+  }
+
+  // Add brand if present
+  if (brand) {
+    // First add "Marken" link
+    breadcrumbs.push({ 
+      name: "Marken", 
+      href: "/shop/marke" 
+    });
+    
+    // Then add specific brand
+    breadcrumbs.push({ 
+      name: brand.charAt(0).toUpperCase() + brand.slice(1).replace(/-/g, ' '), 
+      href: `/shop/marke/${brand}` 
     });
   }
 

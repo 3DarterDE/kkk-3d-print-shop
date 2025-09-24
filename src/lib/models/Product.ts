@@ -18,6 +18,8 @@ export interface ProductDocument {
   videos: string[];
   videoThumbnails: string[];
   tags: string[];
+  brand?: string; // Brand slug
+  brandId?: string; // Brand ID reference
   category: string;
   categoryId?: string;
   subcategoryId?: string;
@@ -60,6 +62,8 @@ const ProductSchema = new Schema<ProductDocument>(
   videos: { type: [String], default: [] },
   videoThumbnails: { type: [String], default: [] },
   tags: { type: [String], default: [] },
+  brand: { type: String, index: true },
+  brandId: { type: String, index: true },
   category: { type: String, default: "3d-print", index: true },
   categoryId: { type: String, index: true },
   subcategoryId: { type: String, index: true },

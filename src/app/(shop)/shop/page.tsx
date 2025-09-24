@@ -41,11 +41,11 @@ async function fetchCategories(): Promise<Category[]> {
 
 
 
-export default function ShopPage({ searchParams }: { searchParams: Promise<{ category?: string; subcategory?: string; search?: string; filter?: string }> }) {
+export default function ShopPage({ searchParams }: { searchParams: Promise<{ category?: string; subcategory?: string; brand?: string; search?: string; filter?: string }> }) {
   const router = useRouter();
   const [allProducts, setAllProducts] = useState<any[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
-  const [resolvedSearchParams, setResolvedSearchParams] = useState<{ category?: string; subcategory?: string; search?: string; filter?: string }>({});
+  const [resolvedSearchParams, setResolvedSearchParams] = useState<{ category?: string; subcategory?: string; brand?: string; search?: string; filter?: string }>({});
   const [loading, setLoading] = useState(true);
   const [sortBy, setSortBy] = useState<'default' | 'newest' | 'oldest' | 'price-low' | 'price-high' | 'name-asc' | 'name-desc'>('default');
   const [searchQuery, setSearchQuery] = useState('');
@@ -112,17 +112,29 @@ export default function ShopPage({ searchParams }: { searchParams: Promise<{ cat
         const pathname = window.location.pathname || '';
         let pathCategory: string | undefined;
         let pathSubcategory: string | undefined;
+        let pathBrand: string | undefined;
+        
         if (pathname.startsWith('/shop/')) {
           const parts = pathname.split('/').filter(Boolean); // e.g. ['shop','dartpfeile','softdarts']
           if (parts.length >= 2) pathCategory = parts[1];
           if (parts.length >= 3) pathSubcategory = parts[2];
+          
+          // Check for brand path: /shop/marke/[brand]
+          if (parts[1] === 'marke' && parts[2]) {
+            pathBrand = parts[2];
+            pathCategory = undefined; // Clear category when showing brand
+          }
         }
+        
         const params = {
           category: urlParams.get('category') || pathCategory || undefined,
           subcategory: urlParams.get('subcategory') || pathSubcategory || undefined,
+          brand: urlParams.get('brand') || pathBrand || undefined,
           search: urlParams.get('search') || undefined,
           filter: urlParams.get('filter') || undefined,
         };
+        
+        console.log('ShopPage - resolved params:', params);
         setResolvedSearchParams(params);
         return;
       }
@@ -482,10 +494,11 @@ export default function ShopPage({ searchParams }: { searchParams: Promise<{ cat
     return filteredProducts.length;
   };
 
-  // Filter products by category, subcategory, and search query
+  // Filter products by category, subcategory, brand, and search query
   const filteredProducts = allProducts.filter((p: any) => {
     const selectedCategory = resolvedSearchParams.category;
     const selectedSubcategory = resolvedSearchParams.subcategory;
+    const selectedBrand = resolvedSearchParams.brand;
     
     // Search filter - only apply if no category is selected and it's not a category search
     if (searchQuery.trim() && !selectedCategory && !isCategorySearch) {
@@ -529,6 +542,28 @@ export default function ShopPage({ searchParams }: { searchParams: Promise<{ cat
         
         if (!isDirectCategoryMatch && !isSubcategoryMatch) return false;
       }
+    }
+    
+    // Brand filter
+    if (selectedBrand) {
+      // Check if product has this brand slug in brand field
+      const hasBrand = p.brand === selectedBrand || 
+                      p.brandId === selectedBrand ||
+                      p.tags?.includes(selectedBrand);
+      
+      // Debug logging
+      if (selectedBrand === 'red-dragon') {
+        console.log('Brand filter debug:', {
+          productTitle: p.title,
+          productBrand: p.brand,
+          productBrandId: p.brandId,
+          productTags: p.tags,
+          selectedBrand,
+          hasBrand
+        });
+      }
+      
+      if (!hasBrand) return false;
     }
     
     // Dynamic filters - Handle different filter types
