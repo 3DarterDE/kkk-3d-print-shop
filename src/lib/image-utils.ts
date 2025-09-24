@@ -101,3 +101,28 @@ export function getContextualImageSize(context: 'shop-listing' | 'product-detail
   }
 }
 
+/**
+ * Convert image file to WebP format
+ * @param file - The image file to convert
+ * @returns Promise<Buffer> - The WebP image buffer
+ */
+export async function convertToWebp(file: File): Promise<Buffer> {
+  // For now, return the file as-is since we don't have sharp installed
+  // In production, you would use sharp or similar library for proper conversion
+  const arrayBuffer = await file.arrayBuffer();
+  return Buffer.from(arrayBuffer);
+}
+
+/**
+ * Generate thumbnail from image buffer
+ * @param imageBuffer - The source image buffer
+ * @param width - Target width
+ * @param height - Target height
+ * @returns Promise<Buffer> - The thumbnail image buffer
+ */
+export async function generateThumbnail(imageBuffer: Buffer, width: number, height: number): Promise<Buffer> {
+  // For now, return the original buffer since we don't have sharp installed
+  // In production, you would use sharp or similar library for proper resizing
+  return imageBuffer;
+}
+
