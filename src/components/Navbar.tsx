@@ -76,9 +76,9 @@ export default function Navbar() {
 
   return (
     <header 
-      className="fixed top-0 left-0 right-0 z-50 transition-all duration-300 shadow-md border-b border-blue-200/30"
+      className="fixed top-0 left-0 right-0 z-50 transition-all duration-300 shadow-md"
       style={{
-        background: 'linear-gradient(135deg, #1E40AF 0%,rgb(52, 120, 230) 10%,rgb(75, 142, 224) 25%,rgb(3, 27, 148) 60%,rgb(15, 3, 83) 100%)',
+        background: 'linear-gradient(115deg, #1E40AF 0%,rgb(52, 120, 230) 10%,rgb(75, 142, 224) 25%,rgb(14, 43, 187) 60%,rgb(3, 27, 148) 73.9%,rgb(0, 0, 0) 74%,rgb(0, 0, 0) 100%)',
         boxShadow: isScrolled ? '0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05)' : '0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06)'
       }}
     >
@@ -87,7 +87,7 @@ export default function Navbar() {
           {/* Mobile: Hamburger Menu + Logo zusammen */}
           <div className="md:hidden flex items-center gap-3">
             <button 
-              onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
+              onClick={() => setIsMobileMenuOpen(prev => !prev)}
               className="p-2 text-white hover:text-blue-200 transition-all duration-300 hover:drop-shadow-[0_0_6px_rgba(173,216,230,0.6)]"
             >
               <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -178,7 +178,7 @@ export default function Navbar() {
             {isAdmin && (
               <div className="relative" data-admin-menu>
                 <button
-                  onClick={() => setIsAdminMenuOpen(!isAdminMenuOpen)}
+                  onClick={() => setIsAdminMenuOpen(prev => !prev)}
                   className="p-2 text-white hover:text-blue-200 transition-all duration-300 group"
                   title="Admin-Bereich"
                   aria-label="Admin-Menü öffnen"
@@ -219,6 +219,16 @@ export default function Navbar() {
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
                       </svg>
                       Kategorien
+                    </Link>
+                    <Link
+                      href="/admin/brands"
+                      onClick={() => setIsAdminMenuOpen(false)}
+                      className="flex items-center px-4 py-2 text-sm text-gray-700 hover:bg-blue-50 hover:text-blue-600 transition-colors"
+                    >
+                      <svg className="w-4 h-4 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z" />
+                      </svg>
+                      Marken
                     </Link>
                     <Link
                       href="/admin/orders"
@@ -315,7 +325,7 @@ export default function Navbar() {
                         <button
                           key={category._id}
                           onClick={() => {
-                            router.push(`/shop?category=${category.slug}`);
+                            router.push(`/shop/${category.slug}`);
                             setIsMobileMenuOpen(false);
                           }}
                           className="w-full text-left px-4 py-3 text-gray-700 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-all duration-300 font-medium"

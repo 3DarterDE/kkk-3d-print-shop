@@ -103,23 +103,31 @@ export default function ShopPage({ searchParams }: { searchParams: Promise<{ cat
     }
   };
 
-  // Resolve search params using both methods
+  // Resolve search params using both methods and also support /shop/<category>/<subcategory> path
   useEffect(() => {
     const getSearchParams = async () => {
-      // Always try URLSearchParams first for client-side navigation
+      // Client-side: prefer URLSearchParams but fall back to path segments
       if (typeof window !== 'undefined') {
         const urlParams = new URLSearchParams(window.location.search);
+        const pathname = window.location.pathname || '';
+        let pathCategory: string | undefined;
+        let pathSubcategory: string | undefined;
+        if (pathname.startsWith('/shop/')) {
+          const parts = pathname.split('/').filter(Boolean); // e.g. ['shop','dartpfeile','softdarts']
+          if (parts.length >= 2) pathCategory = parts[1];
+          if (parts.length >= 3) pathSubcategory = parts[2];
+        }
         const params = {
-          category: urlParams.get('category') || undefined,
-          subcategory: urlParams.get('subcategory') || undefined,
+          category: urlParams.get('category') || pathCategory || undefined,
+          subcategory: urlParams.get('subcategory') || pathSubcategory || undefined,
           search: urlParams.get('search') || undefined,
           filter: urlParams.get('filter') || undefined,
         };
         setResolvedSearchParams(params);
         return;
       }
-      
-      // Fallback to Next.js searchParams for server-side rendering
+
+      // Server-side fallback
       try {
         const params = await searchParams;
         setResolvedSearchParams(params || {});
@@ -127,7 +135,7 @@ export default function ShopPage({ searchParams }: { searchParams: Promise<{ cat
         setResolvedSearchParams({});
       }
     };
-    
+
     getSearchParams();
   }, [searchParams]);
 

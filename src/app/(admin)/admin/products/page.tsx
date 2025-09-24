@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect, useRef } from "react";
 import { ProductDocument } from "@/lib/models/Product";
+import MarkdownEditor from "@/components/MarkdownEditor";
 
 interface Category {
   _id: string;
@@ -20,11 +21,21 @@ interface Category {
   };
 }
 
+interface Brand {
+  _id: string;
+  name: string;
+  slug: string;
+  description?: string;
+  isActive: boolean;
+  sortOrder: number;
+}
+
 export default function ProductsPage() {
   const [products, setProducts] = useState<ProductDocument[]>([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
   const [editingProduct, setEditingProduct] = useState<ProductDocument | null>(null);
+  const [brands, setBrands] = useState<Brand[]>([]);
   const [uploadedFiles, setUploadedFiles] = useState<string[]>([]);
   const [uploadedThumbnails, setUploadedThumbnails] = useState<string[]>([]);
   const [uploadedImageSizes, setUploadedImageSizes] = useState<Array<{ main: string; thumb: string; small: string }>>([]);
@@ -80,28 +91,6 @@ export default function ProductsPage() {
     }
   };
 
-  const executeCommand = (command: string, value?: string) => {
-    document.execCommand(command, false, value);
-    document.getElementById('description-editor')?.focus();
-  };
-
-  const insertHtml = () => {
-    const html = prompt('HTML-Code eingeben:');
-    if (html) {
-      executeCommand('insertHTML', html);
-    }
-  };
-
-  const toggleHtmlEditor = () => {
-    if (showHtmlEditor) {
-      // Switch from HTML to WYSIWYG
-      setDescriptionContent(htmlContent);
-    } else {
-      // Switch from WYSIWYG to HTML
-      setHtmlContent(descriptionContent);
-    }
-    setShowHtmlEditor(!showHtmlEditor);
-  };
   const [draggedProductIndex, setDraggedProductIndex] = useState<number | null>(null);
   const [draggedRecommendedIndex, setDraggedRecommendedIndex] = useState<number | null>(null);
   const [draggedCategoryIndex, setDraggedCategoryIndex] = useState<number | null>(null);
@@ -109,8 +98,6 @@ export default function ProductsPage() {
   const [selectedFontFamily, setSelectedFontFamily] = useState('Arial');
   const [selectedColor, setSelectedColor] = useState('#000000');
   const [descriptionContent, setDescriptionContent] = useState('');
-  const [showHtmlEditor, setShowHtmlEditor] = useState(false);
-  const [htmlContent, setHtmlContent] = useState('');
   const [categories, setCategories] = useState<Category[]>([]);
   const [variations, setVariations] = useState<Array<{
     name: string;
@@ -133,6 +120,7 @@ export default function ProductsPage() {
     category: '',
     subcategory: '',
     subcategories: [] as string[],
+    brand: '',
     price: '',
     offerPrice: '',
     tags: '',
@@ -165,6 +153,7 @@ export default function ProductsPage() {
   useEffect(() => {
     fetchProducts();
     fetchCategories();
+    fetchBrands();
     fetchFilters();
   }, []);
 
@@ -209,26 +198,6 @@ export default function ProductsPage() {
     }
   }, [editingProduct]);
 
-  // Set initial content in editor when descriptionContent changes
-  useEffect(() => {
-    const editor = document.getElementById('description-editor');
-    if (editor) {
-      // Always update the editor content when descriptionContent changes
-      if (descriptionContent !== editor.innerHTML) {
-        editor.innerHTML = descriptionContent || '&nbsp;';
-      }
-    }
-  }, [descriptionContent]);
-
-  // Update editor content when switching to description tab
-  useEffect(() => {
-    if (activeModalTab === 'description') {
-      const editor = document.getElementById('description-editor');
-      if (editor && descriptionContent !== editor.innerHTML) {
-        editor.innerHTML = descriptionContent || '&nbsp;';
-      }
-    }
-  }, [activeModalTab, descriptionContent]);
 
   const fetchProducts = async () => {
     try {
@@ -256,6 +225,16 @@ export default function ProductsPage() {
       setCategories(data);
     } catch (error) {
       console.error("Failed to fetch categories:", error);
+    }
+  };
+
+  const fetchBrands = async () => {
+    try {
+      const response = await fetch("/api/admin/brands");
+      const data = await response.json();
+      setBrands(data);
+    } catch (error) {
+      console.error("Failed to fetch brands:", error);
     }
   };
 
@@ -310,8 +289,8 @@ export default function ProductsPage() {
   const handleFormSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    // Get description from state - use HTML content if in HTML mode, otherwise use WYSIWYG content
-    const description = showHtmlEditor ? htmlContent : descriptionContent || "";
+    // Get description from markdown state
+    const description = descriptionContent || "";
     
     // Generate slug from title
     const title = formData.title;
@@ -343,6 +322,7 @@ export default function ProductsPage() {
       categoryId: formData.category,
       subcategoryId: formData.subcategory || undefined,
       subcategoryIds: formData.subcategories,
+      brand: formData.brand || undefined,
       tags: formData.tags.split(",").map(tag => tag.trim()).filter(tag => tag),
       inStock: formData.inStock,
       stockQuantity: parseInt(formData.stockQuantity) || 0,
@@ -432,6 +412,7 @@ export default function ProductsPage() {
         category: '',
         subcategory: '',
         subcategories: [],
+        brand: '',
         price: '',
         offerPrice: '',
         tags: '',
@@ -526,6 +507,7 @@ export default function ProductsPage() {
       category: product.categoryId || product.category,
       subcategory: product.subcategoryId || '',
       subcategories: product.subcategoryIds || [],
+      brand: product.brand || '',
       price: (product.price / 100).toString(),
       offerPrice: product.offerPrice ? (product.offerPrice / 100).toString() : '',
       tags: product.tags ? product.tags.join(', ') : '',
@@ -536,7 +518,6 @@ export default function ProductsPage() {
     });
     
     setDescriptionContent(product.description || '');
-    setHtmlContent(product.description || '');
     setShowForm(true);
     setActiveModalTab('basic');
   };
@@ -1116,6 +1097,7 @@ export default function ProductsPage() {
                         category: '',
                         subcategory: '',
                         subcategories: [],
+                        brand: '',
                         price: '',
                         offerPrice: '',
                         tags: '',
@@ -1125,7 +1107,6 @@ export default function ProductsPage() {
                         stockQuantity: '0',
                       });
                       setDescriptionContent('');
-                      setHtmlContent('');
                       setProperties([]);
                       setRecommendedProducts([]);
                       setVariations([]);
@@ -1135,7 +1116,6 @@ export default function ProductsPage() {
                       setSelectedProductFilters([]);
                       setRecommendationSearch('');
                       setRecommendationSearchResults([]);
-                      setShowHtmlEditor(false);
                       setActiveModalTab('basic');
                     }}
                     className="text-gray-400 hover:text-gray-600"
@@ -1231,6 +1211,20 @@ export default function ProductsPage() {
                             <option key={category._id} value={category._id}>
                               {category.name}
                             </option>
+                          ))}
+                        </select>
+                      </div>
+
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700">Marke</label>
+                        <select
+                          value={formData.brand}
+                          onChange={(e) => setFormData({ ...formData, brand: e.target.value })}
+                          className="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500"
+                        >
+                          <option value="">Keine Marke</option>
+                          {brands.map((brand) => (
+                            <option key={brand._id} value={brand.slug}>{brand.name}</option>
                           ))}
                         </select>
                       </div>
@@ -1349,203 +1343,12 @@ export default function ProductsPage() {
                   {/* Description Tab */}
                   {activeModalTab === 'description' && (
                     <div>
-                      <div className="flex justify-between items-center mb-4">
-                        <label className="block text-sm font-medium text-gray-700">Beschreibung</label>
-                        <div className="flex space-x-2">
-                          <button
-                            type="button"
-                            onClick={toggleHtmlEditor}
-                            className="px-3 py-1 text-sm bg-gray-100 hover:bg-gray-200 rounded border"
-                          >
-                            {showHtmlEditor ? 'WYSIWYG Editor' : 'HTML Editor'}
-                          </button>
-                        </div>
-                      </div>
-
-                      {showHtmlEditor ? (
-                        <div>
-                          <textarea
-                            value={htmlContent}
-                            onChange={(e) => setHtmlContent(e.target.value)}
-                            className="w-full h-64 p-3 border border-gray-300 rounded-md font-mono text-sm"
-                            placeholder="HTML-Code hier eingeben..."
-                          />
-                        </div>
-                      ) : (
-                        <div>
-                          {/* Rich Text Editor Toolbar */}
-                          <div className="border border-gray-300 rounded-t-md bg-gray-50 p-2 flex flex-wrap items-center gap-2">
-                            {/* Font Controls */}
-                            <select
-                              value={selectedFontFamily}
-                              onChange={(e) => {
-                                setSelectedFontFamily(e.target.value);
-                                executeCommand('fontName', e.target.value);
-                              }}
-                              className="text-sm border border-gray-300 rounded px-2 py-1"
-                            >
-                              <option value="Arial">Arial</option>
-                              <option value="Helvetica">Helvetica</option>
-                              <option value="Times New Roman">Times New Roman</option>
-                              <option value="Georgia">Georgia</option>
-                              <option value="Verdana">Verdana</option>
-                              <option value="Courier New">Courier New</option>
-                            </select>
-
-                            <select
-                              value={selectedFontSize}
-                              onChange={(e) => {
-                                setSelectedFontSize(e.target.value);
-                                executeCommand('fontSize', '7');
-                                executeCommand('styleWithCSS', 'true');
-                                executeCommand('fontSize', e.target.value.replace('px', ''));
-                              }}
-                              className="text-sm border border-gray-300 rounded px-2 py-1"
-                            >
-                              <option value="12px">12px</option>
-                              <option value="14px">14px</option>
-                              <option value="16px">16px</option>
-                              <option value="18px">18px</option>
-                              <option value="20px">20px</option>
-                              <option value="24px">24px</option>
-                              <option value="28px">28px</option>
-                              <option value="32px">32px</option>
-                            </select>
-
-                            <div className="w-px h-6 bg-gray-300"></div>
-
-                            {/* Text Formatting */}
-                            <button
-                              type="button"
-                              onClick={() => executeCommand('bold')}
-                              className="px-2 py-1 text-sm font-bold border border-gray-300 rounded hover:bg-gray-200"
-                              title="Fett"
-                            >
-                              B
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => executeCommand('italic')}
-                              className="px-2 py-1 text-sm italic border border-gray-300 rounded hover:bg-gray-200"
-                              title="Kursiv"
-                            >
-                              I
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => executeCommand('underline')}
-                              className="px-2 py-1 text-sm underline border border-gray-300 rounded hover:bg-gray-200"
-                              title="Unterstrichen"
-                            >
-                              U
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => executeCommand('strikeThrough')}
-                              className="px-2 py-1 text-sm line-through border border-gray-300 rounded hover:bg-gray-200"
-                              title="Durchgestrichen"
-                            >
-                              S
-                            </button>
-
-                            <div className="w-px h-6 bg-gray-300"></div>
-
-                            {/* Text Alignment */}
-                            <button
-                              type="button"
-                              onClick={() => executeCommand('justifyLeft')}
-                              className="px-2 py-1 text-sm border border-gray-300 rounded hover:bg-gray-200"
-                              title="Links ausrichten"
-                            >
-                              ⬅
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => executeCommand('justifyCenter')}
-                              className="px-2 py-1 text-sm border border-gray-300 rounded hover:bg-gray-200"
-                              title="Zentriert"
-                            >
-                              ⬆
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => executeCommand('justifyRight')}
-                              className="px-2 py-1 text-sm border border-gray-300 rounded hover:bg-gray-200"
-                              title="Rechts ausrichten"
-                            >
-                              ➡
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => executeCommand('justifyFull')}
-                              className="px-2 py-1 text-sm border border-gray-300 rounded hover:bg-gray-200"
-                              title="Blocksatz"
-                            >
-                              ⬌
-                            </button>
-
-                            <div className="w-px h-6 bg-gray-300"></div>
-
-                            {/* Lists */}
-                            <button
-                              type="button"
-                              onClick={() => executeCommand('insertUnorderedList')}
-                              className="px-2 py-1 text-sm border border-gray-300 rounded hover:bg-gray-200"
-                              title="Aufzählungsliste"
-                            >
-                              • Liste
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => executeCommand('insertOrderedList')}
-                              className="px-2 py-1 text-sm border border-gray-300 rounded hover:bg-gray-200"
-                              title="Nummerierte Liste"
-                            >
-                              1. Liste
-                            </button>
-
-                            <div className="w-px h-6 bg-gray-300"></div>
-
-                            {/* Color */}
-                            <input
-                              type="color"
-                              value={selectedColor}
-                              onChange={(e) => {
-                                setSelectedColor(e.target.value);
-                                executeCommand('foreColor', e.target.value);
-                              }}
-                              className="w-8 h-8 border border-gray-300 rounded cursor-pointer"
-                              title="Textfarbe"
-                            />
-
-                            <div className="w-px h-6 bg-gray-300"></div>
-
-                            {/* HTML Insert */}
-                            <button
-                              type="button"
-                              onClick={insertHtml}
-                              className="px-2 py-1 text-sm border border-gray-300 rounded hover:bg-gray-200"
-                              title="HTML einfügen"
-                            >
-                              &lt;HTML&gt;
-                            </button>
-                          </div>
-
-                          {/* Editor Area */}
-                          <div
-                            id="description-editor"
-                            contentEditable
-                            className="min-h-[300px] p-4 border border-gray-300 border-t-0 rounded-b-md focus:ring-blue-500 focus:border-blue-500"
-                            style={{
-                              fontSize: selectedFontSize,
-                              fontFamily: selectedFontFamily,
-                              color: selectedColor
-                            }}
-                            onInput={(e) => setDescriptionContent(e.currentTarget.innerHTML)}
-                            dangerouslySetInnerHTML={{ __html: descriptionContent }}
-                          />
-                        </div>
-                      )}
+                      <MarkdownEditor
+                        value={descriptionContent}
+                        onChange={setDescriptionContent}
+                        placeholder="Markdown-Beschreibung für das Produkt eingeben..."
+                        height={400}
+                      />
                     </div>
                   )}
 
@@ -2071,7 +1874,7 @@ export default function ProductsPage() {
                   <div className="flex justify-end space-x-3 pt-6 border-t mt-6">
                     <button
                       type="button"
-                      onClick={() => {
+                    onClick={() => {
                         setShowForm(false);
                         setEditingProduct(null);
                         setFormData({
@@ -2080,6 +1883,7 @@ export default function ProductsPage() {
                           category: '',
                           subcategory: '',
                           subcategories: [],
+                        brand: '',
                           price: '',
                           offerPrice: '',
                           tags: '',
@@ -2089,7 +1893,6 @@ export default function ProductsPage() {
                           stockQuantity: '0',
                         });
                         setDescriptionContent('');
-                        setHtmlContent('');
                         setProperties([]);
                         setRecommendedProducts([]);
                         setVariations([]);
@@ -2099,7 +1902,6 @@ export default function ProductsPage() {
                         setSelectedProductFilters([]);
                         setRecommendationSearch('');
                         setRecommendationSearchResults([]);
-                        setShowHtmlEditor(false);
                         setActiveModalTab('basic');
                       }}
                       className="px-4 py-2 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50"

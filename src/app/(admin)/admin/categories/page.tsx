@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
+import MarkdownEditor from "@/components/MarkdownEditor";
 
 interface Category {
   _id: string;
@@ -30,17 +31,20 @@ export default function CategoriesPage() {
   const [categoryImage, setCategoryImage] = useState<File | null>(null);
   const [categoryImagePreview, setCategoryImagePreview] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [selectedParentId, setSelectedParentId] = useState<string>('');
+  
+  // Markdown Editor state
+  const [descriptionContent, setDescriptionContent] = useState('');
 
   useEffect(() => {
     fetchCategories();
   }, []);
 
+
   const fetchCategories = async () => {
     try {
-      console.log("Fetching categories...");
       setError(null);
       const response = await fetch("/api/admin/categories");
-      console.log("Response status:", response.status);
       
       if (!response.ok) {
         const errorText = await response.text();
@@ -48,7 +52,6 @@ export default function CategoriesPage() {
       }
       
       const data = await response.json();
-      console.log("Categories data:", data);
       setCategories(Array.isArray(data) ? data : []);
     } catch (error) {
       console.error("Failed to fetch categories:", error);
@@ -98,12 +101,15 @@ export default function CategoriesPage() {
     e.preventDefault();
     const formData = new FormData(e.target as HTMLFormElement);
     
+    // Get description from markdown state
+    const description = descriptionContent || "";
+    
     const categoryData = {
       name: formData.get("name") as string,
-      description: formData.get("description") as string,
+      description: description,
       isActive: formData.get("isActive") === "on",
       sortOrder: editingCategory ? editingCategory.sortOrder : categories.length,
-      parentId: null // Always create as parent category
+      parentId: selectedParentId || null // Use selected parent ID
     };
 
     try {
@@ -146,26 +152,6 @@ export default function CategoriesPage() {
         }
       }
 
-      // Handle subcategories
-      if (subcategories.length > 0) {
-        for (const subcategory of subcategories) {
-          if (subcategory.name.trim()) {
-            const subcategoryData = {
-              name: subcategory.name,
-              description: subcategory.description,
-              isActive: true,
-              parentId: savedCategory._id,
-              sortOrder: subcategory.sortOrder
-            };
-
-            await fetch("/api/admin/categories", {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify(subcategoryData),
-            });
-          }
-        }
-      }
 
       // Reset form
       setShowCategoryForm(false);
@@ -173,6 +159,7 @@ export default function CategoriesPage() {
       setSubcategories([]);
       setCategoryImage(null);
       setCategoryImagePreview(null);
+      setSelectedParentId('');
       fetchCategories();
     } catch (error) {
       console.error("Failed to save category:", error);
@@ -187,12 +174,16 @@ export default function CategoriesPage() {
       description: sub.description || '',
       sortOrder: sub.sortOrder
     })) || []);
+    
+    // Set parent ID for subcategories, empty for main categories
+    setSelectedParentId(category.parentId || '');
+    
+    // Load description content for markdown editor
+    setDescriptionContent(category.description || '');
+    
     setShowCategoryForm(true);
   };
 
-  const addSubcategory = () => {
-    setSubcategories([...subcategories, { name: '', description: '', sortOrder: subcategories.length }]);
-  };
 
   const handleCategoryImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -590,6 +581,7 @@ export default function CategoriesPage() {
                         setSubcategories([]);
                         setCategoryImage(null);
                         setCategoryImagePreview(null);
+                        setSelectedParentId('');
                       }}
                       className="text-gray-400 hover:text-gray-600"
                     >
@@ -615,15 +607,33 @@ export default function CategoriesPage() {
 
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-2">
-                        Beschreibung
+                        Übergeordnete Kategorie
                       </label>
-                      <textarea
-                        name="description"
-                        rows={3}
-                        defaultValue={editingCategory?.description || ''}
+                      <select
+                        value={selectedParentId}
+                        onChange={(e) => setSelectedParentId(e.target.value)}
                         className="w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                      />
+                      >
+                        <option value="">Hauptkategorie (keine Überkategorie)</option>
+                        {categories
+                          .filter(cat => !cat.parentId) // Nur Hauptkategorien anzeigen
+                          .map(category => (
+                            <option key={category._id} value={category._id}>
+                              {category.name}
+                            </option>
+                          ))}
+                      </select>
+                      <p className="text-sm text-gray-500 mt-1">
+                        {selectedParentId ? 'Diese Kategorie wird als Unterkategorie gespeichert' : 'Diese Kategorie wird als Hauptkategorie gespeichert'}
+                      </p>
                     </div>
+
+                    <MarkdownEditor
+                      value={descriptionContent}
+                      onChange={setDescriptionContent}
+                      placeholder="Markdown-Beschreibung für die Kategorie eingeben..."
+                      height={300}
+                    />
 
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -665,66 +675,6 @@ export default function CategoriesPage() {
                       <label className="text-sm text-gray-700">Aktiv</label>
                     </div>
 
-                    {/* Subcategories Section */}
-                    <div>
-                      <div className="flex justify-between items-center mb-4">
-                        <h3 className="text-lg font-medium text-gray-900">Unterkategorien</h3>
-                        <button
-                          type="button"
-                          onClick={addSubcategory}
-                          className="text-blue-600 hover:text-blue-800 text-sm"
-                        >
-                          + Unterkategorie hinzufügen
-                        </button>
-                      </div>
-                      
-                      {subcategories.map((subcategory, index) => (
-                        <div key={index} className="grid grid-cols-2 gap-4 mb-4 p-4 border border-gray-200 rounded-lg">
-                          <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-1">
-                              Name
-                            </label>
-                            <input
-                              type="text"
-                              value={subcategory.name}
-                              onChange={(e) => {
-                                const newSubcategories = [...subcategories];
-                                newSubcategories[index].name = e.target.value;
-                                setSubcategories(newSubcategories);
-                              }}
-                              className="w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                            />
-                          </div>
-                          <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-1">
-                              Beschreibung
-                            </label>
-                            <input
-                              type="text"
-                              value={subcategory.description}
-                              onChange={(e) => {
-                                const newSubcategories = [...subcategories];
-                                newSubcategories[index].description = e.target.value;
-                                setSubcategories(newSubcategories);
-                              }}
-                              className="w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                            />
-                          </div>
-                          <div className="col-span-2 flex justify-end">
-                            <button
-                              type="button"
-                              onClick={() => {
-                                const newSubcategories = subcategories.filter((_, i) => i !== index);
-                                setSubcategories(newSubcategories);
-                              }}
-                              className="text-red-600 hover:text-red-800 text-sm"
-                            >
-                              Entfernen
-                            </button>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
                   </div>
 
                   <div className="flex justify-end space-x-3 pt-6 border-t mt-6">

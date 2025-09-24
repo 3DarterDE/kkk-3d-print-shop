@@ -3,30 +3,14 @@ import { connectToDatabase } from "@/lib/mongodb";
 import Category from "@/lib/models/Category";
 import JsonLd from "@/components/JsonLd";
 import { notFound } from "next/navigation";
-import { remark } from "remark";
-import remarkHtml from "remark-html";
+import { renderMarkdownToHtml } from "@/lib/markdown";
 import ProductDisplay from "./ProductDisplay";
-import ShopPage from "../page";
 
 export const revalidate = 60; // Cache for 1 minute
 export const dynamic = 'force-dynamic';
 
-// Remove generateStaticParams to avoid unnecessary fetchAllProducts calls
-// export async function generateStaticParams() {
-//   const products = await fetchAllProducts();
-//   return products.map((p: any) => ({ slug: p.slug }));
-// }
-
 export default async function ProductPage({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params;
-
-  // If slug matches a category, render the shop listing for that category at /shop/[slug]
-  await connectToDatabase();
-  const categoryDoc = await Category.findOne({ slug }).lean();
-  if (categoryDoc) {
-    return <ShopPage searchParams={{ category: slug } as any} />;
-  }
-
   const product = await fetchProductBySlug(slug);
   if (!product) return notFound();
 
@@ -34,6 +18,7 @@ export default async function ProductPage({ params }: { params: Promise<{ slug: 
   let categoryData = null;
   let subcategoryData = null;
   if (product.categoryId) {
+    await connectToDatabase();
     categoryData = await Category.findById(product.categoryId).lean();
     
     // Load subcategory data if product has subcategoryIds
@@ -135,35 +120,34 @@ export default async function ProductPage({ params }: { params: Promise<{ slug: 
     product.description !== "<br>" && 
     product.description !== "<div><br></div>";
   
-  const descriptionHtml = hasDescription 
-    ? (() => {
-        const isHtml = /<\w+[\s\S]*>/m.test(product.description || "");
-        return isHtml
-          ? product.description
-          : remark().use(remarkHtml).processSync(product.description || "").toString();
-      })()
-    : '<p class="text-gray-500 italic">Eine detaillierte Beschreibung für dieses Produkt ist in Arbeit und wird bald verfügbar sein.</p>';
+  const descriptionMarkdown = hasDescription 
+    ? product.description
+    : 'Eine detaillierte Beschreibung für dieses Produkt ist in Arbeit und wird bald verfügbar sein.';
+  
+  // Server-side HTML conversion with caching
+  const descriptionHtml = renderMarkdownToHtml(descriptionMarkdown);
   
   // Serialize category data
   const serializedCategory = categoryData && !Array.isArray(categoryData) ? {
     _id: (categoryData as any)._id.toString(),
     name: (categoryData as any).name,
     slug: (categoryData as any).slug
-  } : null;
+  } : undefined;
 
   // Serialize subcategory data
   const serializedSubcategory = subcategoryData && !Array.isArray(subcategoryData) ? {
     _id: (subcategoryData as any)._id.toString(),
     name: (subcategoryData as any).name,
     slug: (subcategoryData as any).slug
-  } : null;
+  } : undefined;
 
 
   return (
     <>
       <ProductDisplay 
         product={serializedProduct} 
-        descriptionHtml={descriptionHtml} 
+        descriptionMarkdown={descriptionMarkdown}
+        descriptionHtml={descriptionHtml}
         recommendedProducts={recommendedProductsData}
         category={serializedCategory}
         subcategory={serializedSubcategory}

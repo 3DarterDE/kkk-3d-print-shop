@@ -1,7 +1,7 @@
 "use client";
 import React from "react";
 import Link from "next/link";
-import { useSearchParams } from "next/navigation";
+import { useSearchParams, usePathname } from "next/navigation";
 
 interface BreadcrumbProps {
   className?: string;
@@ -12,8 +12,19 @@ interface BreadcrumbProps {
 
 export default function Breadcrumb({ className = "", category: propCategory, subcategory: propSubcategory, productName }: BreadcrumbProps) {
   const searchParams = useSearchParams();
-  const category = propCategory || searchParams.get('category');
-  const subcategory = propSubcategory || searchParams.get('subcategory');
+  const pathname = usePathname();
+
+  // Derive category/subcategory from props, query, or path (/shop/<cat>/<subcat>)
+  let pathCategory: string | null = null;
+  let pathSubcategory: string | null = null;
+  if (pathname && pathname.startsWith('/shop/')) {
+    const parts = pathname.split('/').filter(Boolean); // ["shop", "cat", "subcat?"]
+    if (parts.length >= 2) pathCategory = parts[1];
+    if (parts.length >= 3) pathSubcategory = parts[2];
+  }
+
+  const category = propCategory || searchParams.get('category') || pathCategory || null;
+  const subcategory = propSubcategory || searchParams.get('subcategory') || pathSubcategory || null;
   const filter = searchParams.get('filter');
 
   // Get category name from URL or use slug
@@ -61,7 +72,7 @@ export default function Breadcrumb({ className = "", category: propCategory, sub
   if (category) {
     breadcrumbs.push({ 
       name: getCategoryName(category), 
-      href: `/shop?category=${category}` 
+      href: `/shop/${category}` 
     });
   }
 
@@ -69,7 +80,7 @@ export default function Breadcrumb({ className = "", category: propCategory, sub
   if (subcategory) {
     breadcrumbs.push({ 
       name: getSubcategoryName(subcategory), 
-      href: `/shop?category=${category}&subcategory=${subcategory}` 
+      href: `/shop/${category}/${subcategory}` 
     });
   }
 

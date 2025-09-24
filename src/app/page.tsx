@@ -4,6 +4,11 @@ import ScrollAnimation from "@/components/ScrollAnimation";
 import ProductCard from "@/components/ProductCard";
 import { connectToDatabase } from "@/lib/mongodb";
 import { Product } from "@/lib/models/Product";
+import TopSellerCarousel from "@/components/TopSellerCarousel";
+import TopSellerSection from "@/components/TopSellerSection";
+import SaleSection from "@/components/SaleSection";
+import BrandsCarousel from "@/components/BrandsCarousel";
+import { headers } from "next/headers";
 
 export default async function Home() {
   // Lade Top Seller Produkte mit allen benötigten Feldern
@@ -17,8 +22,21 @@ export default async function Home() {
     .lean();
   
   const topSellerProducts = allProducts
+    .filter((product: any) => {
+      // Nur Produkte anzeigen, die verfügbar sind
+      if (product.variations && product.variations.length > 0) {
+        // Bei Produkten mit Variationen: mindestens eine Variation muss verfügbar sein
+        return product.variations.some((variation: any) => 
+          variation.options && variation.options.some((option: any) => 
+            option.inStock && option.stockQuantity > 0
+          )
+        );
+      } else {
+        // Bei Produkten ohne Variationen: direktes inStock und stockQuantity prüfen
+        return product.inStock && product.stockQuantity > 0;
+      }
+    })
     .sort(() => Math.random() - 0.5) // Zufällige Reihenfolge
-    .slice(0, 4) // Nur die ersten 4
     .map((product: any) => ({
       _id: product._id.toString(),
       slug: product.slug,
@@ -51,6 +69,71 @@ export default async function Home() {
       createdAt: product.createdAt,
       updatedAt: product.updatedAt
     }));
+
+  // Lade Angebot-Produkte
+  const saleProducts = await Product.find({ 
+    isActive: true, 
+    isOnSale: true 
+  })
+    .select('_id slug title price offerPrice isOnSale isTopSeller images imageSizes tags categoryId subcategoryId subcategoryIds sortOrder createdAt updatedAt inStock stockQuantity variations')
+    .sort({ sortOrder: 1, createdAt: -1 })
+    .lean();
+  
+  const filteredSaleProducts = saleProducts
+    .filter((product: any) => {
+      // Nur Produkte anzeigen, die verfügbar sind
+      if (product.variations && product.variations.length > 0) {
+        // Bei Produkten mit Variationen: mindestens eine Variation muss verfügbar sein
+        return product.variations.some((variation: any) => 
+          variation.options && variation.options.some((option: any) => 
+            option.inStock && option.stockQuantity > 0
+          )
+        );
+      } else {
+        // Bei Produkten ohne Variationen: direktes inStock und stockQuantity prüfen
+        return product.inStock && product.stockQuantity > 0;
+      }
+    })
+    .sort(() => Math.random() - 0.5) // Zufällige Reihenfolge
+    .map((product: any) => ({
+      _id: product._id.toString(),
+      slug: product.slug,
+      title: product.title,
+      price: product.price,
+      offerPrice: product.offerPrice,
+      isOnSale: product.isOnSale,
+      isTopSeller: product.isTopSeller,
+      inStock: product.inStock,
+      stockQuantity: product.stockQuantity,
+      images: product.images || [],
+      imageSizes: product.imageSizes?.map((img: any) => ({
+        main: img.main,
+        thumb: img.thumb,
+        small: img.small
+      })),
+      tags: product.tags || [],
+      variations: product.variations?.map((variation: any) => ({
+        name: variation.name,
+        options: variation.options?.map((option: any) => ({
+          value: option.value,
+          priceAdjustment: option.priceAdjustment || 0,
+          inStock: option.inStock,
+          stockQuantity: option.stockQuantity || 0
+        }))
+      })) || [],
+      categoryId: product.categoryId?.toString(),
+      subcategoryId: product.subcategoryId?.toString(),
+      subcategoryIds: product.subcategoryIds?.map((id: any) => id.toString()),
+      createdAt: product.createdAt,
+      updatedAt: product.updatedAt
+    }));
+
+  const hdrs = await headers();
+  const proto = hdrs.get('x-forwarded-proto') || 'http';
+  const host = hdrs.get('x-forwarded-host') || hdrs.get('host') || 'localhost:3000';
+  const origin = `${proto}://${host}`;
+  const popularBrands = await fetch(`${origin}/api/shop/brands`, { cache: 'no-store' }).then(async (r) => r.ok ? r.json() : []);
+
   return (
     <>
       {/* Hero Section mit Header-Bild */}
@@ -140,25 +223,13 @@ export default async function Home() {
       </section>
 
       {/* Top Seller Produkte */}
-      <section className="bg-gray-50 py-12">
-        <div className="max-w-7xl mx-auto px-6">
-          <div className="text-center mb-8">
-            <h2 className="text-3xl font-bold text-gray-900 mb-4">Top Seller</h2>
-            <p className="text-gray-600">Unsere beliebtesten Produkte</p>
-          </div>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-            {topSellerProducts.length > 0 ? (
-              topSellerProducts.map((product) => (
-                <ProductCard key={product._id} product={product} />
-              ))
-            ) : (
-              <div className="col-span-full text-center py-12">
-                <p className="text-gray-500">Keine Top Seller Produkte gefunden.</p>
-              </div>
-            )}
-          </div>
-        </div>
-      </section>
+      <TopSellerSection products={topSellerProducts} />
+
+      {/* Beliebte Marken */}
+      <BrandsCarousel brands={popularBrands.map((b: any) => ({ id: b._id, name: b.name, logo: b.imageSizes?.main || b.image || '/images/brands/red-dragon.png', url: `/shop/marke/${b.slug}` }))} />
+
+      {/* Im Angebot Produkte */}
+      <SaleSection products={filteredSaleProducts} />
 
       {/* Hauptinhalt */}
       <section className="max-w-7xl mx-auto px-6 py-2">

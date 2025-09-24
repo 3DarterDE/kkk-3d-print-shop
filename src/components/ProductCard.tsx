@@ -32,9 +32,10 @@ interface ProductCardProps {
       }>;
     }>;
   };
+  variant?: 'default' | 'carousel';
 }
 
-export default function ProductCard({ product }: ProductCardProps) {
+export default function ProductCard({ product, variant = 'default' }: ProductCardProps) {
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
   const [isHovered, setIsHovered] = useState(false);
   const [intervalId, setIntervalId] = useState<NodeJS.Timeout | null>(null);
@@ -266,8 +267,10 @@ export default function ProductCard({ product }: ProductCardProps) {
   return (
     <>
       <Link
-        href={`/shop/${product.slug}`}
-        className="shop-grid-item block overflow-hidden group bg-white transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-blue-500"
+        href={`/${product.slug}`}
+        className={`shop-grid-item block overflow-hidden group transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-blue-500 ${
+          variant === 'carousel' ? '' : 'bg-white'
+        }`}
         onMouseEnter={handleMouseEnter}
         onMouseLeave={handleMouseLeave}
         onClick={handleClick}
@@ -324,7 +327,10 @@ export default function ProductCard({ product }: ProductCardProps) {
           {/* Right: Product Info */}
           <div className="flex-1 flex flex-col justify-between min-w-0">
             {/* Product Title */}
-            <div className="font-semibold text-gray-900 line-clamp-2 cursor-pointer group-hover:underline transition-all duration-200 text-base sm:text-lg leading-tight">
+            <div 
+              className="font-semibold text-gray-900 truncate cursor-pointer group-hover:underline transition-all duration-200 text-base sm:text-lg leading-tight" 
+              title={product.title}
+            >
               {product.title}
             </div>
             
@@ -353,10 +359,9 @@ export default function ProductCard({ product }: ProductCardProps) {
                       <span className="text-sm text-gray-900 font-medium">
                         ,{(product.offerPrice % 100).toString().padStart(2, '0')}
                       </span>
-                      <span className="text-sm text-gray-900 ml-1">€</span>
                     </div>
                     <span className="line-through text-gray-400 text-sm ml-2">
-                      {Math.floor(product.price / 100)},{(product.price % 100).toString().padStart(2, '0')}€
+                      {Math.floor(product.price / 100)},{(product.price % 100).toString().padStart(2, '0')}
                     </span>
                   </div>
                 ) : (
@@ -367,18 +372,19 @@ export default function ProductCard({ product }: ProductCardProps) {
                     <span className="text-sm text-gray-900 font-medium">
                       ,{(product.price % 100).toString().padStart(2, '0')}
                     </span>
-                    <span className="text-sm text-gray-900 ml-1">€</span>
                   </div>
                 )}
               </div>
               
-              {/* Stock Status */}
-              <div className="flex items-center gap-1 mr-2 flex-shrink-0">
-                <div className={`w-2 h-2 rounded-full ${!isOutOfStock() ? 'bg-green-500' : 'bg-red-500'}`}></div>
-                <span className={`text-[10px] font-medium ${!isOutOfStock() ? 'text-green-600' : 'text-red-600'}`}>
-                  {!isOutOfStock() ? 'Auf Lager' : 'Nicht verfügbar'}
-                </span>
-              </div>
+              {/* Stock Status - nur bei Standard-Variante anzeigen */}
+              {variant !== 'carousel' && (
+                <div className="flex items-center gap-1 mr-2 flex-shrink-0">
+                  <div className={`w-2 h-2 rounded-full ${!isOutOfStock() ? 'bg-green-500' : 'bg-red-500'}`}></div>
+                  <span className={`text-[10px] font-medium ${!isOutOfStock() ? 'text-green-600' : 'text-red-600'}`}>
+                    {!isOutOfStock() ? 'Auf Lager' : 'Nicht verfügbar'}
+                  </span>
+                </div>
+              )}
               
               {/* Add to cart button */}
               <button
@@ -454,7 +460,11 @@ export default function ProductCard({ product }: ProductCardProps) {
           </div>
           
           <div className="p-3 sm:p-4 relative flex flex-col gap-2">
-            <div className="font-semibold text-gray-900 mb-1 sm:mb-2 line-clamp-2 cursor-pointer group-hover:underline transition-all duration-200 text-base sm:text-lg" style={{ textUnderlineOffset: '4px', textDecorationThickness: '1px' }}>
+            <div 
+              className="font-semibold text-gray-900 mb-1 sm:mb-2 truncate cursor-pointer group-hover:underline transition-all duration-200 text-base sm:text-lg" 
+              style={{ textUnderlineOffset: '4px', textDecorationThickness: '1px' }}
+              title={product.title}
+            >
               {product.title}
             </div>
             
@@ -470,10 +480,9 @@ export default function ProductCard({ product }: ProductCardProps) {
                       <span className="text-xs sm:text-sm text-gray-900 font-medium">
                         ,{(product.offerPrice % 100).toString().padStart(2, '0')}
                       </span>
-                      <span className="text-xs sm:text-sm text-gray-900 ml-1">€</span>
                     </div>
                     <span className="line-through text-gray-400 text-xs sm:text-sm">
-                      {(product.price / 100).toFixed(2)} €
+                      {(product.price / 100).toFixed(2)}
                     </span>
                   </div>
                 ) : (
@@ -484,20 +493,21 @@ export default function ProductCard({ product }: ProductCardProps) {
                     <span className="text-xs sm:text-sm text-gray-900 font-medium">
                       ,{(product.price % 100).toString().padStart(2, '0')}
                     </span>
-                    <span className="text-xs sm:text-sm text-gray-900 ml-1">€</span>
                   </div>
                 )}
               </div>
               
               {/* Stock status and cart button */}
               <div className="flex items-center gap-2 mt-2 sm:mt-0">
-                {/* Stock status */}
-                <div className="flex items-center gap-1">
-                  <div className={`w-2 h-2 rounded-full ${!isOutOfStock() ? 'bg-green-500' : 'bg-red-500'}`}></div>
-                  <span className={`text-[10px] sm:text-xs font-medium ${!isOutOfStock() ? 'text-green-600' : 'text-red-600'}`}>
-                    {!isOutOfStock() ? 'Auf Lager' : 'Nicht verfügbar'}
-                  </span>
-                </div>
+                {/* Stock status - nur bei Standard-Variante anzeigen */}
+                {variant !== 'carousel' && (
+                  <div className="flex items-center gap-1">
+                    <div className={`w-2 h-2 rounded-full ${!isOutOfStock() ? 'bg-green-500' : 'bg-red-500'}`}></div>
+                    <span className={`text-[10px] sm:text-xs font-medium ${!isOutOfStock() ? 'text-green-600' : 'text-red-600'}`}>
+                      {!isOutOfStock() ? 'Auf Lager' : 'Nicht verfügbar'}
+                    </span>
+                  </div>
+                )}
                 
                 {/* Add to cart button */}
                 <button
@@ -540,19 +550,24 @@ export default function ProductCard({ product }: ProductCardProps) {
           <div className="p-6">
             <div className="flex justify-between items-center mb-4">
               <div>
-                <h3 className="text-lg font-semibold text-gray-900">{product.title}</h3>
+                <h3 
+                className="text-lg font-semibold text-gray-900 truncate cursor-help" 
+                title={product.title}
+              >
+                {product.title}
+              </h3>
                 <div className="text-sm text-gray-600 mt-1">
                   {product.isOnSale && product.offerPrice ? (
                     <>
                       <span className="text-red-600 font-semibold">
-                        {(product.offerPrice / 100).toFixed(2)} €
+                        {(product.offerPrice / 100).toFixed(2)}
                       </span>
                       <span className="line-through text-gray-400 ml-2">
-                        {(product.price / 100).toFixed(2)} €
+                        {(product.price / 100).toFixed(2)}
                       </span>
                     </>
                   ) : (
-                    <span className="font-semibold">{(product.price / 100).toFixed(2)} €</span>
+                    <span className="font-semibold">{(product.price / 100).toFixed(2)}</span>
                   )}
                 </div>
               </div>
@@ -588,8 +603,8 @@ export default function ProductCard({ product }: ProductCardProps) {
                           disabled={!optionInStock || optionStock <= 0}
                         >
                           {option.value} 
-                          {option.priceAdjustment !== undefined && option.priceAdjustment > 0 && ` (+${(option.priceAdjustment / 100).toFixed(2)} €)`}
-                          {option.priceAdjustment !== undefined && option.priceAdjustment < 0 && ` (${(option.priceAdjustment / 100).toFixed(2)} €)`}
+                          {option.priceAdjustment !== undefined && option.priceAdjustment > 0 && ` (+${(option.priceAdjustment / 100).toFixed(2)})`}
+                          {option.priceAdjustment !== undefined && option.priceAdjustment < 0 && ` (${(option.priceAdjustment / 100).toFixed(2)})`}
                           {optionStock > 0 && ` - ${optionStock} verfügbar`}
                           {(!optionInStock || optionStock <= 0) && ' - Nicht verfügbar'}
                         </option>
@@ -651,12 +666,12 @@ export default function ProductCard({ product }: ProductCardProps) {
               <div className="flex justify-between items-center">
                 <span className="text-sm text-gray-600">Gesamtpreis:</span>
                 <span className="text-lg font-semibold text-gray-900">
-                  {getTotalPrice().toFixed(2)} €
+                  {getTotalPrice().toFixed(2)}
                 </span>
               </div>
               {quantity > 1 && (
                 <div className="text-xs text-gray-500 mt-1">
-                  {quantity} × {((product.offerPrice || product.price) / 100).toFixed(2)} €
+                  {quantity} × {((product.offerPrice || product.price) / 100).toFixed(2)}
                 </div>
               )}
             </div>

@@ -42,16 +42,47 @@ export default function CategoryNavigation({
   const [isHovered, setIsHovered] = useState(false);
   const [hoveredCategory, setHoveredCategory] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [isBrandsHovered, setIsBrandsHovered] = useState(false);
   const router = useRouter();
+
+  const [brands, setBrands] = useState<Array<{ _id: string; name: string; image?: string; imageSizes?: { thumb?: string; main?: string; small?: string }; slug: string }>>([]);
+
+  useEffect(() => {
+    const loadBrands = async () => {
+      try {
+        const res = await fetch('/api/shop/brands');
+        if (res.ok) {
+          const data = await res.json();
+          setBrands(Array.isArray(data) ? data : []);
+        }
+      } catch {}
+    };
+    loadBrands();
+  }, []);
   
+
+  // Check if we're on shop page or in a category/brand
+  const isOnShopPage = () => {
+    if (typeof window === 'undefined') return false;
+    const path = window.location.pathname;
+    return path === '/shop' || path.startsWith('/shop/');
+  };
 
   // Toggle functions that handle both URL navigation and callback
   const handleTopSellerToggle = () => {
     if (onTopSellerToggle) {
       onTopSellerToggle();
-    } else {
+    } else if (isOnShopPage()) {
+      // On shop page - dispatch event
       if (typeof window !== 'undefined') {
         window.dispatchEvent(new CustomEvent('shop-toggle-filter', { detail: { filter: 'topseller', action: 'toggle' } }));
+      }
+    } else {
+      // Not on shop page - navigate to shop and activate filter
+      if (typeof window !== 'undefined') {
+        // Store filter in sessionStorage for activation after navigation
+        sessionStorage.setItem('activateFilter', 'topseller');
+        window.location.href = '/shop';
       }
     }
   };
@@ -59,9 +90,17 @@ export default function CategoryNavigation({
   const handleSaleToggle = () => {
     if (onSaleToggle) {
       onSaleToggle();
-    } else {
+    } else if (isOnShopPage()) {
+      // On shop page - dispatch event
       if (typeof window !== 'undefined') {
         window.dispatchEvent(new CustomEvent('shop-toggle-filter', { detail: { filter: 'sale', action: 'toggle' } }));
+      }
+    } else {
+      // Not on shop page - navigate to shop and activate filter
+      if (typeof window !== 'undefined') {
+        // Store filter in sessionStorage for activation after navigation
+        sessionStorage.setItem('activateFilter', 'sale');
+        window.location.href = '/shop';
       }
     }
   };
@@ -69,9 +108,17 @@ export default function CategoryNavigation({
   const handleNewToggle = () => {
     if (onNewToggle) {
       onNewToggle();
-    } else {
+    } else if (isOnShopPage()) {
+      // On shop page - dispatch event
       if (typeof window !== 'undefined') {
         window.dispatchEvent(new CustomEvent('shop-toggle-filter', { detail: { filter: 'neu', action: 'toggle' } }));
+      }
+    } else {
+      // Not on shop page - navigate to shop and activate filter
+      if (typeof window !== 'undefined') {
+        // Store filter in sessionStorage for activation after navigation
+        sessionStorage.setItem('activateFilter', 'neu');
+        window.location.href = '/shop';
       }
     }
   };
@@ -136,13 +183,13 @@ export default function CategoryNavigation({
   }, []);
 
   const handleCategoryClick = (category: Category) => {
-    router.push(`/shop?category=${category.slug}`);
+    router.push(`/shop/${category.slug}`);
     setIsHovered(false);
     setHoveredCategory(null);
   };
 
   const handleSubcategoryClick = (subcategory: Category, parentCategory: Category) => {
-    router.push(`/shop?category=${parentCategory.slug}&subcategory=${subcategory.slug}`);
+    router.push(`/shop/${parentCategory.slug}/${subcategory.slug}`);
     setIsHovered(false);
     setHoveredCategory(null);
   };
@@ -154,8 +201,10 @@ export default function CategoryNavigation({
     <div className={`hidden md:block sticky top-16 z-30 bg-white border-b border-gray-300 transition-opacity duration-300 ${!isVisible ? 'opacity-0' : 'opacity-100'} ${className}`}>
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-4">
         <div className="flex items-center justify-between">
-          {/* Left side - Categories dropdown */}
-          <div className="relative">
+          {/* Left side - Categories and Brands dropdowns */}
+          <div className="flex items-center gap-4">
+            {/* Categories dropdown */}
+            <div className="relative">
             <button
               onMouseEnter={() => !isLoading && setIsHovered(true)}
               onMouseLeave={() => {
@@ -289,6 +338,71 @@ export default function CategoryNavigation({
                 </div>
               </div>
           )}
+          </div>
+
+            {/* Brands dropdown */}
+            <div className="relative">
+              <button
+                onMouseEnter={() => setIsBrandsHovered(true)}
+                onMouseLeave={() => {
+                  // Delay to allow mouse to move to dropdown
+                  setTimeout(() => {
+                    if (!document.querySelector('.brands-dropdown:hover')) {
+                      setIsBrandsHovered(false);
+                    }
+                  }, 100);
+                }}
+                className="flex items-center gap-2 py-3 text-gray-700 hover:text-gray-900 hover:bg-gray-50 rounded-md transition-colors"
+              >
+                <span className="font-medium">Marken</span>
+                <svg 
+                  className={`w-4 h-4 transition-transform ${isBrandsHovered ? 'rotate-180' : ''}`} 
+                  fill="none" 
+                  stroke="currentColor" 
+                  viewBox="0 0 24 24"
+                >
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                </svg>
+              </button>
+
+              {/* Brands dropdown menu */}
+              {isBrandsHovered && (
+                <div 
+                  className="brands-dropdown absolute top-full left-0 bg-white border border-gray-200 rounded-md shadow-xl z-50 opacity-100 min-w-[400px]"
+                  onMouseEnter={() => setIsBrandsHovered(true)}
+                  onMouseLeave={() => {
+                    setIsBrandsHovered(false);
+                  }}
+                >
+                  <div className="p-4">
+                    <h3 className="text-lg font-semibold text-gray-900 mb-4">
+                      Marken
+                    </h3>
+                    <div className="grid grid-cols-2 gap-3">
+                      {brands.map((brand) => (
+                        <button
+                          key={brand._id}
+                          onClick={() => {
+                            router.push(`/shop/marke/${brand.slug}`);
+                            setIsBrandsHovered(false);
+                          }}
+                          className="flex items-center gap-3 p-3 text-left hover:bg-gray-50 rounded-md transition-colors"
+                        >
+                          <div className="w-8 h-8 flex items-center justify-center">
+                            {brand.image || brand.imageSizes?.thumb ? (
+                              <img src={brand.imageSizes?.thumb || brand.image!} alt={brand.name} className="max-w-full max-h-full object-contain" />
+                            ) : (
+                              <span className="text-xs text-gray-400">{brand.name[0]}</span>
+                            )}
+                          </div>
+                          <span className="text-sm font-medium text-gray-700">{brand.name}</span>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
           </div>
 
           {/* Right side - Special filters */}
