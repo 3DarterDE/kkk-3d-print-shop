@@ -3,7 +3,8 @@ import { connectToDatabase } from "@/lib/mongodb";
 import Category from "@/lib/models/Category";
 import JsonLd from "@/components/JsonLd";
 import { notFound } from "next/navigation";
-import { renderMarkdownToHtml } from "@/lib/markdown";
+import { remark } from "remark";
+import remarkHtml from "remark-html";
 import ProductDisplay from "./ProductDisplay";
 
 export const revalidate = 60; // Cache for 1 minute
@@ -11,6 +12,7 @@ export const dynamic = 'force-dynamic';
 
 export default async function ProductPage({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params;
+
   const product = await fetchProductBySlug(slug);
   if (!product) return notFound();
 
@@ -120,34 +122,34 @@ export default async function ProductPage({ params }: { params: Promise<{ slug: 
     product.description !== "<br>" && 
     product.description !== "<div><br></div>";
   
-  const descriptionMarkdown = hasDescription 
-    ? product.description
-    : 'Eine detaillierte Beschreibung für dieses Produkt ist in Arbeit und wird bald verfügbar sein.';
-  
-  // Server-side HTML conversion with caching
-  const descriptionHtml = renderMarkdownToHtml(descriptionMarkdown);
+  const descriptionHtml = hasDescription 
+    ? (() => {
+        const isHtml = /<\w+[\s\S]*>/m.test(product.description || "");
+        return isHtml
+          ? product.description
+          : remark().use(remarkHtml).processSync(product.description || "").toString();
+      })()
+    : '<p class="text-gray-500 italic">Eine detaillierte Beschreibung für dieses Produkt ist in Arbeit und wird bald verfügbar sein.</p>';
   
   // Serialize category data
   const serializedCategory = categoryData && !Array.isArray(categoryData) ? {
     _id: (categoryData as any)._id.toString(),
     name: (categoryData as any).name,
     slug: (categoryData as any).slug
-  } : undefined;
+  } : null;
 
   // Serialize subcategory data
   const serializedSubcategory = subcategoryData && !Array.isArray(subcategoryData) ? {
     _id: (subcategoryData as any)._id.toString(),
     name: (subcategoryData as any).name,
     slug: (subcategoryData as any).slug
-  } : undefined;
-
+  } : null;
 
   return (
     <>
       <ProductDisplay 
         product={serializedProduct} 
-        descriptionMarkdown={descriptionMarkdown}
-        descriptionHtml={descriptionHtml}
+        descriptionHtml={descriptionHtml} 
         recommendedProducts={recommendedProductsData}
         category={serializedCategory}
         subcategory={serializedSubcategory}

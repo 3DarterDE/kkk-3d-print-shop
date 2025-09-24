@@ -4,15 +4,13 @@ import { useState, useEffect } from "react";
 import AddToCartButton from "./AddToCartButton";
 import SearchBar from "@/components/SearchBar";
 import Breadcrumb from "@/components/Breadcrumb";
-import MarkdownRenderer from "@/components/MarkdownRenderer";
 import { getOptimizedImageUrl, getContextualImageSize, generateSrcSet } from "@/lib/image-utils";
 import ProductCard from "@/components/ProductCard";
 import { getStockQuantityForVariations, isVariationInStock } from "@/lib/variation-stock";
 
 interface ProductDisplayProps {
   product: any;
-  descriptionMarkdown: string;
-  descriptionHtml?: string;
+  descriptionHtml: string;
   recommendedProducts?: any[];
   category?: {
     _id: string;
@@ -26,7 +24,7 @@ interface ProductDisplayProps {
   } | null;
 }
 
-export default function ProductDisplay({ product, descriptionMarkdown, descriptionHtml, recommendedProducts = [], category, subcategory }: ProductDisplayProps) {
+export default function ProductDisplay({ product, descriptionHtml, recommendedProducts = [], category, subcategory }: ProductDisplayProps) {
   const [selectedImageIndex, setSelectedImageIndex] = useState(0);
   const [quantity, setQuantity] = useState(1);
   const [isLightboxOpen, setIsLightboxOpen] = useState(false);
@@ -320,7 +318,7 @@ export default function ProductDisplay({ product, descriptionMarkdown, descripti
             <div className="mb-6 p-4 bg-gray-50 rounded-lg">
               <div className="flex items-center gap-3 mb-2">
                 <span className="text-3xl font-bold text-gray-900">
-                  {(calculateFinalPrice() / 100).toFixed(2)}
+                  {(calculateFinalPrice() / 100).toFixed(2)} €
                 </span>
                 {product.isOnSale && product.offerPrice && (
                   <span className="text-lg text-gray-400 line-through">
@@ -338,7 +336,7 @@ export default function ProductDisplay({ product, descriptionMarkdown, descripti
                         });
                       }
                       return (originalPriceWithVariations / 100).toFixed(2);
-                    })()}
+                    })()} €
                   </span>
                 )}
                 {product.isOnSale && (
@@ -392,8 +390,8 @@ export default function ProductDisplay({ product, descriptionMarkdown, descripti
                               disabled={!optionInStock || optionStock <= 0}
                             >
                               {option.value} 
-                              {option.priceAdjustment !== undefined && option.priceAdjustment > 0 && ` (+${(option.priceAdjustment / 100).toFixed(2)})`}
-                              {option.priceAdjustment !== undefined && option.priceAdjustment < 0 && ` (${(option.priceAdjustment / 100).toFixed(2)})`}
+                              {option.priceAdjustment !== undefined && option.priceAdjustment > 0 && ` (+${(option.priceAdjustment / 100).toFixed(2)} €)`}
+                              {option.priceAdjustment !== undefined && option.priceAdjustment < 0 && ` (${(option.priceAdjustment / 100).toFixed(2)} €)`}
                               {optionStock > 0 && ` - ${optionStock} verfügbar`}
                               {(!optionInStock || optionStock <= 0) && ' - Nicht verfügbar'}
                             </option>
@@ -550,17 +548,10 @@ export default function ProductDisplay({ product, descriptionMarkdown, descripti
           
           <div className="p-6">
           {activeTab === 'description' && (
-            descriptionHtml ? (
-              <div 
-                className="prose prose-lg max-w-none"
-                dangerouslySetInnerHTML={{ __html: descriptionHtml }}
-              />
-            ) : (
-              <MarkdownRenderer 
-                content={descriptionMarkdown}
-                className="max-w-none"
-              />
-            )
+            <div
+              className="prose max-w-none"
+              dangerouslySetInnerHTML={{ __html: descriptionHtml }}
+            />
           )}
           
           {activeTab === 'properties' && (
