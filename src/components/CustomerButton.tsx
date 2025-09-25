@@ -3,9 +3,11 @@
 import { useState, useEffect } from 'react';
 import { CgProfile } from 'react-icons/cg';
 import useAuth from '@/lib/hooks/useAuth';
+import { useUserData } from '@/lib/contexts/UserDataContext';
 
 export default function CustomerButton() {
-  const { user, loading, error } = useAuth();
+  const { user: authUser, loading, error } = useAuth();
+  const { user: userData } = useUserData();
   const [isOpen, setIsOpen] = useState(false);
   const [isModalOpen, setIsModalOpen] = useState(false);
 
@@ -25,7 +27,7 @@ export default function CustomerButton() {
   }, [isOpen]);
 
   const handleButtonClick = () => {
-    if (user) {
+    if (authUser) {
       // User is logged in, toggle dropdown
       setIsOpen(!isOpen);
     } else {
@@ -63,11 +65,16 @@ export default function CustomerButton() {
         </button>
 
         {/* Dropdown for logged in users */}
-        {user && isOpen && (
+        {authUser && isOpen && (
           <div className="absolute right-0 top-12 w-64 bg-white rounded-lg shadow-lg border border-gray-200 py-2 z-50">
             <div className="px-4 py-3 border-b border-gray-200">
-              <p className="text-sm font-medium text-gray-900">{user.name || 'User'}</p>
-              <p className="text-sm text-gray-500">{user.email}</p>
+              <p className="text-sm font-medium text-gray-900">
+                {userData?.firstName && userData?.lastName 
+                  ? `${userData.firstName} ${userData.lastName}`
+                  : userData?.name || authUser.name || 'User'
+                }
+              </p>
+              <p className="text-sm text-gray-500">{userData?.email || authUser.email}</p>
             </div>
             
             <div className="py-1">

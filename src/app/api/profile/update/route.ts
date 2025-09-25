@@ -13,19 +13,21 @@ export async function PUT(request: NextRequest) {
     }
 
     const body = await request.json();
-    const { firstName, lastName, phone, dateOfBirth, address, billingAddress, paymentMethod } = body;
+    const { salutation, firstName, lastName, phone, dateOfBirth, address, billingAddress, paymentMethod } = body;
     
 
     await connectToDatabase();
     
     const updateData: any = {};
     
+    if (salutation !== undefined) updateData.salutation = salutation || null;
     if (firstName !== undefined) updateData.firstName = firstName || null;
     if (lastName !== undefined) updateData.lastName = lastName || null;
     if (phone !== undefined) updateData.phone = phone || null;
     if (dateOfBirth !== undefined) updateData.dateOfBirth = dateOfBirth ? new Date(dateOfBirth) : null;
     if (address !== undefined) {
       updateData.address = {
+        company: address.company || null,
         street: address.street || null,
         houseNumber: address.houseNumber || null,
         addressLine2: address.addressLine2 || null,
@@ -36,6 +38,7 @@ export async function PUT(request: NextRequest) {
     }
     if (billingAddress !== undefined) {
       updateData.billingAddress = {
+        company: billingAddress.company || null,
         street: billingAddress.street || null,
         houseNumber: billingAddress.houseNumber || null,
         addressLine2: billingAddress.addressLine2 || null,
@@ -65,6 +68,7 @@ export async function PUT(request: NextRequest) {
       success: true,
       user: {
         name: user.name,
+        salutation: user.salutation,
         firstName: user.firstName,
         lastName: user.lastName,
         email: user.email,

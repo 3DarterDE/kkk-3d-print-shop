@@ -7,9 +7,11 @@ export default async function CheckoutPage() {
   const initialFormData: CheckoutFormData = {
     firstName: user?.firstName || '',
     lastName: user?.lastName || '',
+    salutation: user?.salutation || 'Herr',
     email: user?.email || '',
     phone: user?.phone || '',
     shippingAddress: {
+      company: user?.address?.company || '',
       street: user?.address?.street || '',
       houseNumber: user?.address?.houseNumber || '',
       addressLine2: user?.address?.addressLine2 || '',
@@ -18,6 +20,7 @@ export default async function CheckoutPage() {
       country: user?.address?.country || 'Deutschland',
     },
     billingAddress: {
+      company: user?.billingAddress?.company || user?.address?.company || '',
       street: user?.billingAddress?.street || user?.address?.street || '',
       houseNumber: user?.billingAddress?.houseNumber || user?.address?.houseNumber || '',
       addressLine2: user?.billingAddress?.addressLine2 || user?.address?.addressLine2 || '',
@@ -30,21 +33,29 @@ export default async function CheckoutPage() {
   };
 
   const hasContactData = Boolean(initialFormData.firstName && initialFormData.lastName && initialFormData.email);
-  const hasAddressData = Boolean(
+  const hasShippingAddressData = Boolean(
     initialFormData.shippingAddress.street &&
     initialFormData.shippingAddress.houseNumber &&
     initialFormData.shippingAddress.city &&
     initialFormData.shippingAddress.postalCode
   );
+  const hasBillingAddressData = Boolean(
+    initialFormData.billingAddress.street &&
+    initialFormData.billingAddress.houseNumber &&
+    initialFormData.billingAddress.city &&
+    initialFormData.billingAddress.postalCode
+  );
   const hasPaymentData = Boolean(initialFormData.paymentMethod);
 
-  const initialStep = hasContactData && hasAddressData && hasPaymentData
-    ? 4
-    : hasContactData && hasAddressData
-      ? 3
-      : hasContactData
-        ? 2
-        : 1;
+  const initialStep = hasContactData && hasShippingAddressData && hasBillingAddressData && hasPaymentData
+    ? 5 // All steps completed - go to overview
+    : hasContactData && hasShippingAddressData && hasBillingAddressData
+      ? 4 // Payment step
+      : hasContactData && hasShippingAddressData
+        ? 3 // Billing address step
+        : hasContactData
+          ? 2 // Shipping address step
+          : 1; // Contact data step
 
   return (
     <CheckoutClient

@@ -74,11 +74,13 @@ export default function ProfilePage() {
 
   // Form state
   const [formData, setFormData] = useState({
+    salutation: '',
     firstName: '',
     lastName: '',
     phone: '',
     dateOfBirth: '',
     address: {
+      company: '',
       street: '',
       houseNumber: '',
       addressLine2: '',
@@ -87,6 +89,7 @@ export default function ProfilePage() {
       country: 'Deutschland'
     },
     billingAddress: {
+      company: '',
       street: '',
       houseNumber: '',
       addressLine2: '',
@@ -100,11 +103,13 @@ export default function ProfilePage() {
   useEffect(() => {
     if (user) {
       setFormData({
+        salutation: user.salutation || '',
         firstName: user.firstName || '',
         lastName: user.lastName || '',
         phone: user.phone || '',
         dateOfBirth: user.dateOfBirth ? new Date(user.dateOfBirth).toISOString().split('T')[0] : '',
         address: {
+          company: user.address?.company || '',
           street: user.address?.street || '',
           houseNumber: user.address?.houseNumber || '',
           addressLine2: user.address?.addressLine2 || '',
@@ -113,6 +118,7 @@ export default function ProfilePage() {
           country: user.address?.country || 'Deutschland'
         },
         billingAddress: {
+          company: user.billingAddress?.company || '',
           street: user.billingAddress?.street || '',
           houseNumber: user.billingAddress?.houseNumber || '',
           addressLine2: user.billingAddress?.addressLine2 || '',
@@ -204,6 +210,7 @@ export default function ProfilePage() {
 
     try {
       const updateData = {
+        salutation: formData.salutation,
         firstName: formData.firstName,
         lastName: formData.lastName,
         phone: formData.phone,
@@ -243,11 +250,13 @@ export default function ProfilePage() {
     // Reset form to original data
     if (user) {
       setFormData({
+        salutation: user.salutation || '',
         firstName: user.firstName || '',
         lastName: user.lastName || '',
         phone: user.phone || '',
         dateOfBirth: user.dateOfBirth ? new Date(user.dateOfBirth).toISOString().split('T')[0] : '',
         address: {
+          company: user.address?.company || '',
           street: user.address?.street || '',
           houseNumber: user.address?.houseNumber || '',
           addressLine2: user.address?.addressLine2 || '',
@@ -256,6 +265,7 @@ export default function ProfilePage() {
           country: user.address?.country || 'Deutschland'
         },
         billingAddress: {
+          company: user.billingAddress?.company || '',
           street: user.billingAddress?.street || '',
           houseNumber: user.billingAddress?.houseNumber || '',
           addressLine2: user.billingAddress?.addressLine2 || '',
@@ -679,6 +689,20 @@ export default function ProfilePage() {
               {/* Contact Data Section */}
               {editingSection === 'contact' && (
                 <>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Anrede</label>
+                    <select
+                      value={formData.salutation ?? ''}
+                      onChange={(e) => handleInputChange('salutation', e.target.value)}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm"
+                    >
+                      <option value="">Bitte wählen</option>
+                      <option value="Herr">Herr</option>
+                      <option value="Frau">Frau</option>
+                      <option value="Divers">Divers</option>
+                    </select>
+                  </div>
+
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-1">Vorname</label>
@@ -733,7 +757,18 @@ export default function ProfilePage() {
               {editingSection === 'shipping' && (
                 <div>
                   <h4 className="text-base font-semibold text-gray-900 mb-3">Versandadresse</h4>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  <div className="space-y-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Firma</label>
+                      <input
+                        type="text"
+                        value={formData.address.company ?? ''}
+                        onChange={(e) => handleInputChange('address.company', e.target.value)}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm"
+                        placeholder="Firmenname (optional)"
+                      />
+                    </div>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                     <div className="md:col-span-1">
                       <label className="block text-sm font-medium text-gray-700 mb-1">Straße</label>
                       <input
@@ -792,6 +827,7 @@ export default function ProfilePage() {
                         <option value="Schweiz">Schweiz</option>
                       </select>
                     </div>
+                    </div>
                   </div>
                 </div>
               )}
@@ -815,7 +851,18 @@ export default function ProfilePage() {
                   {useSameAddress ? (
                     <p className="text-gray-500 italic text-sm">Rechnungsadresse ist identisch mit der Versandadresse</p>
                   ) : (
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    <div className="space-y-4">
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Firma</label>
+                        <input
+                          type="text"
+                          value={formData.billingAddress.company ?? ''}
+                          onChange={(e) => handleInputChange('billingAddress.company', e.target.value)}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm"
+                          placeholder="Firmenname (optional)"
+                        />
+                      </div>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                       <div className="md:col-span-1">
                         <label className="block text-sm font-medium text-gray-700 mb-1">Straße</label>
                         <input
@@ -874,6 +921,7 @@ export default function ProfilePage() {
                           <option value="Schweiz">Schweiz</option>
                         </select>
                       </div>
+                    </div>
                     </div>
                   )}
                 </div>

@@ -5,7 +5,7 @@ import { useCartStore } from "@/lib/store/cart";
 import Logo from "./Logo";
 import SearchBar from "./SearchBar";
 import CustomerButton from "./CustomerButton";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo, useCallback } from "react";
 import { useAuth } from '@/lib/hooks/useAuth';
 import { TiShoppingCart } from "react-icons/ti";
 import { useRouter } from "next/navigation";
@@ -28,6 +28,28 @@ export default function Navbar() {
   const [categories, setCategories] = useState<Category[]>([]);
   const [isLoadingCategories, setIsLoadingCategories] = useState(true);
   const router = useRouter();
+
+  // Memoized Logo component to prevent re-renders
+  const MemoizedLogo = useMemo(() => (
+    <Logo variant="navbar" className="mb-0 transition-transform duration-300 group-hover:rotate-12 scale-125" />
+  ), []);
+
+  // Optimized event handlers
+  const toggleMobileMenu = useCallback(() => {
+    setIsMobileMenuOpen(prev => !prev);
+  }, []);
+
+  const toggleAdminMenu = useCallback(() => {
+    setIsAdminMenuOpen(prev => !prev);
+  }, []);
+
+  const closeMobileMenu = useCallback(() => {
+    setIsMobileMenuOpen(false);
+  }, []);
+
+  const closeAdminMenu = useCallback(() => {
+    setIsAdminMenuOpen(false);
+  }, []);
 
   useEffect(() => {
     setIsMounted(true);
@@ -87,7 +109,7 @@ export default function Navbar() {
           {/* Mobile: Hamburger Menu + Logo zusammen */}
           <div className="md:hidden flex items-center gap-3">
             <button 
-              onClick={() => setIsMobileMenuOpen(prev => !prev)}
+              onClick={toggleMobileMenu}
               className="p-2 text-white hover:text-blue-200 transition-all duration-300 hover:drop-shadow-[0_0_6px_rgba(173,216,230,0.6)]"
             >
               <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -100,7 +122,7 @@ export default function Navbar() {
               className="flex items-center gap-3 group"
             >
               <div className="relative group-hover:drop-shadow-[0_0_8px_rgba(173,216,230,0.6)] transition-all duration-150">
-                <Logo variant="navbar" className="mb-0 transition-transform duration-300 group-hover:rotate-12 scale-125" />
+                {MemoizedLogo}
               </div>
               <div className="flex flex-col -mt-1">
                 <span className="font-bold text-xl text-white group-hover:text-shadow-[0_0_8px_rgba(173,216,230,0.6)] transition-all duration-150">
@@ -119,7 +141,7 @@ export default function Navbar() {
             className="hidden md:flex items-center gap-3 group"
           >
             <div className="relative group-hover:drop-shadow-[0_0_8px_rgba(173,216,230,0.6)] transition-all duration-150">
-              <Logo variant="navbar" className="mb-0 transition-transform duration-300 group-hover:rotate-12 scale-125" />
+              {MemoizedLogo}
             </div>
             <div className="flex flex-col -mt-1">
               <span className="font-bold text-xl text-white group-hover:text-shadow-[0_0_8px_rgba(173,216,230,0.6)] transition-all duration-150">
@@ -178,7 +200,7 @@ export default function Navbar() {
             {isAdmin && (
               <div className="relative" data-admin-menu>
                 <button
-                  onClick={() => setIsAdminMenuOpen(prev => !prev)}
+                  onClick={toggleAdminMenu}
                   className="p-2 text-white hover:text-blue-200 transition-all duration-300 group"
                   title="Admin-Bereich"
                   aria-label="Admin-Menü öffnen"
@@ -192,7 +214,7 @@ export default function Navbar() {
                   <div className="absolute right-0 top-10 w-48 bg-white rounded-lg shadow-lg border border-gray-200 py-1 z-50">
                     <Link
                       href="/admin/dashboard"
-                      onClick={() => setIsAdminMenuOpen(false)}
+                      onClick={closeAdminMenu}
                       className="flex items-center px-4 py-2 text-sm text-gray-700 hover:bg-blue-50 hover:text-blue-600 transition-colors"
                     >
                       <svg className="w-4 h-4 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -202,7 +224,7 @@ export default function Navbar() {
                     </Link>
                     <Link
                       href="/admin/products"
-                      onClick={() => setIsAdminMenuOpen(false)}
+                      onClick={closeAdminMenu}
                       className="flex items-center px-4 py-2 text-sm text-gray-700 hover:bg-blue-50 hover:text-blue-600 transition-colors"
                     >
                       <svg className="w-4 h-4 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -212,7 +234,7 @@ export default function Navbar() {
                     </Link>
                     <Link
                       href="/admin/categories"
-                      onClick={() => setIsAdminMenuOpen(false)}
+                      onClick={closeAdminMenu}
                       className="flex items-center px-4 py-2 text-sm text-gray-700 hover:bg-blue-50 hover:text-blue-600 transition-colors"
                     >
                       <svg className="w-4 h-4 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -222,7 +244,7 @@ export default function Navbar() {
                     </Link>
                     <Link
                       href="/admin/brands"
-                      onClick={() => setIsAdminMenuOpen(false)}
+                      onClick={closeAdminMenu}
                       className="flex items-center px-4 py-2 text-sm text-gray-700 hover:bg-blue-50 hover:text-blue-600 transition-colors"
                     >
                       <svg className="w-4 h-4 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -232,7 +254,7 @@ export default function Navbar() {
                     </Link>
                     <Link
                       href="/admin/orders"
-                      onClick={() => setIsAdminMenuOpen(false)}
+                      onClick={closeAdminMenu}
                       className="flex items-center px-4 py-2 text-sm text-gray-700 hover:bg-blue-50 hover:text-blue-600 transition-colors"
                     >
                       <svg className="w-4 h-4 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -242,7 +264,7 @@ export default function Navbar() {
                     </Link>
                     <Link
                       href="/admin/returns"
-                      onClick={() => setIsAdminMenuOpen(false)}
+                      onClick={closeAdminMenu}
                       className="flex items-center px-4 py-2 text-sm text-gray-700 hover:bg-blue-50 hover:text-blue-600 transition-colors"
                     >
                       <svg className="w-4 h-4 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -252,7 +274,7 @@ export default function Navbar() {
                     </Link>
                     <Link
                       href="/admin/users"
-                      onClick={() => setIsAdminMenuOpen(false)}
+                      onClick={closeAdminMenu}
                       className="flex items-center px-4 py-2 text-sm text-gray-700 hover:bg-blue-50 hover:text-blue-600 transition-colors"
                     >
                       <svg className="w-4 h-4 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -262,7 +284,7 @@ export default function Navbar() {
                     </Link>
                     <Link
                       href="/admin/filters"
-                      onClick={() => setIsAdminMenuOpen(false)}
+                      onClick={closeAdminMenu}
                       className="flex items-center px-4 py-2 text-sm text-gray-700 hover:bg-blue-50 hover:text-blue-600 transition-colors"
                     >
                       <svg className="w-4 h-4 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -283,7 +305,7 @@ export default function Navbar() {
               {/* Overlay */}
               <div 
                 className="fixed inset-0 bg-black/50 backdrop-blur-sm" 
-                onClick={() => setIsMobileMenuOpen(false)}
+                onClick={closeMobileMenu}
               ></div>
               
               {/* Slide-in Panel */}
@@ -291,7 +313,7 @@ export default function Navbar() {
                 <div className="flex items-center justify-between p-4 border-b border-gray-200">
                   <h3 className="text-lg font-semibold text-gray-900">Kategorien</h3>
                   <button
-                    onClick={() => setIsMobileMenuOpen(false)}
+                    onClick={closeMobileMenu}
                     className="p-2 text-gray-400 hover:text-gray-600 transition-colors"
                   >
                     <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -309,7 +331,7 @@ export default function Navbar() {
                   <nav className="space-y-1">
                     <Link
                       href="/shop"
-                      onClick={() => setIsMobileMenuOpen(false)}
+                      onClick={closeMobileMenu}
                       className="block px-4 py-3 text-gray-700 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-all duration-300 font-medium"
                     >
                       Alle Produkte
@@ -326,7 +348,7 @@ export default function Navbar() {
                           key={category._id}
                           onClick={() => {
                             router.push(`/shop/${category.slug}`);
-                            setIsMobileMenuOpen(false);
+                            closeMobileMenu();
                           }}
                           className="w-full text-left px-4 py-3 text-gray-700 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-all duration-300 font-medium"
                         >

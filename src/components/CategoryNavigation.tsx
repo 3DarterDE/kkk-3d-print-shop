@@ -216,7 +216,7 @@ export default function CategoryNavigation({
                   }
                 }, 100);
               }}
-              className="flex items-center gap-2 py-3 text-gray-700 hover:text-gray-900 hover:bg-gray-50 rounded-md transition-colors"
+              className="relative flex items-center gap-2 py-3 text-gray-700 hover:text-gray-900 hover:bg-gray-50 rounded-md transition-colors overflow-hidden group"
             >
               <span className="font-medium">Alle Kategorien</span>
               <svg 
@@ -227,6 +227,9 @@ export default function CategoryNavigation({
               >
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
               </svg>
+              
+              {/* Animated blue line */}
+              <div className="absolute bottom-0 left-0 w-full h-0.5 bg-blue-500 transform scale-x-0 group-hover:scale-x-100 transition-transform duration-300 ease-out origin-left"></div>
             </button>
 
             {/* Dropdown menu */}
@@ -352,7 +355,7 @@ export default function CategoryNavigation({
                     }
                   }, 100);
                 }}
-                className="flex items-center gap-2 py-3 text-gray-700 hover:text-gray-900 hover:bg-gray-50 rounded-md transition-colors"
+                className="relative flex items-center gap-2 py-3 text-gray-700 hover:text-gray-900 hover:bg-gray-50 rounded-md transition-colors overflow-hidden group"
               >
                 <span className="font-medium">Marken</span>
                 <svg 
@@ -363,6 +366,9 @@ export default function CategoryNavigation({
                 >
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
                 </svg>
+                
+                {/* Animated blue line */}
+                <div className="absolute bottom-0 left-0 w-full h-0.5 bg-blue-500 transform scale-x-0 group-hover:scale-x-100 transition-transform duration-300 ease-out origin-left"></div>
               </button>
 
               {/* Brands dropdown menu */}

@@ -7,9 +7,11 @@ export interface IUser {
   name?: string;
   firstName?: string;
   lastName?: string;
+  salutation?: 'Herr' | 'Frau' | 'Divers';
   phone?: string;
   dateOfBirth?: Date;
   address?: {
+    company?: string;
     street?: string;
     houseNumber?: string;
     addressLine2?: string;
@@ -18,6 +20,7 @@ export interface IUser {
     country?: string;
   };
   billingAddress?: {
+    company?: string;
     street?: string;
     houseNumber?: string;
     addressLine2?: string;
@@ -34,32 +37,33 @@ export interface IUser {
   updatedAt?: Date;
 }
 
+const AddressSchema = new Schema({
+  company: { type: String },
+  street: { type: String },
+  houseNumber: { type: String },
+  addressLine2: { type: String },
+  city: { type: String },
+  postalCode: { type: String },
+  country: { type: String, default: 'Deutschland' }
+}, { _id: false });
+
 const UserSchema = new Schema<IUser>({
   auth0Id: { type: String, required: true, unique: true, index: true },
   email: { type: String },
   name: { type: String },
   firstName: { type: String },
   lastName: { type: String },
+  salutation: {
+    type: String,
+    enum: ['Herr', 'Frau', 'Divers'],
+    default: null
+  },
   phone: { type: String },
   dateOfBirth: { type: Date },
-  address: {
-    street: { type: String },
-    houseNumber: { type: String },
-    addressLine2: { type: String },
-    city: { type: String },
-    postalCode: { type: String },
-    country: { type: String, default: 'Deutschland' }
-  },
-  billingAddress: {
-    street: { type: String },
-    houseNumber: { type: String },
-    addressLine2: { type: String },
-    city: { type: String },
-    postalCode: { type: String },
-    country: { type: String, default: 'Deutschland' }
-  },
-  paymentMethod: { 
-    type: String, 
+  address: AddressSchema,
+  billingAddress: AddressSchema,
+  paymentMethod: {
+    type: String,
     enum: ['card', 'paypal', 'bank'],
     default: 'card'
   },
@@ -69,6 +73,10 @@ const UserSchema = new Schema<IUser>({
   isVerified: { type: Boolean, default: false },
 }, { timestamps: true });
 
-export const User: Model<IUser> = mongoose.models.User || mongoose.model<IUser>('User', UserSchema);
+if (mongoose.models.User) {
+  mongoose.deleteModel('User');
+}
+
+export const User: Model<IUser> = mongoose.model<IUser>('User', UserSchema);
 
 export default User;

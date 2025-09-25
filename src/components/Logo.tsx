@@ -1,14 +1,14 @@
 "use client";
 
 import Image from "next/image";
-import { useState } from "react";
+import { useState, memo } from "react";
 
 interface LogoProps {
   variant?: "footer" | "navbar";
   className?: string;
 }
 
-export default function Logo({ variant = "footer", className = "" }: LogoProps) {
+const Logo = memo(function Logo({ variant = "footer", className = "" }: LogoProps) {
   const [imageError, setImageError] = useState(false);
 
   // Logo-Konfiguration basierend auf Variante
@@ -52,4 +52,6 @@ export default function Logo({ variant = "footer", className = "" }: LogoProps) 
       )}
     </div>
   );
-}
+});
+
+export default Logo;

@@ -7,10 +7,12 @@ type UserProfile = {
   name?: string;
   firstName?: string;
   lastName?: string;
+  salutation?: 'Herr' | 'Frau' | 'Divers';
   email?: string;
   phone?: string;
   dateOfBirth?: string;
   address?: {
+    company?: string;
     street?: string;
     houseNumber?: string;
     addressLine2?: string;
@@ -19,6 +21,7 @@ type UserProfile = {
     country?: string;
   };
   billingAddress?: {
+    company?: string;
     street?: string;
     houseNumber?: string;
     addressLine2?: string;

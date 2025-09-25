@@ -18,12 +18,14 @@ export async function GET() {
   return NextResponse.json({
     user: {
       name: user?.name,
+      salutation: user?.salutation,
       firstName: user?.firstName,
       lastName: user?.lastName,
       email: user?.email,
       phone: user?.phone,
       dateOfBirth: user?.dateOfBirth,
       address: {
+        company: user?.address?.company,
         street: user?.address?.street,
         houseNumber: user?.address?.houseNumber,
         addressLine2: user?.address?.addressLine2,
@@ -32,6 +34,7 @@ export async function GET() {
         country: user?.address?.country
       },
       billingAddress: {
+        company: user?.billingAddress?.company,
         street: user?.billingAddress?.street,
         houseNumber: user?.billingAddress?.houseNumber,
         addressLine2: user?.billingAddress?.addressLine2,

@@ -63,6 +63,9 @@ export default function ShopPage({ searchParams }: { searchParams: Promise<{ cat
   const [showMobileFilters, setShowMobileFilters] = useState(false);
   // Scroll state for mobile breadcrumb
   const [isScrolled, setIsScrolled] = useState(false);
+  // Pagination state
+  const [currentPage, setCurrentPage] = useState(1);
+  const [productsPerPage, setProductsPerPage] = useState(25);
 
   // Load product filters for all products
   const loadProductFilters = async (products: any[]) => {
@@ -221,6 +224,36 @@ export default function ShopPage({ searchParams }: { searchParams: Promise<{ cat
 
     loadData();
   }, []);
+
+  // Load filter from sessionStorage when coming from other pages
+  useEffect(() => {
+    if (typeof window !== 'undefined' && !loading) {
+      const activateFilter = sessionStorage.getItem('activateFilter');
+      if (activateFilter) {
+        // Clear the sessionStorage immediately
+        sessionStorage.removeItem('activateFilter');
+        
+        // Set the appropriate filter based on the stored value
+        switch (activateFilter) {
+          case 'topseller':
+            setShowTopSellers(true);
+            setShowSaleItems(false);
+            setShowNewItems(false);
+            break;
+          case 'sale':
+            setShowTopSellers(false);
+            setShowSaleItems(true);
+            setShowNewItems(false);
+            break;
+          case 'neu':
+            setShowTopSellers(false);
+            setShowSaleItems(false);
+            setShowNewItems(true);
+            break;
+        }
+      }
+    }
+  }, [loading]);
 
   // Initialize search query from URL params
   useEffect(() => {
@@ -944,6 +977,37 @@ export default function ShopPage({ searchParams }: { searchParams: Promise<{ cat
     }
   });
 
+  // Pagination logic
+  const totalProducts = sortedPrimaryProducts.length;
+  const totalPages = Math.ceil(totalProducts / productsPerPage);
+  const startIndex = (currentPage - 1) * productsPerPage;
+  const endIndex = startIndex + productsPerPage;
+  const paginatedProducts = sortedPrimaryProducts.slice(startIndex, endIndex);
+
+  // Calculate display values for pagination text
+  const displayStart = startIndex + 1;
+  const displayEnd = Math.min(endIndex, totalProducts);
+
+  // Reset to first page when products per page changes
+  const handleProductsPerPageChange = (newProductsPerPage: number) => {
+    setProductsPerPage(newProductsPerPage);
+    setCurrentPage(1);
+  };
+
+  // Reset to first page when filters change
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [resolvedSearchParams.category, resolvedSearchParams.brand, showTopSellers, showSaleItems, showNewItems, searchQuery, priceRange, selectedDynamicFilters]);
+
+  // Smooth scroll to top when page changes
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      window.scrollTo({
+        top: 0,
+        behavior: 'smooth'
+      });
+    }
+  }, [currentPage]);
 
   if (loading) {
     return (
@@ -1617,10 +1681,9 @@ export default function ShopPage({ searchParams }: { searchParams: Promise<{ cat
           <div className="min-h-[400px]">
         {/* Category Products */}
         <div className="h-full">
-          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-4 px-4 md:px-0">
-            <div className="flex flex-col mb-2 sm:mb-0">
-              {/* Active Filter Buttons */}
-              <div className="flex flex-wrap gap-2">
+          <div className="flex flex-col mb-4 px-4 md:px-0">
+            {/* Active Filter Buttons - separate row */}
+            <div className="flex flex-wrap gap-2 mb-4">
                 {/* Dynamic Filter Buttons */}
                 {Object.entries(selectedDynamicFilters).map(([filterId, values]) => {
                   if (!values || values.length === 0) return null;
@@ -1786,10 +1849,16 @@ export default function ShopPage({ searchParams }: { searchParams: Promise<{ cat
                 )}
               </div>
               
+              {/* Filter Separator - always show */}
+              <div className="border-b border-gray-200 mt-2"></div>
+            </div>
+            
+            {/* Products Count and Dropdowns - always on same row */}
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
               {/* Products Count */}
               <div className="flex items-center">
                 <p className="text-sm text-gray-600">
-                  <span className="font-semibold text-lg">{sortedPrimaryProducts.length}</span> Artikel
+                  <span className="font-semibold text-lg">{totalProducts}</span> Artikel
                   {resolvedSearchParams.category && (
                     <span className="ml-2 text-blue-600">
                       in Kategorie "{categories.find(c => c.slug === resolvedSearchParams.category)?.name || resolvedSearchParams.category}"
@@ -1797,9 +1866,28 @@ export default function ShopPage({ searchParams }: { searchParams: Promise<{ cat
                   )}
                 </p>
               </div>
-            </div>
-            {/* Sort Dropdown - own right-aligned column in the row */}
-            <div className="mt-2 sm:mt-0 sm:ml-auto">
+              
+              {/* Sort Dropdown and Products Per Page */}
+              <div className="flex flex-col sm:flex-row gap-2">
+              {/* Products Per Page Dropdown */}
+              <div className="flex items-center gap-2">
+                <label htmlFor="products-per-page" className="text-sm text-gray-600">
+                  Anzeigen:
+                </label>
+                <select
+                  id="products-per-page"
+                  value={productsPerPage}
+                  onChange={(e) => handleProductsPerPageChange(Number(e.target.value))}
+                  className="px-2 py-1 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent appearance-none bg-white"
+                  style={{ backgroundImage: 'none' }}
+                >
+                  <option value={10}>10</option>
+                  <option value={25}>25</option>
+                  <option value={50}>50</option>
+                </select>
+              </div>
+              
+              {/* Sort Dropdown */}
               <select
                 value={sortBy}
                 onChange={(e) => setSortBy(e.target.value as any)}
@@ -1813,11 +1901,16 @@ export default function ShopPage({ searchParams }: { searchParams: Promise<{ cat
                 <option value="name-asc">Name A-Z</option>
                 <option value="name-desc">Name Z-A</option>
               </select>
+              </div>
             </div>
           </div>
+          
+          {/* Spacing between controls and products */}
+          <div className="mt-6"></div>
+          
           <div className="grid grid-cols-1 md:grid-cols-3 gap-x-3 gap-y-0 md:gap-y-6 pl-0 pr-0 md:pl-0 md:pr-4">
               {/* Primary Products */}
-              {sortedPrimaryProducts.map((p: any) => {
+              {paginatedProducts.map((p: any) => {
                 // Determine if this product should show as top seller
                 let isTopSeller = false;
                 
@@ -1851,9 +1944,69 @@ export default function ShopPage({ searchParams }: { searchParams: Promise<{ cat
             })}
             
           </div>
+          
+          {/* Pagination Controls */}
+          {totalPages > 1 && (
+            <div className="mt-8 flex flex-col sm:flex-row items-center justify-between gap-4">
+              {/* Pagination Info */}
+              <div className="text-sm text-gray-600">
+                Zeige {displayStart} bis {displayEnd} von {totalProducts} Artikeln
+              </div>
+              
+              {/* Pagination Buttons */}
+              <div className="flex items-center gap-2">
+                {/* Previous Button */}
+                <button
+                  onClick={() => setCurrentPage(Math.max(1, currentPage - 1))}
+                  disabled={currentPage === 1}
+                  className="px-3 py-2 text-sm font-medium text-gray-500 bg-white border border-gray-300 rounded-md hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  Zurück
+                </button>
+                
+                {/* Page Numbers */}
+                <div className="flex items-center gap-1">
+                  {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+                    let pageNum;
+                    if (totalPages <= 5) {
+                      pageNum = i + 1;
+                    } else if (currentPage <= 3) {
+                      pageNum = i + 1;
+                    } else if (currentPage >= totalPages - 2) {
+                      pageNum = totalPages - 4 + i;
+                    } else {
+                      pageNum = currentPage - 2 + i;
+                    }
+                    
+                    return (
+                      <button
+                        key={pageNum}
+                        onClick={() => setCurrentPage(pageNum)}
+                        className={`px-3 py-2 text-sm font-medium rounded-md ${
+                          currentPage === pageNum
+                            ? 'bg-blue-600 text-white'
+                            : 'text-gray-700 bg-white border border-gray-300 hover:bg-gray-50'
+                        }`}
+                      >
+                        {pageNum}
+                      </button>
+                    );
+                  })}
+                </div>
+                
+                {/* Next Button */}
+                <button
+                  onClick={() => setCurrentPage(Math.min(totalPages, currentPage + 1))}
+                  disabled={currentPage === totalPages}
+                  className="px-3 py-2 text-sm font-medium text-gray-500 bg-white border border-gray-300 rounded-md hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  Weiter
+                </button>
+              </div>
+            </div>
+          )}
         </div>
       </div>
-    </div>
     </div>
     </div>
 
