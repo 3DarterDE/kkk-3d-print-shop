@@ -5,6 +5,7 @@ import ProductCard from "@/components/ProductCard";
 import DynamicFilters from "@/components/DynamicFilters";
 import Breadcrumb from "@/components/Breadcrumb";
 import SearchBar from "@/components/SearchBar";
+import CategoryDescriptionSection from "@/components/CategoryDescriptionSection";
 import { getOptimizedImageUrl, getContextualImageSize } from "@/lib/image-utils";
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
@@ -2006,9 +2007,17 @@ export default function ShopPage({ searchParams }: { searchParams: Promise<{ cat
             </div>
           )}
         </div>
+        </div>
       </div>
     </div>
-    </div>
+
+    {/* Category Description Section */}
+    {resolvedSearchParams.category && (
+      <CategoryDescriptionSection 
+        currentCategory={categories.find(c => c.slug === resolvedSearchParams.category) || null}
+        currentBrand={null}
+      />
+    )}
 
     {/* Mobile Filter Button - Fixed Bottom */}
     <div className="md:hidden fixed bottom-4 right-4 z-40">
