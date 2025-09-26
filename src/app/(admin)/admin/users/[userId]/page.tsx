@@ -33,6 +33,7 @@ interface User {
   newsletterSubscribedAt?: string;
   isAdmin: boolean;
   isVerified?: boolean;
+  bonusPoints: number;
   createdAt: string;
   updatedAt: string;
 }
@@ -85,6 +86,9 @@ interface OrderStats {
   totalSpent: number;
   averageOrderValue: number;
   lastOrderDate: string | null;
+  totalShippingCosts: number;
+  totalBonusPointsEarned: number;
+  totalBonusPointsRedeemed: number;
 }
 
 interface UserDetailsResponse {
@@ -144,6 +148,39 @@ export default function UserDetailPage() {
       hour: '2-digit',
       minute: '2-digit'
     });
+  };
+
+  const downloadInvoice = async (orderKey: string) => {
+    try {
+      const response = await fetch(`/api/admin/orders/${orderKey}/invoice`);
+      
+      if (!response.ok) {
+        const errorData = await response.json();
+        alert(errorData.error || 'Fehler beim Herunterladen der Rechnung');
+        return;
+      }
+
+      // Get the PDF blob
+      const blob = await response.blob();
+      
+      // Create download link
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      // Prefer filename from response header
+      const disposition = response.headers.get('Content-Disposition') || '';
+      const match = disposition.match(/filename="?([^";]+)"?/i);
+      const filename = match ? match[1] : `rechnung-${orderKey}.pdf`;
+      link.download = filename;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(url);
+      
+    } catch (error) {
+      console.error('Error downloading invoice:', error);
+      alert('Fehler beim Herunterladen der Rechnung');
+    }
   };
 
   const formatCurrency = (amount: number) => {
@@ -335,6 +372,14 @@ export default function UserDetailPage() {
                     <label className="text-sm font-medium text-gray-500">Registriert am</label>
                     <p className="mt-1 text-sm text-gray-900">{formatDate(user.createdAt)}</p>
                   </div>
+                  
+                  <div>
+                    <label className="text-sm font-medium text-gray-500">Bonuspunkte</label>
+                    <div className="mt-1 flex items-center space-x-2">
+                      <span className="text-lg font-semibold text-yellow-600">{user.bonusPoints}</span>
+                      <span className="text-xs text-gray-500">Punkte</span>
+                    </div>
+                  </div>
                 </div>
               </div>
             </div>
@@ -524,13 +569,62 @@ export default function UserDetailPage() {
                                           </div>
                                           <div className="text-right">
                                             <p className="font-medium text-gray-900">{item.quantity}x</p>
-                                            <p className="text-sm text-gray-600">{formatCurrency(item.price)}</p>
+                                            <p className="text-sm text-gray-600">{formatCurrency(item.price / 100)}</p>
                                           </div>
                                         </div>
                                       ))}
                                     </div>
                                   </div>
                                 )}
+                                
+                                {/* Bestellübersicht */}
+                                <div className="mt-3 mb-3 p-3 bg-blue-50 rounded-lg">
+                                  <p className="font-medium text-gray-700 mb-2">Bestellübersicht:</p>
+                                  <div className="space-y-1 text-sm">
+                                    <div className="flex justify-between">
+                                      <span className="text-gray-600">Zwischensumme:</span>
+                                      <span className="font-medium">{formatCurrency((order as any).subtotal || order.total)}</span>
+                                    </div>
+                                    {(order as any).shippingCosts > 0 && (
+                                      <div className="flex justify-between">
+                                        <span className="text-gray-600">Versandkosten:</span>
+                                        <span className="font-medium">{formatCurrency((order as any).shippingCosts / 100)}</span>
+                                      </div>
+                                    )}
+                                    {(order as any).shippingCosts === 0 && (
+                                      <div className="flex justify-between">
+                                        <span className="text-gray-600">Versandkosten:</span>
+                                        <span className="font-medium text-green-600">Kostenlos</span>
+                                      </div>
+                                    )}
+                                    {(order as any).bonusPointsRedeemed > 0 && (
+                                      <div className="flex justify-between">
+                                        <span className="text-gray-600">Bonuspunkte-Rabatt:</span>
+                                        <span className="font-medium text-green-600">
+                                          -{formatCurrency((order as any).bonusPointsRedeemed >= 5000 ? 50 : 
+                                                         (order as any).bonusPointsRedeemed >= 4000 ? 35 :
+                                                         (order as any).bonusPointsRedeemed >= 3000 ? 20 :
+                                                         (order as any).bonusPointsRedeemed >= 2000 ? 10 :
+                                                         (order as any).bonusPointsRedeemed >= 1000 ? 5 : 0)}
+                                        </span>
+                                      </div>
+                                    )}
+                                    <div className="border-t border-gray-300 pt-1">
+                                      <div className="flex justify-between font-semibold">
+                                        <span className="text-gray-800">Gesamtbetrag:</span>
+                                        <span className="text-gray-800">{formatCurrency(order.total)}</span>
+                                      </div>
+                                    </div>
+                                    {(order as any).bonusPointsEarned > 0 && (
+                                      <div className="text-xs text-yellow-600 mt-2">
+                                        <span className="font-medium">Bonuspunkte erhalten: {(order as any).bonusPointsEarned}</span>
+                                        {(order as any).bonusPointsRedeemed > 0 && (
+                                          <span className="block">Bonuspunkte eingelöst: {(order as any).bonusPointsRedeemed}</span>
+                                        )}
+                                      </div>
+                                    )}
+                                  </div>
+                                </div>
                                 
                                 <p><strong>Lieferadresse:</strong> {getDisplayName(user)} - {order.shippingAddress.street} {order.shippingAddress.houseNumber}, {order.shippingAddress.postalCode} {order.shippingAddress.city}</p>
                                 {order.paymentMethod && (
@@ -564,6 +658,34 @@ export default function UserDetailPage() {
                                     </div>
                                   </div>
                                 )}
+                                
+                                {/* Action Buttons */}
+                                <div className="mt-4 pt-3 border-t border-gray-200">
+                                  <div className="flex gap-2">
+                                    {order.status === 'delivered' ? (
+                                      <button
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          downloadInvoice(order.orderNumber);
+                                        }}
+                                        className="px-3 py-1 text-xs font-medium text-green-600 bg-green-50 rounded-md hover:bg-green-100 transition-colors flex items-center gap-1"
+                                        title="Rechnung herunterladen"
+                                      >
+                                        <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                                        </svg>
+                                        Rechnung herunterladen
+                                      </button>
+                                    ) : (
+                                      <div className="px-3 py-1 text-xs text-gray-500 bg-gray-50 rounded-md flex items-center gap-1" title="Rechnung verfügbar nach Lieferung">
+                                        <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                        </svg>
+                                        Rechnung nach Lieferung verfügbar
+                                      </div>
+                                    )}
+                                  </div>
+                                </div>
                               </div>
                             </div>
                           )}

@@ -10,6 +10,8 @@ interface TrackingInfo {
   shippingProvider: 'dhl' | 'dpd' | 'ups' | 'fedex' | 'hermes' | 'gls' | 'other';
   addedAt: string;
   notes?: string;
+  emailSent?: boolean;
+  emailSentAt?: string;
 }
 
 interface Order {
@@ -26,18 +28,36 @@ interface Order {
     variations?: Record<string, string>;
   }[];
   shippingAddress: {
+    firstName?: string;
+    lastName?: string;
     street: string;
     houseNumber: string;
+    addressLine2?: string;
+    city: string;
+    postalCode: string;
+    country: string;
+  };
+  billingAddress?: {
+    firstName?: string;
+    lastName?: string;
+    street: string;
+    houseNumber: string;
+    addressLine2?: string;
     city: string;
     postalCode: string;
     country: string;
   };
   paymentMethod?: string;
+  paymentStatus?: 'pending' | 'paid' | 'failed' | 'refunded';
   trackingNumber?: string; // Legacy field
   shippingProvider?: 'dhl' | 'dpd' | 'ups' | 'fedex' | 'hermes' | 'gls' | 'other'; // Legacy field
   trackingInfo: TrackingInfo[];
   isEmailSent?: boolean;
   emailSentAt?: string;
+  bonusPointsEarned: number; // Bonuspunkte die bei dieser Bestellung verdient wurden
+  bonusPointsCredited: boolean; // Ob die Bonuspunkte bereits gutgeschrieben wurden
+  bonusPointsCreditedAt?: string; // Wann die Bonuspunkte gutgeschrieben wurden
+  bonusPointsScheduledAt?: string; // Wann die Bonuspunkte geplant sind (für Timer)
   createdAt: string;
   updatedAt: string;
   userEmail?: string;
@@ -49,6 +69,7 @@ interface OrdersResponse {
   total: number;
   page: number;
   limit: number;
+  error?: string;
 }
 
 export default function AdminOrdersPage() {
@@ -233,7 +254,7 @@ export default function AdminOrdersPage() {
           trackingInfo: selectedOrder.trackingInfo.map(tracking => ({
             ...tracking,
             emailSent: true,
-            emailSentAt: now
+            emailSentAt: now.toISOString()
           }))
         };
         setSelectedOrder(updatedOrder);
@@ -251,6 +272,50 @@ export default function AdminOrdersPage() {
       console.error('Send email error:', err);
     } finally {
       setSendingEmail(false);
+    }
+  };
+
+
+  const copyToClipboard = async (text: string, label: string) => {
+    try {
+      await navigator.clipboard.writeText(text);
+      alert(`${label} wurde in die Zwischenablage kopiert!`);
+    } catch (err) {
+      console.error('Failed to copy:', err);
+      alert('Fehler beim Kopieren in die Zwischenablage');
+    }
+  };
+
+  const downloadInvoice = async (orderKey: string) => {
+    try {
+      const response = await fetch(`/api/admin/orders/${orderKey}/invoice`);
+      
+      if (!response.ok) {
+        const errorData = await response.json();
+        alert(errorData.error || 'Fehler beim Herunterladen der Rechnung');
+        return;
+      }
+
+      // Get the PDF blob
+      const blob = await response.blob();
+      
+      // Create download link
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      // Try to derive filename from response headers, fallback to orderKey
+      const disposition = response.headers.get('Content-Disposition') || '';
+      const match = disposition.match(/filename="?([^";]+)"?/i);
+      const filename = match ? match[1] : `rechnung-${orderKey}.pdf`;
+      link.download = filename;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(url);
+      
+    } catch (error) {
+      console.error('Error downloading invoice:', error);
+      alert('Fehler beim Herunterladen der Rechnung');
     }
   };
 
@@ -330,6 +395,16 @@ export default function AdminOrdersPage() {
       style: 'currency',
       currency: 'EUR'
     }).format(amount);
+  };
+
+  // Funktion zur Berechnung des Bonuspunkte-Rabatts
+  const getPointsDiscountAmount = (points: number) => {
+    if (points >= 5000) return 50; // 50€
+    if (points >= 4000) return 35; // 35€
+    if (points >= 3000) return 20; // 20€
+    if (points >= 2000) return 10; // 10€
+    if (points >= 1000) return 5;  // 5€
+    return 0;
   };
 
   const handleSearch = (e: React.FormEvent) => {
@@ -457,25 +532,25 @@ export default function AdminOrdersPage() {
               <table className="min-w-full divide-y divide-gray-200">
                 <thead className="bg-gray-50">
                   <tr>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                       Bestellung
                     </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                       Kunde
                     </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                       Datum
                     </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
                       Betrag
                     </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
                       Status
                     </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
                       Sendung
                     </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
                       Aktionen
                     </th>
                   </tr>
@@ -488,77 +563,89 @@ export default function AdminOrdersPage() {
                     return (
                       <React.Fragment key={order._id}>
                         <tr className="hover:bg-gray-50">
-                          <td className="px-6 py-4 whitespace-nowrap">
+                          <td className="px-4 py-3">
                             <div className="text-sm font-medium text-gray-900">
                               {order.orderNumber}
                             </div>
-                            <div className="text-sm text-gray-500">
+                            <div className="text-xs text-gray-500">
                               {order.items.length} Artikel
                             </div>
                           </td>
-                          <td className="px-6 py-4 whitespace-nowrap">
+                          <td className="px-4 py-3">
                             <div className="text-sm text-gray-900">
                               {order.userName || 'Unbekannt'}
                             </div>
-                            <div className="text-sm text-gray-500">
+                            <div className="text-xs text-gray-500">
                               {order.userEmail || 'Keine E-Mail'}
                             </div>
                           </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                          <td className="px-4 py-3 text-sm text-gray-900">
                             {formatDate(order.createdAt)}
                           </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                            {formatCurrency(order.total)}
+                          <td className="px-4 py-3 text-right">
+                            <div className="text-sm font-medium text-gray-900">
+                              {formatCurrency(order.total)}
+                            </div>
                           </td>
-                          <td className="px-6 py-4 whitespace-nowrap">
-                            <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${statusInfo.bg} ${statusInfo.color}`}>
+                          <td className="px-4 py-3 text-center">
+                            <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${statusInfo.bg} ${statusInfo.color}`}>
                               {statusInfo.icon} {statusInfo.text}
                             </span>
                           </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                          <td className="px-4 py-3 text-center">
                             <div className="space-y-1">
                               {order.trackingInfo && order.trackingInfo.length > 0 ? (
-                                <div>
-                                   <div className="text-xs font-medium text-gray-900 flex items-center space-x-2">
-                                     <span>
-                                       {order.trackingInfo.length} Sendung{order.trackingInfo.length > 1 ? 'en' : ''}
-                                     </span>
+                                <div className="text-center">
+                                   <div className="text-xs font-medium text-gray-900">
+                                     {order.trackingInfo.length} Sendung{order.trackingInfo.length > 1 ? 'en' : ''}
+                                   </div>
                                    {(order.isEmailSent || order.trackingInfo.some(t => t.emailSent)) && (
+                                     <div className="mt-1">
                                        <span className="inline-flex items-center px-1.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
                                          <svg className="w-3 h-3 mr-1" fill="currentColor" viewBox="0 0 20 20">
                                            <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
                                          </svg>
                                          E-Mail
                                        </span>
-                                     )}
-                                   </div>
-                                   <div className="text-xs text-gray-500">
-                                     {getTrackingProviderName(order.trackingInfo[0].shippingProvider || 'other')}
-                                   </div>
+                                     </div>
+                                   )}
                                 </div>
                               ) : (
                                 <div className="text-xs text-gray-400">Keine Sendungen</div>
                               )}
-                              <button
-                                onClick={() => openTrackingModal(order)}
-                                className="text-xs text-blue-600 hover:text-blue-800"
-                              >
-                                Verwalten
-                              </button>
                             </div>
                           </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                            <div className="flex space-x-2">
+                          <td className="px-4 py-3 text-center">
+                            <div className="flex flex-col space-y-1">
                               <button
                                 onClick={() => setExpandedOrder(isExpanded ? null : order._id)}
-                                className="text-blue-600 hover:text-blue-900"
+                                className="text-xs text-blue-600 hover:text-blue-900 px-2 py-1 rounded hover:bg-blue-50"
                               >
                                 {isExpanded ? 'Weniger' : 'Details'}
                               </button>
+                              {order.status === 'delivered' ? (
+                                <button
+                                  onClick={() => downloadInvoice(order.orderNumber)}
+                                  className="text-xs text-green-600 hover:text-green-900 px-2 py-1 rounded hover:bg-green-50 flex items-center justify-center gap-1"
+                                  title="Rechnung herunterladen"
+                                >
+                                  <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                                  </svg>
+                                  Rechnung
+                                </button>
+                              ) : (
+                                <div className="text-xs text-gray-500 px-2 py-1 text-center" title="Rechnung verfügbar nach Lieferung">
+                                  <svg className="w-3 h-3 mx-auto mb-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                  </svg>
+                                  Nach Lieferung
+                                </div>
+                              )}
                               <select
                                 value={order.status}
                                 onChange={(e) => handleStatusUpdate(order._id, e.target.value)}
-                                className="text-xs border border-gray-300 rounded px-2 py-1"
+                                className="text-xs border border-gray-300 rounded px-1 py-1 w-full"
                               >
                                 <option value="pending">Ausstehend</option>
                                 <option value="processing">In Bearbeitung</option>
@@ -573,69 +660,340 @@ export default function AdminOrdersPage() {
                         {/* Expanded Details */}
                         {isExpanded && (
                           <tr>
-                            <td colSpan={6} className="px-0 py-0">
+                            <td colSpan={7} className="px-0 py-0">
                               <div className="bg-gray-50 border-t border-gray-200">
                                 <div className="p-6 space-y-6">
                                   {/* Order Items */}
-                                  <div>
+                                  <div className="w-full">
                                     <h4 className="text-lg font-medium text-gray-900 mb-4">Bestellte Artikel</h4>
-                                    <div className="space-y-4">
-                                      {order.items.map((item, index) => (
-                                        <div key={index} className="flex items-center space-x-4 bg-white p-4 rounded-lg">
-                                          {item.image && (
-                                            <img 
-                                              src={item.image} 
-                                              alt={item.name}
-                                              className="w-16 h-16 object-cover rounded-lg"
-                                            />
-                                          )}
-                                          <div className="flex-1">
-                                            <h5 className="font-medium text-gray-900">{item.name}</h5>
-                                            {item.variations && Object.keys(item.variations).length > 0 && (
-                                              <div className="mt-1">
-                                                {Object.entries(item.variations).map(([key, value]) => (
-                                                  <span key={key} className="inline-block mr-3 text-sm text-gray-600">
-                                                    {key}: {value}
+                                    <div className="bg-white rounded-lg overflow-hidden">
+                                      <div className="overflow-x-auto">
+                                        <table className="min-w-full divide-y divide-gray-200">
+                                          <thead className="bg-gray-50">
+                                            <tr>
+                                              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-2/5">
+                                                Produkt
+                                              </th>
+                                              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-1/5">
+                                                Variationen
+                                              </th>
+                                              <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider w-1/10">
+                                                Menge
+                                              </th>
+                                              <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider w-1/10">
+                                                Einzelpreis
+                                              </th>
+                                              <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider w-1/10">
+                                                Gesamt
+                                              </th>
+                                            </tr>
+                                          </thead>
+                                          <tbody className="bg-white divide-y divide-gray-200">
+                                            {order.items.map((item, index) => (
+                                              <tr key={index} className="hover:bg-gray-50">
+                                                <td className="px-6 py-4 w-2/5">
+                                                  <div className="text-sm font-medium text-gray-900">{item.name}</div>
+                                                </td>
+                                                <td className="px-6 py-4 w-1/5">
+                                                  <div className="text-sm text-gray-600">
+                                                    {item.variations && Object.keys(item.variations).length > 0 ? (
+                                                      Object.entries(item.variations).map(([key, value]) => (
+                                                        <span key={key} className="block">
+                                                          {key}: {value}
+                                                        </span>
+                                                      ))
+                                                    ) : (
+                                                      <span className="text-gray-400 italic">Keine Variationen</span>
+                                                    )}
+                                                  </div>
+                                                </td>
+                                                <td className="px-6 py-4 text-center w-1/10">
+                                                  <span className="text-sm font-medium text-gray-900">{item.quantity}</span>
+                                                </td>
+                                                <td className="px-6 py-4 text-right w-1/10">
+                                                  <span className="text-sm text-gray-600">{formatCurrency(item.price / 100)}</span>
+                                                </td>
+                                                <td className="px-6 py-4 text-right w-1/10">
+                                                  <span className="text-sm font-semibold text-gray-900">
+                                                    {formatCurrency((item.price * item.quantity) / 100)}
                                                   </span>
-                                                ))}
-                                              </div>
-                                            )}
-                                            <p className="text-sm text-gray-600">Menge: {item.quantity}</p>
-                                          </div>
-                                          <div className="text-right">
-                                            <p className="font-semibold text-gray-900">
-                                              {formatCurrency(item.price * item.quantity)}
-                                            </p>
-                                            <p className="text-sm text-gray-600">
-                                              {formatCurrency(item.price)} pro Stück
-                                            </p>
-                                          </div>
+                                                </td>
+                                              </tr>
+                                            ))}
+                                          </tbody>
+                                        </table>
+                                      </div>
+                                    </div>
+                                  </div>
+
+                                  {/* Bestellübersicht */}
+                                  <div className="bg-white p-4 rounded-lg">
+                                    <h4 className="font-medium text-gray-900 mb-4">Bestellübersicht</h4>
+                                    <div className="space-y-2">
+                                      <div className="flex justify-between text-sm">
+                                        <span className="text-gray-600">Zwischensumme ({order.items.length} Artikel)</span>
+                                        <span className="font-medium">{formatCurrency((order as any).subtotal || order.total)}</span>
+                                      </div>
+                                      {(order as any).shippingCosts > 0 && (
+                                        <div className="flex justify-between text-sm">
+                                          <span className="text-gray-600">Versandkosten</span>
+                                          <span className="font-medium">{formatCurrency((order as any).shippingCosts / 100)}</span>
                                         </div>
-                                      ))}
+                                      )}
+                                      {(order as any).shippingCosts === 0 && (
+                                        <div className="flex justify-between text-sm">
+                                          <span className="text-gray-600">Versandkosten</span>
+                                          <span className="font-medium text-green-600">Kostenlos</span>
+                                        </div>
+                                      )}
+                                      {(order as any).bonusPointsRedeemed > 0 && (
+                                        <div className="flex justify-between text-sm">
+                                          <span className="text-gray-600">Bonuspunkte-Rabatt ({(order as any).bonusPointsRedeemed} Punkte)</span>
+                                          <span className="font-medium text-green-600">
+                                            -{formatCurrency(getPointsDiscountAmount((order as any).bonusPointsRedeemed))}
+                                          </span>
+                                        </div>
+                                      )}
+                                      <div className="border-t border-gray-200 pt-2">
+                                        <div className="flex justify-between text-base font-semibold">
+                                          <span className="text-gray-900">Gesamtbetrag (vor Rabatt)</span>
+                                          <span className="text-gray-900">{formatCurrency(((order as any).subtotal || order.total) + ((order as any).shippingCosts || 0) / 100)}</span>
+                                        </div>
+                                        {(order as any).bonusPointsRedeemed > 0 && (
+                                          <div className="flex justify-between text-base font-semibold text-green-600 mt-2">
+                                            <span>Endbetrag (nach Rabatt)</span>
+                                            <span>{formatCurrency(order.total)}</span>
+                                          </div>
+                                        )}
+                                      </div>
+                                      <div className="text-sm text-gray-600 bg-blue-50 rounded p-2">
+                                        <span className="font-medium">Kunde hat {order.bonusPointsEarned} Bonuspunkte für diese Bestellung erhalten</span>
+                                        {(order as any).bonusPointsRedeemed > 0 && (
+                                          <span className="block mt-1">
+                                            und {((order as any).bonusPointsRedeemed)} Punkte eingelöst
+                                          </span>
+                                        )}
+                                      </div>
                                     </div>
                                   </div>
 
                                         {/* Order Details */}
-                                        <div className="grid md:grid-cols-3 gap-6">
+                                        <div className="grid md:grid-cols-4 gap-4">
                                           <div className="bg-white p-4 rounded-lg">
                                             <h4 className="font-medium text-gray-900 mb-3">Lieferadresse</h4>
                                             <div className="text-sm text-gray-600 space-y-1">
-                                              <p>{order.shippingAddress.street} {order.shippingAddress.houseNumber}</p>
-                                              <p>{order.shippingAddress.postalCode} {order.shippingAddress.city}</p>
+                                              <div className="flex items-center justify-between">
+                                                <p className="font-medium text-gray-900">
+                                                  {order.shippingAddress.firstName} {order.shippingAddress.lastName}
+                                                </p>
+                                                <button
+                                                  onClick={() => copyToClipboard(
+                                                    `${order.shippingAddress.firstName} ${order.shippingAddress.lastName}`,
+                                                    'Name'
+                                                  )}
+                                                  className="text-gray-400 hover:text-gray-600 p-1 rounded hover:bg-gray-100"
+                                                  title="Name kopieren"
+                                                >
+                                                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                                                  </svg>
+                                                </button>
+                                              </div>
+                                              <div className="flex items-center justify-between">
+                                                <p>{order.shippingAddress.street} {order.shippingAddress.houseNumber}</p>
+                                                <button
+                                                  onClick={() => copyToClipboard(
+                                                    `${order.shippingAddress.street} ${order.shippingAddress.houseNumber}`,
+                                                    'Adresse'
+                                                  )}
+                                                  className="text-gray-400 hover:text-gray-600 p-1 rounded hover:bg-gray-100"
+                                                  title="Adresse kopieren"
+                                                >
+                                                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                                                  </svg>
+                                                </button>
+                                              </div>
+                                              {order.shippingAddress.addressLine2 && (
+                                                <p>{order.shippingAddress.addressLine2}</p>
+                                              )}
+                                              <div className="flex items-center justify-between">
+                                                <p>{order.shippingAddress.postalCode}</p>
+                                                <button
+                                                  onClick={() => copyToClipboard(
+                                                    order.shippingAddress.postalCode,
+                                                    'PLZ'
+                                                  )}
+                                                  className="text-gray-400 hover:text-gray-600 p-1 rounded hover:bg-gray-100"
+                                                  title="PLZ kopieren"
+                                                >
+                                                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                                                  </svg>
+                                                </button>
+                                              </div>
+                                              <div className="flex items-center justify-between">
+                                                <p>{order.shippingAddress.city}</p>
+                                                <button
+                                                  onClick={() => copyToClipboard(
+                                                    order.shippingAddress.city,
+                                                    'Stadt'
+                                                  )}
+                                                  className="text-gray-400 hover:text-gray-600 p-1 rounded hover:bg-gray-100"
+                                                  title="Stadt kopieren"
+                                                >
+                                                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                                                  </svg>
+                                                </button>
+                                              </div>
                                               <p>{order.shippingAddress.country}</p>
+                                            </div>
+                                          </div>
+
+                                          <div className="bg-white p-4 rounded-lg">
+                                            <h4 className="font-medium text-gray-900 mb-3">Rechnungsadresse</h4>
+                                            <div className="text-sm text-gray-600 space-y-1">
+                                              {order.billingAddress ? (
+                                                <>
+                                                  <div className="flex items-center justify-between">
+                                                    <p className="font-medium text-gray-900">
+                                                      {order.billingAddress?.firstName} {order.billingAddress?.lastName}
+                                                    </p>
+                                                    <button
+                                                      onClick={() => copyToClipboard(
+                                                        `${order.billingAddress?.firstName ?? ''} ${order.billingAddress?.lastName ?? ''}`,
+                                                        'Name (Rechnung)'
+                                                      )}
+                                                      className="text-gray-400 hover:text-gray-600 p-1 rounded hover:bg-gray-100"
+                                                      title="Name kopieren"
+                                                    >
+                                                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                                                      </svg>
+                                                    </button>
+                                                  </div>
+                                                  <div className="flex items-center justify-between">
+                                                    <p>{order.billingAddress?.street} {order.billingAddress?.houseNumber}</p>
+                                                    <button
+                                                      onClick={() => copyToClipboard(
+                                                        `${order.billingAddress?.street ?? ''} ${order.billingAddress?.houseNumber ?? ''}`,
+                                                        'Adresse (Rechnung)'
+                                                      )}
+                                                      className="text-gray-400 hover:text-gray-600 p-1 rounded hover:bg-gray-100"
+                                                      title="Adresse kopieren"
+                                                    >
+                                                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                                                      </svg>
+                                                    </button>
+                                                  </div>
+                                                  {order.billingAddress?.addressLine2 && (
+                                                    <p>{order.billingAddress?.addressLine2}</p>
+                                                  )}
+                                                  <div className="flex items-center justify-between">
+                                                    <p>{order.billingAddress?.postalCode}</p>
+                                                    <button
+                                                      onClick={() => copyToClipboard(
+                                                        order.billingAddress?.postalCode ?? '',
+                                                        'PLZ (Rechnung)'
+                                                      )}
+                                                      className="text-gray-400 hover:text-gray-600 p-1 rounded hover:bg-gray-100"
+                                                      title="PLZ kopieren"
+                                                    >
+                                                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                                                      </svg>
+                                                    </button>
+                                                  </div>
+                                                  <div className="flex items-center justify-between">
+                                                    <p>{order.billingAddress?.city}</p>
+                                                    <button
+                                                      onClick={() => copyToClipboard(
+                                                        order.billingAddress?.city ?? '',
+                                                        'Stadt (Rechnung)'
+                                                      )}
+                                                      className="text-gray-400 hover:text-gray-600 p-1 rounded hover:bg-gray-100"
+                                                      title="Stadt kopieren"
+                                                    >
+                                                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                                                      </svg>
+                                                    </button>
+                                                  </div>
+                                                  <p>{order.billingAddress?.country}</p>
+                                                </>
+                                              ) : (
+                                                <p className="text-gray-500 italic">Gleich wie Lieferadresse</p>
+                                              )}
                                             </div>
                                           </div>
                                           
                                           <div className="bg-white p-4 rounded-lg">
-                                            <h4 className="font-medium text-gray-900 mb-3">Zahlungsmethode</h4>
-                                            <p className="text-sm text-gray-600">
-                                              {order.paymentMethod === 'card' && 'Kreditkarte / Debitkarte'}
-                                              {order.paymentMethod === 'paypal' && 'PayPal'}
-                                              {order.paymentMethod === 'bank' && 'Banküberweisung'}
-                                              {!order.paymentMethod && 'Nicht angegeben'}
-                                            </p>
+                                            <h4 className="font-medium text-gray-900 mb-3">Zahlung</h4>
+                                            <div className="text-sm text-gray-600">
+                                              <p className="font-medium text-gray-900">
+                                                {order.paymentMethod === 'card' && '💳 Kreditkarte / Debitkarte'}
+                                                {order.paymentMethod === 'paypal' && '🅿️ PayPal'}
+                                                {order.paymentMethod === 'bank' && '🏦 Banküberweisung'}
+                                                {!order.paymentMethod && '❓ Nicht angegeben'}
+                                              </p>
+                                              <p className="text-xs text-gray-500 mt-1">
+                                                Status: <span className={`font-medium ${
+                                                  order.paymentStatus === 'paid' ? 'text-green-600' :
+                                                  order.paymentStatus === 'pending' ? 'text-amber-600' :
+                                                  order.paymentStatus === 'failed' ? 'text-red-600' :
+                                                  'text-gray-600'
+                                                }`}>
+                                                  {order.paymentStatus === 'paid' && '✅ Bezahlt'}
+                                                  {order.paymentStatus === 'pending' && '⏳ Ausstehend'}
+                                                  {order.paymentStatus === 'failed' && '❌ Fehlgeschlagen'}
+                                                  {order.paymentStatus === 'refunded' && '↩️ Rückerstattet'}
+                                                  {!order.paymentStatus && 'Unbekannt'}
+                                                </span>
+                                              </p>
+                                            </div>
                                           </div>
 
+                                          <div className="bg-white p-4 rounded-lg">
+                                            <h4 className="font-medium text-gray-900 mb-3">Bonuspunkte</h4>
+                                            <div className="space-y-2">
+                                              <div className="flex items-center justify-between">
+                                                <span className="text-sm text-gray-600">Verdiente Punkte:</span>
+                                                <span className="text-lg font-semibold text-yellow-600">{order.bonusPointsEarned}</span>
+                                              </div>
+                                              <div className="flex items-center justify-between">
+                                                <span className="text-sm text-gray-600">Status:</span>
+                                                <span className={`text-xs font-medium px-2 py-1 rounded-full ${
+                                                  order.bonusPointsCredited 
+                                                    ? 'bg-green-100 text-green-800' 
+                                                    : order.bonusPointsScheduledAt
+                                                      ? 'bg-blue-100 text-blue-800'
+                                                      : 'bg-amber-100 text-amber-800'
+                                                }`}>
+                                                  {order.bonusPointsCredited 
+                                                    ? '✅ Gutgeschrieben' 
+                                                    : order.bonusPointsScheduledAt
+                                                      ? '⏰ Eingeplant'
+                                                      : '⏳ Ausstehend'
+                                                  }
+                                                </span>
+                                              </div>
+                                              {order.bonusPointsCreditedAt && (
+                                                <div className="text-xs text-gray-500">
+                                                  Gutgeschrieben: {formatDate(order.bonusPointsCreditedAt)}
+                                                </div>
+                                              )}
+                                              {order.bonusPointsScheduledAt && !order.bonusPointsCredited && (
+                                                <div className="text-xs text-blue-600">
+                                                  Geplant für: {formatDate(order.bonusPointsScheduledAt)}
+                                                </div>
+                                              )}
+                                            </div>
+                                          </div>
+                                        </div>
+
+                                        <div className="grid md:grid-cols-1 gap-6">
                                           <div className="bg-white p-4 rounded-lg">
                                             <h4 className="font-medium text-gray-900 mb-3">Sendungsverfolgung</h4>
                                             <div className="space-y-3">

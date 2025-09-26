@@ -11,6 +11,8 @@ export default async function CheckoutPage() {
     email: user?.email || '',
     phone: user?.phone || '',
     shippingAddress: {
+      firstName: user?.address?.firstName || user?.firstName || '',
+      lastName: user?.address?.lastName || user?.lastName || '',
       company: user?.address?.company || '',
       street: user?.address?.street || '',
       houseNumber: user?.address?.houseNumber || '',
@@ -20,6 +22,8 @@ export default async function CheckoutPage() {
       country: user?.address?.country || 'Deutschland',
     },
     billingAddress: {
+      firstName: user?.billingAddress?.firstName || user?.address?.firstName || user?.firstName || '',
+      lastName: user?.billingAddress?.lastName || user?.address?.lastName || user?.lastName || '',
       company: user?.billingAddress?.company || user?.address?.company || '',
       street: user?.billingAddress?.street || user?.address?.street || '',
       houseNumber: user?.billingAddress?.houseNumber || user?.address?.houseNumber || '',

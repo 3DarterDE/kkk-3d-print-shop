@@ -20,6 +20,26 @@ interface Category {
   subcategories?: Category[];
 }
 
+// Helper function for flexible search matching
+function flexibleSearchMatch(text: string, query: string): boolean {
+  if (!text || !query) return false;
+  
+  const textLower = text.toLowerCase();
+  const queryLower = query.toLowerCase();
+  
+  // First try exact match
+  if (textLower.includes(queryLower)) return true;
+  
+  // Only use flexible search for specific short queries to avoid false positives
+  if (queryLower !== 'steel') return false;
+  
+  // Then try flexible match (allowing max 1 character between letters)
+  // This prevents too many false positives
+  const flexiblePattern = queryLower.replace(/(.)/g, '$1.{0,1}');
+  const flexibleRegex = new RegExp(flexiblePattern, 'i');
+  return flexibleRegex.test(textLower);
+}
+
 async function fetchCategories(): Promise<Category[]> {
   try {
     const url = `/api/shop/categories`;
@@ -72,7 +92,8 @@ export default function ShopPage({ searchParams }: { searchParams: Promise<{ cat
   const loadProductFilters = async (products: any[]) => {
     try {
       const productIds = products.map(p => p._id);
-      const response = await fetch('/api/admin/product-filters');
+      
+      const response = await fetch('/api/shop/product-filters');
       if (response.ok) {
         const allProductFilters = await response.json();
         
@@ -138,7 +159,6 @@ export default function ShopPage({ searchParams }: { searchParams: Promise<{ cat
           filter: urlParams.get('filter') || undefined,
         };
         
-        console.log('ShopPage - resolved params:', params);
         setResolvedSearchParams(params);
         return;
       }
@@ -188,16 +208,34 @@ export default function ShopPage({ searchParams }: { searchParams: Promise<{ cat
   useEffect(() => {
     const loadData = async () => {
       try {
-        // Load critical data in parallel with proper caching
-        const [productsResponse, cats] = await Promise.all([
-          fetch('/api/shop/products', { 
-            cache: 'no-store', // Always fetch fresh products to reflect stock changes immediately
-            next: { revalidate: 0 } // No cache for products
-          }),
-          fetchCategories()
-        ]);
+        // Check if we have a search parameter
+        const hasSearch = resolvedSearchParams.search && resolvedSearchParams.search.trim().length >= 2;
         
-        const products = await productsResponse.json();
+        let productsResponse;
+        let cats;
+        
+        if (hasSearch) {
+          // Use full search API for search queries
+          [productsResponse, cats] = await Promise.all([
+            fetch(`/api/search/full?q=${encodeURIComponent(resolvedSearchParams.search!)}`, { 
+              cache: 'no-store',
+              next: { revalidate: 0 }
+            }),
+            fetchCategories()
+          ]);
+        } else {
+          // Use regular products API for category/brand browsing
+          [productsResponse, cats] = await Promise.all([
+            fetch('/api/shop/products', { 
+              cache: 'no-store', // Always fetch fresh products to reflect stock changes immediately
+              next: { revalidate: 0 } // No cache for products
+            }),
+            fetchCategories()
+          ]);
+        }
+        
+        const productsData = await productsResponse.json();
+        const products = hasSearch ? productsData.products : productsData;
         
         // Set data immediately
         setAllProducts(products);
@@ -209,7 +247,7 @@ export default function ShopPage({ searchParams }: { searchParams: Promise<{ cat
         // Allow the page to render products immediately
         setLoading(false);
 
-        // Load product filters and all filters in the background without blocking initial render
+        // Load filters in the background without blocking initial render
         Promise.all([
           loadProductFilters(products),
           loadAllFilters()
@@ -223,8 +261,27 @@ export default function ShopPage({ searchParams }: { searchParams: Promise<{ cat
       }
     };
 
-    loadData();
-  }, []);
+    // Only load data when we have resolved search params
+    if (Object.keys(resolvedSearchParams).length > 0) {
+      loadData();
+    }
+  }, [resolvedSearchParams]);
+
+  // Clean URL: if we're showing search results, drop the ?search=... from the address bar
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const hasSearch = resolvedSearchParams.search && resolvedSearchParams.search.trim().length >= 2;
+      const hasCategory = !!resolvedSearchParams.category || !!resolvedSearchParams.subcategory || !!resolvedSearchParams.brand;
+      if (hasSearch && !hasCategory) {
+        const url = new URL(window.location.href);
+        if (url.searchParams.get('search')) {
+          window.history.replaceState({}, '', '/shop');
+        }
+      }
+    }
+  }, [resolvedSearchParams.search, resolvedSearchParams.category, resolvedSearchParams.subcategory, resolvedSearchParams.brand]);
+
+  // Product filters are loaded in the main loadData function
 
   // Load filter from sessionStorage when coming from other pages
   useEffect(() => {
@@ -307,7 +364,23 @@ export default function ShopPage({ searchParams }: { searchParams: Promise<{ cat
 
   // Helper function to get effective price (offer price if on sale, otherwise regular price)
   const getEffectivePrice = (product: any) => {
-    return product.isOnSale && product.offerPrice ? product.offerPrice : product.price;
+    let basePrice = product.isOnSale && product.offerPrice ? product.offerPrice : product.price;
+    
+    // Add variation price adjustments (if variations exist and are selected)
+    if (product.variations && product.variations.length > 0) {
+      product.variations.forEach((variation: any) => {
+        // For price calculation, we need to consider the first available option
+        // or the option with the highest price adjustment to get the maximum possible price
+        const availableOptions = variation.options.filter((option: any) => option.inStock);
+        if (availableOptions.length > 0) {
+          // Use the option with the highest price adjustment for price range calculation
+          const maxPriceAdjustment = Math.max(...availableOptions.map((option: any) => option.priceAdjustment || 0));
+          basePrice += maxPriceAdjustment;
+        }
+      });
+    }
+    
+    return basePrice;
   };
 
   // Helper function to check if product or any of its variations are available
@@ -354,14 +427,44 @@ export default function ShopPage({ searchParams }: { searchParams: Promise<{ cat
       
       // Search filter - only apply if no category is selected and it's not a category search
       if (searchQuery.trim() && !selectedCategory && !isCategorySearch) {
-        const query = searchQuery.toLowerCase().trim();
-        const titleMatch = p.title.toLowerCase().includes(query);
-        const descriptionMatch = p.description && p.description.toLowerCase().includes(query);
-        const categoryMatch = p.category && p.category.toLowerCase().includes(query);
-        const subcategoryMatch = p.subcategory && p.subcategory.toLowerCase().includes(query);
-        const tagsMatch = p.tags && p.tags.some((tag: string) => tag.toLowerCase().includes(query));
-        
-        if (!titleMatch && !descriptionMatch && !categoryMatch && !subcategoryMatch && !tagsMatch) {
+        const query = searchQuery.trim();
+        const titleMatch = flexibleSearchMatch(p.title, query);
+        const descriptionMatch = p.description && flexibleSearchMatch(p.description, query);
+        const categoryMatch = p.category && flexibleSearchMatch(p.category, query);
+        const subcategoryMatch = p.subcategory && flexibleSearchMatch(p.subcategory, query);
+        const tagsMatch = p.tags && p.tags.some((tag: string) => flexibleSearchMatch(tag, query));
+
+        // Consider category/subcategory relation via IDs as match as well (like in filteredProducts)
+        let categoryRelationMatch = false;
+        try {
+          const matchingCats = categories.filter(c =>
+            flexibleSearchMatch(c.name, query) || flexibleSearchMatch(c.slug, query)
+          );
+          const matchingSubIds: string[] = [];
+          const matchingParentIds: string[] = [];
+          categories.forEach(c => {
+            (c.subcategories || []).forEach(sub => {
+              if (flexibleSearchMatch(sub.name, query) || flexibleSearchMatch(sub.slug, query)) {
+                matchingSubIds.push(String(sub._id));
+                matchingParentIds.push(String(c._id));
+              }
+            });
+          });
+
+          if (matchingCats.length > 0) {
+            categoryRelationMatch = matchingCats.some(c => String(p.categoryId) === String(c._id))
+              || matchingCats.some(c => (c.subcategories || []).some(sub =>
+                   String(p.subcategoryId) === String(sub._id) || (p.subcategoryIds && p.subcategoryIds.includes(String(sub._id)))
+                 ));
+          }
+          if (!categoryRelationMatch && (matchingSubIds.length > 0 || matchingParentIds.length > 0)) {
+            categoryRelationMatch = matchingSubIds.includes(String(p.subcategoryId))
+              || (p.subcategoryIds && p.subcategoryIds.some((sid: any) => matchingSubIds.includes(String(sid))))
+              || matchingParentIds.includes(String(p.categoryId));
+          }
+        } catch {}
+
+        if (!titleMatch && !descriptionMatch && !categoryMatch && !subcategoryMatch && !tagsMatch && !categoryRelationMatch) {
           return false;
         }
       }
@@ -500,6 +603,8 @@ export default function ShopPage({ searchParams }: { searchParams: Promise<{ cat
     setShowSaleItems(false);
     setShowNewItems(false);
     setShowAvailableOnly(false);
+    
+    // Filters will be reloaded by the main useEffect hook
     setIsPriceFilterModified(false);
   }, [resolvedSearchParams.category, resolvedSearchParams.search]);
 
@@ -510,12 +615,18 @@ export default function ShopPage({ searchParams }: { searchParams: Promise<{ cat
   // debug removed
       setPriceRange(newPriceRange);
     }
-  }, [resolvedSearchParams, allProducts, categories, selectedDynamicFilters, showTopSellers, showSaleItems, showNewItems, showAvailableOnly, isPriceFilterModified]);
+  }, [allProducts, categories, selectedDynamicFilters, showTopSellers, showSaleItems, showNewItems, showAvailableOnly, isPriceFilterModified]);
 
-  // Check if search query matches a category name
+
+  // Check if search query matches a category or subcategory name
+  // Only consider it a category search if the query exactly matches a category name or slug
   const isCategorySearch = searchQuery.trim() && categories.some(cat => 
-    cat.name.toLowerCase() === searchQuery.toLowerCase().trim() || 
-    cat.slug.toLowerCase() === searchQuery.toLowerCase().trim()
+    cat.name.toLowerCase() === searchQuery.trim().toLowerCase() || 
+    cat.slug.toLowerCase() === searchQuery.trim().toLowerCase() ||
+    (cat.subcategories && cat.subcategories.some(sub => 
+      sub.name.toLowerCase() === searchQuery.trim().toLowerCase() || 
+      sub.slug.toLowerCase() === searchQuery.trim().toLowerCase()
+    ))
   );
 
   // Get the correct product count for display
@@ -536,23 +647,60 @@ export default function ShopPage({ searchParams }: { searchParams: Promise<{ cat
     
     // Search filter - only apply if no category is selected and it's not a category search
     if (searchQuery.trim() && !selectedCategory && !isCategorySearch) {
-      const query = searchQuery.toLowerCase().trim();
-      const titleMatch = p.title.toLowerCase().includes(query);
-      const descriptionMatch = p.description && p.description.toLowerCase().includes(query);
-      const categoryMatch = p.category && p.category.toLowerCase().includes(query);
-      const subcategoryMatch = p.subcategory && p.subcategory.toLowerCase().includes(query);
-      const tagsMatch = p.tags && p.tags.some((tag: string) => tag.toLowerCase().includes(query));
-      
-      // Check if any field matches (but exclude recommended products)
-      if (!titleMatch && !descriptionMatch && !categoryMatch && !subcategoryMatch && !tagsMatch) {
+      const query = searchQuery.trim();
+      const titleMatch = flexibleSearchMatch(p.title, query);
+      const descriptionMatch = p.description && flexibleSearchMatch(p.description, query);
+      const categoryMatch = p.category && flexibleSearchMatch(p.category, query);
+      const subcategoryMatch = p.subcategory && flexibleSearchMatch(p.subcategory, query);
+      const tagsMatch = p.tags && p.tags.some((tag: string) => flexibleSearchMatch(tag, query));
+
+      // Also treat products as matched if the query matches a category/subcategory name
+      // and this product belongs to that category/subcategory via IDs
+      let categoryRelationMatch = false;
+      try {
+        // Find any categories whose name/slug matches the query
+        const matchingCats = categories.filter(c =>
+          flexibleSearchMatch(c.name, query) || flexibleSearchMatch(c.slug, query)
+        );
+        // Find any subcategories whose name/slug matches the query
+        const matchingSubIds: string[] = [];
+        const matchingParentIds: string[] = [];
+        categories.forEach(c => {
+          (c.subcategories || []).forEach(sub => {
+            if (flexibleSearchMatch(sub.name, query) || flexibleSearchMatch(sub.slug, query)) {
+              matchingSubIds.push(String(sub._id));
+              matchingParentIds.push(String(c._id));
+            }
+          });
+        });
+
+        // Check direct category match
+        if (matchingCats.length > 0) {
+          categoryRelationMatch = matchingCats.some(c => String(p.categoryId) === String(c._id))
+            || (matchingCats.some(c => (c.subcategories || []).some(sub =>
+                  String(p.subcategoryId) === String(sub._id) || (p.subcategoryIds && p.subcategoryIds.includes(String(sub._id)))
+                )));
+        }
+        // Check subcategory match (via IDs or membership in any matching subcategories)
+        if (!categoryRelationMatch && (matchingSubIds.length > 0 || matchingParentIds.length > 0)) {
+          categoryRelationMatch = matchingSubIds.includes(String(p.subcategoryId))
+            || (p.subcategoryIds && p.subcategoryIds.some((sid: any) => matchingSubIds.includes(String(sid))))
+            || matchingParentIds.includes(String(p.categoryId));
+        }
+      } catch {}
+
+      // If none of the fields match and no category relation match, exclude product
+      if (!titleMatch && !descriptionMatch && !categoryMatch && !subcategoryMatch && !tagsMatch && !categoryRelationMatch) {
         return false;
       }
     }
     
-    // Price filter
-    const effectivePrice = getEffectivePrice(p);
-    if (effectivePrice < priceRange.min || effectivePrice > priceRange.max) {
-      return false;
+    // Price filter (apply only when user modified the range)
+    if (isPriceFilterModified) {
+      const effectivePrice = getEffectivePrice(p);
+      if (effectivePrice < priceRange.min || effectivePrice > priceRange.max) {
+        return false;
+      }
     }
     
     // Category filter
@@ -782,54 +930,21 @@ export default function ShopPage({ searchParams }: { searchParams: Promise<{ cat
   let primaryProducts: any[] = [];
   
   if (searchQuery.trim() && !resolvedSearchParams.category && !isCategorySearch) {
-    const query = searchQuery.toLowerCase().trim();
-    
-    // First, check if there's a category with this exact name
-    const matchingCategory = categories.find(cat => 
-      cat.name.toLowerCase() === query || cat.slug.toLowerCase() === query
-    );
-    
-    if (matchingCategory) {
-      // If there's a matching category, show all products from that category
-      
-      primaryProducts = filteredProducts.filter((p: any) => {
-        const matches = p.categoryId === matchingCategory._id || 
-               p.category === matchingCategory.name ||
-               p.category === matchingCategory.slug ||
-               (matchingCategory.subcategories && matchingCategory.subcategories.some(sub => 
-                 p.subcategoryId === sub._id || 
-                 (p.subcategoryIds && p.subcategoryIds.includes(sub._id))
-               ));
-        
-        
-        return matches;
-      });
-      
-    } else {
-      // No matching category, use normal search logic
-      filteredProducts.forEach((p: any) => {
-        const titleMatch = p.title.toLowerCase().includes(query);
-        const descriptionMatch = p.description && p.description.toLowerCase().includes(query);
-        const categoryMatch = p.category && p.category.toLowerCase().includes(query);
-        const subcategoryMatch = p.subcategory && p.subcategory.toLowerCase().includes(query);
-        const tagsMatch = p.tags && p.tags.some((tag: string) => tag.toLowerCase().includes(query));
-        
-        
-        // Primary matches (title, tags, category, subcategory, description)
-        // Include description in primary matches to avoid duplicates
-        const primaryMatch = titleMatch || categoryMatch || subcategoryMatch || tagsMatch || descriptionMatch;
-        
-        // No description-only matches needed since description is now included in primary matches
-        if (primaryMatch) {
-          primaryProducts.push(p);
-        }
-      });
-    }
+    // Generic search: use all filtered products (API already scoped results)
+    primaryProducts = filteredProducts;
   } else if (isCategorySearch) {
     // If it's a category search, show all products from that category
     const matchingCategory = categories.find(cat => 
-      cat.name.toLowerCase() === searchQuery.toLowerCase().trim() || 
-      cat.slug.toLowerCase() === searchQuery.toLowerCase().trim()
+      flexibleSearchMatch(cat.name, searchQuery.trim()) || 
+      flexibleSearchMatch(cat.slug, searchQuery.trim())
+    );
+    
+    // Also check if any subcategory matches
+    const matchingSubcategoryParent = categories.find(cat => 
+      cat.subcategories && cat.subcategories.some(sub => 
+        flexibleSearchMatch(sub.name, searchQuery.trim()) || 
+        flexibleSearchMatch(sub.slug, searchQuery.trim())
+      )
     );
     
     if (matchingCategory) {
@@ -837,11 +952,120 @@ export default function ShopPage({ searchParams }: { searchParams: Promise<{ cat
       // First filter by category
       const categoryProducts = allProducts.filter((p: any) => {
         const matches = p.categoryId === matchingCategory._id || 
-               p.category === matchingCategory.name ||
-               p.category === matchingCategory.slug ||
+               flexibleSearchMatch(p.category, matchingCategory.name) ||
+               flexibleSearchMatch(p.category, matchingCategory.slug) ||
                (matchingCategory.subcategories && matchingCategory.subcategories.some(sub => 
                  p.subcategoryId === sub._id || 
-                 (p.subcategoryIds && p.subcategoryIds.includes(sub._id))
+                 (p.subcategoryIds && p.subcategoryIds.includes(sub._id)) ||
+                 flexibleSearchMatch(p.subcategory, sub.name) ||
+                 flexibleSearchMatch(p.subcategory, sub.slug)
+               ));
+        
+        
+        return matches;
+      });
+      
+      
+      // Then apply the same filters as filteredProducts (price, dynamic filters, etc.)
+      primaryProducts = categoryProducts.filter((p: any) => {
+        const selectedCategory = resolvedSearchParams.category;
+        const selectedSubcategory = resolvedSearchParams.subcategory;
+        
+        // Price filter
+        const effectivePrice = getEffectivePrice(p);
+        if (effectivePrice < priceRange.min || effectivePrice > priceRange.max) {
+          return false;
+        }
+        
+        // Brand filter
+        if (resolvedSearchParams.brand) {
+          // Check if product has this brand slug in brand field
+          if (p.brand !== resolvedSearchParams.brand && !p.brands?.includes(resolvedSearchParams.brand)) {
+            return false;
+          }
+        }
+        
+        // Category and subcategory filters (should not apply here as we're in category search)
+        // Dynamic filters - Handle different filter types
+        for (const [filterId, filterValues] of Object.entries(selectedDynamicFilters)) {
+          if (filterValues && filterValues.length > 0) {
+            const productFilterList = productFilters[p._id] || [];
+            const productFilter = productFilterList.find((pf: any) => pf.filterId === filterId);
+            
+            if (!productFilter) {
+              return false; // Product doesn't have this filter at all
+            }
+            
+            // Get filter type from allFilters
+            const filterType = allFilters.find(f => f._id === filterId)?.type;
+            
+            if (filterType === 'range') {
+              // Range filter: check if any product value falls within the selected range
+              const minValue = parseFloat(filterValues[0]);
+              const maxValue = parseFloat(filterValues[1]);
+              
+              const hasValueInRange = productFilter.values.some((value: string) => {
+                const numValue = parseFloat(value);
+                return !isNaN(numValue) && numValue >= minValue && numValue <= maxValue;
+              });
+              
+              if (!hasValueInRange) {
+                return false;
+              }
+            } else {
+              // Multiselect filter: OR logic - product needs to have ANY of the selected values
+              const hasAnyValue = filterValues.some((selectedValue: string) => 
+                productFilter.values.includes(selectedValue)
+              );
+              
+              if (!hasAnyValue) {
+                return false;
+              }
+            }
+          }
+        }
+        
+        // Top seller filter
+        if (showTopSellers && !p.isTopSeller) {
+          return false;
+        }
+        
+        // Sale filter
+        if (showSaleItems && !p.isOnSale) {
+          return false;
+        }
+        
+        // New items filter
+        if (showNewItems) {
+          const productDate = new Date(p.createdAt);
+          const thirtyDaysAgo = new Date();
+          thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+          if (productDate < thirtyDaysAgo) {
+            return false;
+          }
+        }
+        
+        // Available only filter
+        if (showAvailableOnly && (!p.inStock || p.stockQuantity <= 0)) {
+          return false;
+        }
+        
+        return true;
+      });
+      
+    } else if (matchingSubcategoryParent) {
+      
+      // First filter by parent category that has matching subcategory
+      const categoryProducts = allProducts.filter((p: any) => {
+        const matches = p.categoryId === matchingSubcategoryParent._id || 
+               flexibleSearchMatch(p.category, matchingSubcategoryParent.name) ||
+               flexibleSearchMatch(p.category, matchingSubcategoryParent.slug) ||
+               (matchingSubcategoryParent.subcategories && matchingSubcategoryParent.subcategories.some(sub => 
+                 (flexibleSearchMatch(sub.name, searchQuery.trim()) || flexibleSearchMatch(sub.slug, searchQuery.trim())) &&
+                 (p.subcategoryId === sub._id || 
+                  (p.subcategoryIds && p.subcategoryIds.includes(sub._id)) ||
+                  flexibleSearchMatch(p.subcategory, sub.name) ||
+                  flexibleSearchMatch(p.subcategory, sub.slug))
                ));
         
         
@@ -984,6 +1208,8 @@ export default function ShopPage({ searchParams }: { searchParams: Promise<{ cat
   const startIndex = (currentPage - 1) * productsPerPage;
   const endIndex = startIndex + productsPerPage;
   const paginatedProducts = sortedPrimaryProducts.slice(startIndex, endIndex);
+  
+  
 
   // Calculate display values for pagination text
   const displayStart = startIndex + 1;
@@ -1037,12 +1263,12 @@ export default function ShopPage({ searchParams }: { searchParams: Promise<{ cat
     
     // Search filter for top sellers
     if (searchQuery.trim()) {
-      const query = searchQuery.toLowerCase().trim();
-      const titleMatch = p.title.toLowerCase().includes(query);
-      const descriptionMatch = p.description && p.description.toLowerCase().includes(query);
-      const categoryMatch = p.category && p.category.toLowerCase().includes(query);
-      const subcategoryMatch = p.subcategory && p.subcategory.toLowerCase().includes(query);
-      const tagsMatch = p.tags && p.tags.some((tag: string) => tag.toLowerCase().includes(query));
+      const query = searchQuery.trim();
+      const titleMatch = flexibleSearchMatch(p.title, query);
+      const descriptionMatch = p.description && flexibleSearchMatch(p.description, query);
+      const categoryMatch = p.category && flexibleSearchMatch(p.category, query);
+      const subcategoryMatch = p.subcategory && flexibleSearchMatch(p.subcategory, query);
+      const tagsMatch = p.tags && p.tags.some((tag: string) => flexibleSearchMatch(tag, query));
       
       if (!titleMatch && !descriptionMatch && !categoryMatch && !subcategoryMatch && !tagsMatch) {
         return false;
@@ -1059,7 +1285,7 @@ export default function ShopPage({ searchParams }: { searchParams: Promise<{ cat
       <div className="fixed top-16 left-0 right-0 z-40 bg-white border-b border-gray-200 px-4 py-3 md:hidden">
         <SearchBar 
           placeholder="Luke Littler, Dartpfeile..."
-          maxResults={4}
+          maxResults={10}
         />
       </div>
 
@@ -1685,6 +1911,27 @@ export default function ShopPage({ searchParams }: { searchParams: Promise<{ cat
           <div className="flex flex-col mb-4 px-4 md:px-0">
             {/* Active Filter Buttons - separate row */}
             <div className="flex flex-wrap gap-2 mb-4">
+                {/* Search Query Chip */}
+                {searchQuery && (
+                  <div className="inline-flex items-center px-3 py-1 rounded-md text-sm bg-gray-100 text-gray-800 border border-gray-200">
+                    <span className="mr-2">Suchergebnis: {searchQuery}</span>
+                    <button
+                      onClick={() => {
+                        setSearchQuery('');
+                        setResolvedSearchParams(prev => ({ ...prev, search: undefined }));
+                        if (typeof window !== 'undefined') {
+                          const url = new URL(window.location.href);
+                          url.searchParams.delete('search');
+                          const newUrl = url.search ? `${url.pathname}${url.search}` : '/shop';
+                          window.history.replaceState({}, '', newUrl);
+                        }
+                      }}
+                      className="ml-1 text-gray-500 hover:text-gray-700"
+                    >
+                      ×
+                    </button>
+                  </div>
+                )}
                 {/* Dynamic Filter Buttons */}
                 {Object.entries(selectedDynamicFilters).map(([filterId, values]) => {
                   if (!values || values.length === 0) return null;
@@ -1906,6 +2153,18 @@ export default function ShopPage({ searchParams }: { searchParams: Promise<{ cat
             </div>
           </div>
           
+          {/* Search Results Header */}
+          {resolvedSearchParams.search && (
+            <div className="mt-6 mb-4">
+              <h2 className="text-lg font-semibold text-gray-900">
+                Suchergebnisse für "{resolvedSearchParams.search}"
+              </h2>
+              <p className="text-sm text-gray-600 mt-1">
+                {filteredProducts.length} Produkt{filteredProducts.length !== 1 ? 'e' : ''} gefunden
+              </p>
+            </div>
+          )}
+          
           {/* Spacing between controls and products */}
           <div className="mt-6"></div>
           
@@ -1930,6 +2189,9 @@ export default function ShopPage({ searchParams }: { searchParams: Promise<{ cat
                     isOnSale: p.isOnSale,
                     isTopSeller: isTopSeller,
                     inStock: p.inStock,
+                    // prefer API provided availability if present
+                    // @ts-ignore
+                    isAvailable: p.isAvailable !== undefined ? p.isAvailable : undefined,
                     stockQuantity: p.stockQuantity,
                     images: p.images || [],
                     imageSizes: (p.imageSizes || []).map((imgSize: any) => ({
@@ -1938,7 +2200,8 @@ export default function ShopPage({ searchParams }: { searchParams: Promise<{ cat
                       small: imgSize.small
                     })),
                     tags: p.tags || [],
-                    variations: p.variations || []
+                    variations: p.variations || [],
+                    reviews: p.reviews || { averageRating: 0, totalReviews: 0 }
                   }}
                 />
               );
@@ -2014,7 +2277,22 @@ export default function ShopPage({ searchParams }: { searchParams: Promise<{ cat
     {/* Category Description Section */}
     {resolvedSearchParams.category && (
       <CategoryDescriptionSection 
-        currentCategory={categories.find(c => c.slug === resolvedSearchParams.category) || null}
+        currentCategory={(() => {
+          // Find main category
+          const mainCategory = categories.find(c => c.slug === resolvedSearchParams.category);
+          
+          // If we have a subcategory, find it within the main category
+          if (resolvedSearchParams.subcategory && mainCategory?.subcategories) {
+            const subcategory = mainCategory.subcategories.find(sub => sub.slug === resolvedSearchParams.subcategory);
+            if (subcategory) {
+              // Return subcategory as the current category
+              return subcategory;
+            }
+          }
+          
+          // Otherwise return main category
+          return mainCategory || null;
+        })()}
         currentBrand={null}
       />
     )}
@@ -2035,3 +2313,4 @@ export default function ShopPage({ searchParams }: { searchParams: Promise<{ cat
     </>
   );
 }
+

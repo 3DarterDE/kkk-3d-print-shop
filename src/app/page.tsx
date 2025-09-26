@@ -4,6 +4,7 @@ import ScrollAnimation from "@/components/ScrollAnimation";
 import ProductCard from "@/components/ProductCard";
 import { connectToDatabase } from "@/lib/mongodb";
 import { Product } from "@/lib/models/Product";
+import Review from "@/lib/models/Review";
 import TopSellerCarousel from "@/components/TopSellerCarousel";
 import TopSellerSection from "@/components/TopSellerSection";
 import SaleSection from "@/components/SaleSection";
@@ -21,6 +22,32 @@ export default async function Home() {
     .sort({ sortOrder: 1, createdAt: -1 })
     .lean();
   
+  // Load review statistics for all products
+  const productSlugs = allProducts.map(p => p.slug).filter(slug => slug);
+  const reviewStats = await Review.aggregate([
+    {
+      $match: {
+        productId: { $in: productSlugs }
+      }
+    },
+    {
+      $group: {
+        _id: '$productId',
+        averageRating: { $avg: '$rating' },
+        totalReviews: { $sum: 1 }
+      }
+    }
+  ]);
+  
+  // Create a map for quick lookup
+  const reviewMap = new Map();
+  reviewStats.forEach(stat => {
+    reviewMap.set(stat._id, {
+      averageRating: Math.round(stat.averageRating * 10) / 10,
+      totalReviews: stat.totalReviews
+    });
+  });
+
   const topSellerProducts = allProducts
     .filter((product: any) => {
       // Nur Produkte anzeigen, die verfügbar sind
@@ -67,7 +94,8 @@ export default async function Home() {
       subcategoryId: product.subcategoryId?.toString(),
       subcategoryIds: product.subcategoryIds?.map((id: any) => id.toString()),
       createdAt: product.createdAt,
-      updatedAt: product.updatedAt
+      updatedAt: product.updatedAt,
+      reviews: reviewMap.get(product.slug) || { averageRating: 0, totalReviews: 0 }
     }));
 
   // Lade Angebot-Produkte
@@ -125,7 +153,8 @@ export default async function Home() {
       subcategoryId: product.subcategoryId?.toString(),
       subcategoryIds: product.subcategoryIds?.map((id: any) => id.toString()),
       createdAt: product.createdAt,
-      updatedAt: product.updatedAt
+      updatedAt: product.updatedAt,
+      reviews: reviewMap.get(product.slug) || { averageRating: 0, totalReviews: 0 }
     }));
 
   const hdrs = await headers();

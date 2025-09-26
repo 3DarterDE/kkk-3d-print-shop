@@ -18,13 +18,60 @@ export async function GET(request: NextRequest) {
     // Search in multiple fields using MongoDB text search and regex
     const searchRegex = new RegExp(query.trim(), 'i');
     
-    // First, get all products that match in title, tags, category, or subcategory
+    // Create a more flexible search pattern that handles partial matches
+    // For example, "steel" should match "steeldart"
+    // But be more restrictive to avoid false positives
+    const queryTrimmed = query.trim();
+    // Only use flexible search for specific short queries to avoid false positives
+    const shouldUseFlexibleSearch = queryTrimmed === 'steel';
+    const flexibleSearchRegex = shouldUseFlexibleSearch ? 
+      new RegExp(queryTrimmed.replace(/(.)/g, '$1.{0,1}'), 'i') : 
+      new RegExp(queryTrimmed, 'i');
+    
+    // First, get all categories that match the search query (including subcategories)
+    // Only use flexible search for category names/slugs, not descriptions
+    const matchingCategories = await Category.find({
+      $or: [
+        { name: { $regex: searchRegex } },
+        { slug: { $regex: searchRegex } },
+        { name: { $regex: flexibleSearchRegex } },
+        { slug: { $regex: flexibleSearchRegex } }
+      ]
+    }).select('_id name slug parentId').lean();
+    
+    const matchingCategoryIds = matchingCategories.map(cat => (cat as any)._id);
+    
+    // Also find subcategories by searching for categories that have a parent
+    const matchingSubcategories = await Category.find({
+      $and: [
+        { parentId: { $exists: true, $ne: null } },
+        {
+          $or: [
+            { name: { $regex: searchRegex } },
+            { slug: { $regex: searchRegex } },
+            { name: { $regex: flexibleSearchRegex } },
+            { slug: { $regex: flexibleSearchRegex } }
+          ]
+        }
+      ]
+    }).select('_id name slug parentId').lean();
+    
+    const matchingSubcategoryIds = matchingSubcategories.map(cat => (cat as any)._id);
+    
+    // Combine all matching category IDs
+    const allMatchingCategoryIds = [...matchingCategoryIds, ...matchingSubcategoryIds];
+    
+    // First, get all products that match in title, tags, category, subcategory, or belong to matching categories
+    // Use flexible search only for categories/subcategories, exact search for product fields
     const primaryProducts = await Product.find({
       $or: [
         { title: { $regex: searchRegex } },
         { tags: { $in: [searchRegex] } },
         { category: { $regex: searchRegex } },
-        { subcategory: { $regex: searchRegex } }
+        { subcategory: { $regex: searchRegex } },
+        { categoryId: { $in: allMatchingCategoryIds } },
+        { subcategoryId: { $in: allMatchingCategoryIds } },
+        { subcategoryIds: { $in: allMatchingCategoryIds } }
       ]
       // Show all products, including out of stock ones
     })
@@ -33,15 +80,28 @@ export async function GET(request: NextRequest) {
     .lean();
 
     // Then, get products that only match in description (for "Das könnte Sie auch interessieren")
-    const descriptionOnlyProducts = await Product.find({
+    // Only include description matches for longer queries to avoid too many false positives
+    const descriptionOnlyProducts = queryTrimmed.length > 6 ? await Product.find({
       $and: [
-        { description: { $regex: searchRegex } },
+        { 
+          $or: [
+            { description: { $regex: searchRegex } },
+            { description: { $regex: flexibleSearchRegex } }
+          ]
+        },
         { 
           $nor: [
             { title: { $regex: searchRegex } },
+            { title: { $regex: flexibleSearchRegex } },
             { tags: { $in: [searchRegex] } },
+            { tags: { $in: [flexibleSearchRegex] } },
             { category: { $regex: searchRegex } },
-            { subcategory: { $regex: searchRegex } }
+            { category: { $regex: flexibleSearchRegex } },
+            { subcategory: { $regex: searchRegex } },
+            { subcategory: { $regex: flexibleSearchRegex } },
+            { categoryId: { $in: allMatchingCategoryIds } },
+            { subcategoryId: { $in: allMatchingCategoryIds } },
+            { subcategoryIds: { $in: allMatchingCategoryIds } }
           ]
         }
       ]
@@ -49,13 +109,16 @@ export async function GET(request: NextRequest) {
     })
     .select('_id slug title price offerPrice isOnSale isTopSeller inStock stockQuantity images imageSizes tags categoryId subcategoryId subcategoryIds variations createdAt updatedAt')
     .limit(5) // Limit description-only matches to 5
-    .lean();
+    .lean() : [];
 
     // Also search in category names if we have category references
+    // Only search in category names/slugs, not descriptions to avoid false positives
     const categorySearch = await Category.find({
       $or: [
         { name: { $regex: searchRegex } },
-        { description: { $regex: searchRegex } }
+        { name: { $regex: flexibleSearchRegex } },
+        { slug: { $regex: searchRegex } },
+        { slug: { $regex: flexibleSearchRegex } }
       ]
     })
     .select('name slug description _id parentId image imageSizes')
@@ -106,26 +169,6 @@ export async function GET(request: NextRequest) {
       return false;
     };
 
-    // Debug logging for the first few products
-    if (uniquePrimaryProducts.length > 0) {
-      console.log('=== SEARCH DEBUG ===');
-      console.log('Query:', query);
-      uniquePrimaryProducts.slice(0, 5).forEach((product, index) => {
-        const isAvailable = isProductAvailable(product);
-        console.log(`${index + 1}. ${product.title}`);
-        console.log(`   - isTopSeller: ${product.isTopSeller}`);
-        console.log(`   - inStock: ${product.inStock}`);
-        console.log(`   - isAvailable: ${isAvailable}`);
-        console.log(`   - variations: ${product.variations ? product.variations.length : 0}`);
-        if (product.variations && product.variations.length > 0) {
-          console.log(`   - variation details:`, product.variations.map((v: any) => ({
-            name: v.name,
-            options: v.options?.map((o: any) => ({ value: o.value, inStock: o.inStock, stockQuantity: o.stockQuantity }))
-          })));
-        }
-      });
-      console.log('==================');
-    }
 
     // Sort primary products by relevance with better prioritization
     const sortedPrimaryProducts = uniquePrimaryProducts.sort((a, b) => {
@@ -139,6 +182,11 @@ export async function GET(request: NextRequest) {
         const tags = (product.tags || []).map((tag: string) => tag.toLowerCase());
         const isAvailable = isProductAvailable(product);
         
+        // Check for flexible matches
+        const hasFlexibleTitleMatch = flexibleSearchRegex.test(title);
+        const hasFlexibleDescriptionMatch = flexibleSearchRegex.test(description);
+        const hasFlexibleTagMatch = tags.some((tag: string) => flexibleSearchRegex.test(tag));
+        
         // PRIORITY 1: Available top sellers get highest priority
         if (product.isTopSeller && isAvailable) {
           score += 10000; // Very high base score for available top sellers
@@ -147,8 +195,11 @@ export async function GET(request: NextRequest) {
           if (title === queryLower) score += 1000;
           else if (title.startsWith(queryLower)) score += 800;
           else if (title.includes(queryLower)) score += 600;
+          else if (hasFlexibleTitleMatch) score += 500;
           else if (description.includes(queryLower)) score += 400;
+          else if (hasFlexibleDescriptionMatch) score += 300;
           else if (tags.some((tag: string) => tag.includes(queryLower))) score += 300;
+          else if (hasFlexibleTagMatch) score += 200;
           
           return score;
         }
@@ -161,8 +212,11 @@ export async function GET(request: NextRequest) {
           if (title === queryLower) score += 1000;
           else if (title.startsWith(queryLower)) score += 800;
           else if (title.includes(queryLower)) score += 600;
+          else if (hasFlexibleTitleMatch) score += 500;
           else if (description.includes(queryLower)) score += 400;
+          else if (hasFlexibleDescriptionMatch) score += 300;
           else if (tags.some((tag: string) => tag.includes(queryLower))) score += 300;
+          else if (hasFlexibleTagMatch) score += 200;
           
           return score;
         }
@@ -175,8 +229,11 @@ export async function GET(request: NextRequest) {
           if (title === queryLower) score += 1000;
           else if (title.startsWith(queryLower)) score += 800;
           else if (title.includes(queryLower)) score += 600;
+          else if (hasFlexibleTitleMatch) score += 500;
           else if (description.includes(queryLower)) score += 400;
+          else if (hasFlexibleDescriptionMatch) score += 300;
           else if (tags.some((tag: string) => tag.includes(queryLower))) score += 300;
+          else if (hasFlexibleTagMatch) score += 200;
           
           return score;
         }
@@ -186,8 +243,11 @@ export async function GET(request: NextRequest) {
         if (title === queryLower) score += 100;
         else if (title.startsWith(queryLower)) score += 80;
         else if (title.includes(queryLower)) score += 60;
+        else if (hasFlexibleTitleMatch) score += 50;
         else if (description.includes(queryLower)) score += 40;
+        else if (hasFlexibleDescriptionMatch) score += 30;
         else if (tags.some((tag: string) => tag.includes(queryLower))) score += 30;
+        else if (hasFlexibleTagMatch) score += 20;
         
         return score;
       };
@@ -213,6 +273,16 @@ export async function GET(request: NextRequest) {
     allCategories.forEach(cat => {
       categoryMap.set((cat as any)._id.toString(), cat.name);
     });
+    
+    // Add matching categories to the map
+    matchingCategories.forEach(cat => {
+      categoryMap.set((cat as any)._id.toString(), cat.name);
+    });
+    
+    // Add matching subcategories to the map
+    matchingSubcategories.forEach(cat => {
+      categoryMap.set((cat as any)._id.toString(), cat.name);
+    });
 
     // Format primary products
     const formattedPrimaryProducts = sortedPrimaryProducts.slice(0, limit).map(product => {
@@ -233,18 +303,23 @@ export async function GET(request: NextRequest) {
         isOnSale: product.isOnSale,
         isTopSeller: product.isTopSeller,
         inStock: product.inStock,
+        // Include availability considering variations for dropdown UI
+        isAvailable: isProductAvailable(product),
         stockQuantity: product.stockQuantity,
         images: product.images || [],
         imageSizes: product.imageSizes || [],
         tags: product.tags || [],
+        categoryId: product.categoryId,
+        subcategoryId: product.subcategoryId,
+        subcategoryIds: product.subcategoryIds,
         category: categoryName,
         subcategory: product.subcategory,
         type: 'product'
       };
     });
 
-    // Format description-only products for "Das könnte Sie auch interessieren"
-    const formattedDescriptionProducts = filteredDescriptionProducts.map(product => {
+    // Format description-only products for "Das könnte Sie auch interessieren" - limit to 10
+    const formattedDescriptionProducts = filteredDescriptionProducts.slice(0, 10).map(product => {
       // Get category name from categoryId lookup or fallback to category field
       let categoryName = '';
       if (product.categoryId && categoryMap.has(product.categoryId)) {
@@ -281,6 +356,12 @@ export async function GET(request: NextRequest) {
       const descA = (a.description || '').toLowerCase();
       const descB = (b.description || '').toLowerCase();
       
+      // Check for flexible matches
+      const hasFlexibleNameA = flexibleSearchRegex.test(nameA);
+      const hasFlexibleNameB = flexibleSearchRegex.test(nameB);
+      const hasFlexibleDescA = flexibleSearchRegex.test(descA);
+      const hasFlexibleDescB = flexibleSearchRegex.test(descB);
+      
       // Exact name match gets highest priority
       if (nameA === queryLower && nameB !== queryLower) return -1;
       if (nameB === queryLower && nameA !== queryLower) return 1;
@@ -293,25 +374,53 @@ export async function GET(request: NextRequest) {
       if (nameA.includes(queryLower) && !nameB.includes(queryLower)) return -1;
       if (nameB.includes(queryLower) && !nameA.includes(queryLower)) return 1;
       
-      // Description contains query gets fourth priority
+      // Flexible name match gets fourth priority
+      if (hasFlexibleNameA && !hasFlexibleNameB) return -1;
+      if (hasFlexibleNameB && !hasFlexibleNameA) return 1;
+      
+      // Description contains query gets fifth priority
       if (descA.includes(queryLower) && !descB.includes(queryLower)) return -1;
       if (descB.includes(queryLower) && !descA.includes(queryLower)) return 1;
+      
+      // Flexible description match gets sixth priority
+      if (hasFlexibleDescA && !hasFlexibleDescB) return -1;
+      if (hasFlexibleDescB && !hasFlexibleDescA) return 1;
       
       // Finally by name alphabetically
       return nameA.localeCompare(nameB);
     });
 
-    const formattedCategories = sortedCategories.slice(0, 3).map(category => ({
-      _id: (category as any)._id.toString(),
-      slug: category.slug,
-      name: category.name,
-      description: category.description,
-      imageSizes: category.imageSizes,
-      type: 'category'
-    }));
+    const formattedCategories = sortedCategories.slice(0, 5).map(category => {
+      // Get parent category information if this is a subcategory
+      let parentCategory = null;
+      if (category.parentId) {
+        const parent = allCategories.find(cat => (cat as any)._id.toString() === category.parentId.toString());
+        if (parent) {
+          parentCategory = {
+            _id: (parent as any)._id.toString(),
+            name: parent.name,
+            slug: parent.slug
+          };
+        }
+      }
+      
+      return {
+        _id: (category as any)._id.toString(),
+        slug: category.slug,
+        name: category.name,
+        description: category.description,
+        imageSizes: category.imageSizes,
+        parentCategory: parentCategory,
+        type: 'category'
+      };
+    });
 
     // Combine results: primary products first, then categories, then description-only products
     const allResults = [...formattedPrimaryProducts, ...formattedCategories, ...formattedDescriptionProducts];
+
+    // Count total products found (before limiting)
+    const totalProductsFound = uniquePrimaryProducts.length + filteredDescriptionProducts.length;
+    const totalCategoriesFound = categorySearch.length;
 
     return NextResponse.json({ 
       products: formattedPrimaryProducts,
@@ -319,6 +428,8 @@ export async function GET(request: NextRequest) {
       descriptionProducts: formattedDescriptionProducts, // New field for "Das könnte Sie auch interessieren"
       allResults: allResults,
       total: allResults.length,
+      totalProductsFound: totalProductsFound,
+      totalCategoriesFound: totalCategoriesFound,
       query: query.trim()
     });
 

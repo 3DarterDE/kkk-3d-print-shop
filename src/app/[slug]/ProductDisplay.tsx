@@ -24,6 +24,31 @@ interface ProductDisplayProps {
   } | null;
 }
 
+interface Review {
+  _id: string;
+  rating: number;
+  title: string;
+  comment: string;
+  isVerified: boolean;
+  createdAt: string;
+  user: {
+    name: string;
+    email?: string;
+  };
+}
+
+interface ReviewStats {
+  averageRating: number;
+  totalReviews: number;
+  ratingDistribution: {
+    1: number;
+    2: number;
+    3: number;
+    4: number;
+    5: number;
+  };
+}
+
 export default function ProductDisplay({ product, descriptionHtml, recommendedProducts = [], category, subcategory }: ProductDisplayProps) {
   const [selectedImageIndex, setSelectedImageIndex] = useState(0);
   const [quantity, setQuantity] = useState(1);
@@ -32,6 +57,16 @@ export default function ProductDisplay({ product, descriptionHtml, recommendedPr
   const [activeTab, setActiveTab] = useState('description');
   const [selectedVariations, setSelectedVariations] = useState<Record<string, string>>({});
   const [isScrolled, setIsScrolled] = useState(false);
+  const [reviews, setReviews] = useState<Review[]>([]);
+  const [reviewStats, setReviewStats] = useState<ReviewStats | null>(null);
+  const [reviewsLoading, setReviewsLoading] = useState(true);
+  const [reviewsPage, setReviewsPage] = useState(1);
+  const [reviewsPagination, setReviewsPagination] = useState<{
+    page: number;
+    limit: number;
+    total: number;
+    pages: number;
+  } | null>(null);
 
   // Handle lightbox close with animation
   const handleLightboxClose = () => {
@@ -115,6 +150,43 @@ export default function ProductDisplay({ product, descriptionHtml, recommendedPr
     }
   }, [product.variations]);
 
+  // Initialize reviews from product data (already loaded)
+  useEffect(() => {
+    if (product.reviews) {
+      setReviews(product.reviews.reviews || []);
+      setReviewStats(product.reviews.reviewStats || {
+        averageRating: 0,
+        totalReviews: 0,
+        ratingDistribution: { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 }
+      });
+      setReviewsLoading(false);
+    }
+  }, [product.reviews]);
+
+  // Load additional reviews when page changes
+  useEffect(() => {
+    if (reviewsPage > 1) {
+      const loadMoreReviews = async () => {
+        try {
+          setReviewsLoading(true);
+          const response = await fetch(`/api/reviews/product/${product.slug}?page=${reviewsPage}&limit=5`);
+          if (response.ok) {
+            const data = await response.json();
+            setReviews(data.reviews);
+            setReviewStats(data.statistics);
+            setReviewsPagination(data.pagination);
+          }
+        } catch (error) {
+          console.error('Error loading reviews:', error);
+        } finally {
+          setReviewsLoading(false);
+        }
+      };
+
+      loadMoreReviews();
+    }
+  }, [product.slug, reviewsPage]);
+
   // Handle scroll to hide breadcrumb behind search bar
   useEffect(() => {
     const handleScroll = () => {
@@ -157,7 +229,7 @@ export default function ProductDisplay({ product, descriptionHtml, recommendedPr
       <div className="fixed top-16 left-0 right-0 z-40 bg-white border-b border-gray-200 px-4 py-3 md:hidden">
         <SearchBar 
           placeholder="Luke Littler, Dartpfeile..."
-          maxResults={4}
+          maxResults={10}
         />
       </div>
 
@@ -302,16 +374,45 @@ export default function ProductDisplay({ product, descriptionHtml, recommendedPr
 
             {/* Stars & Review */}
             <div className="flex items-center gap-2 mb-4">
-              <div className="flex">
-                {[...Array(5)].map((_, i) => (
-                  <svg key={i} className="w-4 h-4 text-gray-300" fill="currentColor" viewBox="0 0 20 20">
-                    <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
-                  </svg>
-                ))}
-              </div>
-              <span className="text-sm text-blue-600 hover:underline cursor-pointer">
-                Bewertung schreiben
-              </span>
+              {reviewStats && reviewStats.totalReviews > 0 ? (
+                <>
+                  <div className="flex">
+                    {[1, 2, 3, 4, 5].map((star) => (
+                      <span
+                        key={star}
+                        className={`text-lg ${
+                          star <= Math.round(reviewStats.averageRating)
+                            ? 'text-yellow-400'
+                            : 'text-gray-300'
+                        }`}
+                      >
+                        ★
+                      </span>
+                    ))}
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm font-medium text-gray-900">
+                      {reviewStats.averageRating.toFixed(1)}
+                    </span>
+                    <span className="text-sm text-gray-600">
+                      ({reviewStats.totalReviews} Bewertungen)
+                    </span>
+                  </div>
+                </>
+              ) : (
+                <>
+                  <div className="flex">
+                    {[1, 2, 3, 4, 5].map((star) => (
+                      <span key={star} className="text-lg text-gray-300">
+                        ★
+                      </span>
+                    ))}
+                  </div>
+                  <span className="text-sm text-gray-500">
+                    Noch keine Bewertungen
+                  </span>
+                </>
+              )}
             </div>
 
             {/* Price */}
@@ -349,10 +450,18 @@ export default function ProductDisplay({ product, descriptionHtml, recommendedPr
                 )}
               </div>
               <div className="flex items-center text-sm text-gray-600">
-                <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                </svg>
-                inkl. MwSt. zzgl. Versandkosten
+                <div className="relative group">
+                  <svg className="w-4 h-4 mr-1 cursor-help" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                  {/* Tooltip */}
+                  <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-3 py-2 bg-gray-900 text-white text-xs rounded-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 whitespace-nowrap z-10">
+                    Alle Preise sind Endpreise zzgl. Versandkosten. Gemäß § 19 UStG wird keine Umsatzsteuer erhoben und ausgewiesen.
+                    {/* Tooltip arrow */}
+                    <div className="absolute top-full left-1/2 transform -translate-x-1/2 border-4 border-transparent border-t-gray-900"></div>
+                  </div>
+                </div>
+                <span className="text-gray-500">Preisinformationen</span>
               </div>
             </div>
 
@@ -543,6 +652,19 @@ export default function ProductDisplay({ product, descriptionHtml, recommendedPr
                 </svg>
                 Eigenschaften
               </button>
+              <button 
+                onClick={() => setActiveTab('reviews')}
+                className={`flex-1 py-4 px-6 text-sm font-medium flex items-center justify-center transition-colors ${
+                  activeTab === 'reviews' 
+                    ? 'bg-blue-50 text-blue-600 border-b-2 border-blue-500' 
+                    : 'text-gray-500 hover:text-gray-700 hover:bg-gray-100'
+                }`}
+              >
+                <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.197-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.784-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z" />
+                </svg>
+                Bewertungen ({reviewStats?.totalReviews || 0})
+              </button>
             </nav>
           </div>
           
@@ -567,6 +689,176 @@ export default function ProductDisplay({ product, descriptionHtml, recommendedPr
                 </div>
               ) : (
                 <p className="text-gray-500">Keine Eigenschaften verfügbar.</p>
+              )}
+            </div>
+          )}
+          
+          {activeTab === 'reviews' && (
+            <div className="space-y-6">
+              {reviewStats && reviewStats.totalReviews > 0 ? (
+                <>
+                  {/* Review Statistics */}
+                  <div className="bg-gray-50 rounded-lg p-6">
+                    <div className="flex items-center gap-6 mb-4">
+                      <div className="text-center">
+                        <div className="text-4xl font-bold text-gray-900">
+                          {reviewStats.averageRating.toFixed(1)}
+                        </div>
+                        <div className="flex justify-center mt-1">
+                          {[1, 2, 3, 4, 5].map((star) => (
+                            <span
+                              key={star}
+                              className={`text-lg ${
+                                star <= Math.round(reviewStats.averageRating)
+                                  ? 'text-yellow-400'
+                                  : 'text-gray-300'
+                              }`}
+                            >
+                              ★
+                            </span>
+                          ))}
+                        </div>
+                        <div className="text-sm text-gray-600 mt-1">
+                          {reviewStats.totalReviews} Bewertungen
+                        </div>
+                      </div>
+                      
+                      {/* Rating Distribution */}
+                      <div className="flex-1">
+                        {[5, 4, 3, 2, 1].map((rating) => (
+                          <div key={rating} className="flex items-center gap-2 mb-2">
+                            <span className="text-sm text-gray-600 w-8">{rating}</span>
+                            <span className="text-yellow-400">★</span>
+                            <div className="flex-1 bg-gray-200 rounded-full h-2">
+                              <div 
+                                className="bg-yellow-400 h-2 rounded-full"
+                                style={{ 
+                                  width: `${reviewStats.totalReviews > 0 ? (reviewStats.ratingDistribution[rating as keyof typeof reviewStats.ratingDistribution] / reviewStats.totalReviews) * 100 : 0}%` 
+                                }}
+                              ></div>
+                            </div>
+                            <span className="text-sm text-gray-600 w-8">
+                              {reviewStats.ratingDistribution[rating as keyof typeof reviewStats.ratingDistribution]}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                  
+                  {/* Individual Reviews */}
+                  <div className="space-y-4">
+                    <h3 className="text-lg font-semibold text-gray-900">Kundenbewertungen</h3>
+                    {reviewsLoading ? (
+                      <div className="text-center py-8">
+                        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
+                        <p className="text-gray-500 mt-2">Lade Bewertungen...</p>
+                      </div>
+                    ) : reviews.length > 0 ? (
+                      reviews.map((review) => (
+                        <div key={review._id} className="border border-gray-200 rounded-lg p-4">
+                          <div className="flex items-start justify-between mb-2">
+                            <div className="flex items-center gap-2">
+                              <div className="flex">
+                                {[1, 2, 3, 4, 5].map((star) => (
+                                  <span
+                                    key={star}
+                                    className={`text-sm ${
+                                      star <= review.rating
+                                        ? 'text-yellow-400'
+                                        : 'text-gray-300'
+                                    }`}
+                                  >
+                                    ★
+                                  </span>
+                                ))}
+                              </div>
+                              <span className="text-sm font-medium text-gray-900">
+                                {review.user.name}
+                              </span>
+                              {review.isVerified && (
+                                <span className="text-xs bg-green-100 text-green-800 px-2 py-1 rounded-full">
+                                  ✓ Verifizierter Kauf
+                                </span>
+                              )}
+                            </div>
+                            <span className="text-xs text-gray-500">
+                              {new Date(review.createdAt).toLocaleDateString('de-DE')}
+                            </span>
+                          </div>
+                          {review.title && (
+                            <h4 className="font-medium text-gray-900 mb-2">{review.title}</h4>
+                          )}
+                          {review.comment && (
+                            <p className="text-gray-700 text-sm">{review.comment}</p>
+                          )}
+                        </div>
+                      ))
+                    ) : (
+                      <p className="text-gray-500 text-center py-8">
+                        Noch keine Bewertungen vorhanden.
+                      </p>
+                    )}
+                    
+                    {/* Pagination */}
+                    {reviewsPagination && reviewsPagination.pages > 1 && (
+                      <div className="flex items-center justify-center gap-2 mt-6">
+                        <button
+                          onClick={() => setReviewsPage(Math.max(1, reviewsPage - 1))}
+                          disabled={reviewsPage === 1}
+                          className={`px-3 py-2 text-sm rounded-lg transition-colors ${
+                            reviewsPage === 1
+                              ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                              : 'bg-white border border-gray-300 text-gray-700 hover:bg-gray-50'
+                          }`}
+                        >
+                          ← Zurück
+                        </button>
+                        
+                        <div className="flex items-center gap-1">
+                          {Array.from({ length: reviewsPagination.pages }, (_, i) => i + 1).map((page) => (
+                            <button
+                              key={page}
+                              onClick={() => setReviewsPage(page)}
+                              className={`px-3 py-2 text-sm rounded-lg transition-colors ${
+                                page === reviewsPage
+                                  ? 'bg-blue-600 text-white'
+                                  : 'bg-white border border-gray-300 text-gray-700 hover:bg-gray-50'
+                              }`}
+                            >
+                              {page}
+                            </button>
+                          ))}
+                        </div>
+                        
+                        <button
+                          onClick={() => setReviewsPage(Math.min(reviewsPagination.pages, reviewsPage + 1))}
+                          disabled={reviewsPage === reviewsPagination.pages}
+                          className={`px-3 py-2 text-sm rounded-lg transition-colors ${
+                            reviewsPage === reviewsPagination.pages
+                              ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                              : 'bg-white border border-gray-300 text-gray-700 hover:bg-gray-50'
+                          }`}
+                        >
+                          Weiter →
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                </>
+              ) : (
+                <div className="text-center py-12">
+                  <div className="text-6xl mb-4">⭐</div>
+                  <h3 className="text-lg font-semibold text-gray-900 mb-2">
+                    Noch keine Bewertungen
+                  </h3>
+                  <p className="text-gray-600 mb-4">
+                    Sei der Erste, der dieses Produkt bewertet!
+                  </p>
+                  <button className="bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700 transition-colors">
+                    Bewertung schreiben
+                  </button>
+                </div>
               )}
             </div>
           )}

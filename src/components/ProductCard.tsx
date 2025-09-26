@@ -31,6 +31,10 @@ interface ProductCardProps {
         priceAdjustment?: number;
       }>;
     }>;
+    reviews?: {
+      averageRating: number;
+      totalReviews: number;
+    };
   };
   variant?: 'default' | 'carousel';
 }
@@ -111,8 +115,14 @@ export default function ProductCard({ product, variant = 'default' }: ProductCar
     setIsHovered(false);
   };
 
-  // Check if product is out of stock (considering variations)
+  // Check if product is out of stock (considering variations) or use API-provided availability
   const isOutOfStock = () => {
+    // Prefer server-computed availability if present
+    // @ts-ignore allow optional field from API
+    if ((product as any).isAvailable !== undefined) {
+      // @ts-ignore
+      return !(product as any).isAvailable;
+    }
     // If no variations, use main product stock
     if (!product.variations || product.variations.length === 0) {
       return !product.inStock || (product.stockQuantity || 0) <= 0;
@@ -175,7 +185,7 @@ export default function ProductCard({ product, variant = 'default' }: ProductCar
       addItem({
         slug: product.slug,
         title: product.title,
-        price: product.offerPrice || product.price,
+        price: getTotalPrice() * 100, // Convert to cents and include variations
         quantity: quantity,
         variations: selectedVariations,
         image: product.images[0],
@@ -334,16 +344,33 @@ export default function ProductCard({ product, variant = 'default' }: ProductCar
               {product.title}
             </div>
             
-            {/* Rating (placeholder for now) */}
+            {/* Reviews */}
             <div className="flex items-center gap-1 mt-2">
-              <div className="flex text-orange-400">
-                {[...Array(5)].map((_, i) => (
-                  <svg key={i} className="w-4 h-4 fill-current" viewBox="0 0 20 20">
-                    <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
-                  </svg>
+              <div className="flex">
+                {[1, 2, 3, 4, 5].map((star) => (
+                  <span
+                    key={star}
+                    className={`text-sm ${
+                      product.reviews && product.reviews.totalReviews > 0
+                        ? star <= Math.round(product.reviews.averageRating)
+                          ? 'text-yellow-400'
+                          : 'text-gray-300'
+                        : 'text-gray-300'
+                    }`}
+                  >
+                    ★
+                  </span>
                 ))}
               </div>
-              <span className="text-sm text-gray-500">4,76 (37)</span>
+              {product.reviews && product.reviews.totalReviews > 0 ? (
+                <span className="text-sm text-gray-500">
+                  {product.reviews.averageRating.toFixed(1)} ({product.reviews.totalReviews})
+                </span>
+              ) : (
+                <span className="text-sm text-gray-500">
+                  Noch keine Bewertungen
+                </span>
+              )}
             </div>
 
             {/* Price and Cart Button Row */}
@@ -381,7 +408,7 @@ export default function ProductCard({ product, variant = 'default' }: ProductCar
                 <div className="flex items-center gap-1 mr-2 flex-shrink-0">
                   <div className={`w-2 h-2 rounded-full ${!isOutOfStock() ? 'bg-green-500' : 'bg-red-500'}`}></div>
                   <span className={`text-[10px] font-medium ${!isOutOfStock() ? 'text-green-600' : 'text-red-600'}`}>
-                    {!isOutOfStock() ? 'Auf Lager' : 'Nicht verfügbar'}
+                    {!isOutOfStock() ? 'Auf Lager' : 'Ausverkauft'}
                   </span>
                 </div>
               )}
@@ -468,6 +495,35 @@ export default function ProductCard({ product, variant = 'default' }: ProductCar
               {product.title}
             </div>
             
+            {/* Reviews */}
+            <div className="flex items-center gap-2 mb-2">
+              <div className="flex items-center">
+                {[1, 2, 3, 4, 5].map((star) => (
+                  <span
+                    key={star}
+                    className={`text-sm ${
+                      product.reviews && product.reviews.totalReviews > 0
+                        ? star <= Math.round(product.reviews.averageRating)
+                          ? 'text-yellow-400'
+                          : 'text-gray-300'
+                        : 'text-gray-300'
+                    }`}
+                  >
+                    ★
+                  </span>
+                ))}
+              </div>
+              {product.reviews && product.reviews.totalReviews > 0 ? (
+                <span className="text-xs text-gray-600">
+                  ({product.reviews.totalReviews})
+                </span>
+              ) : (
+                <span className="text-xs text-gray-500">
+                  (0)
+                </span>
+              )}
+            </div>
+            
             {/* Price with large Euro and small Cent */}
             <div className="mb-2 sm:mb-3 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 sm:gap-0">
               <div className="flex-1">
@@ -504,7 +560,7 @@ export default function ProductCard({ product, variant = 'default' }: ProductCar
                   <div className="flex items-center gap-1">
                     <div className={`w-2 h-2 rounded-full ${!isOutOfStock() ? 'bg-green-500' : 'bg-red-500'}`}></div>
                     <span className={`text-[10px] sm:text-xs font-medium ${!isOutOfStock() ? 'text-green-600' : 'text-red-600'}`}>
-                      {!isOutOfStock() ? 'Auf Lager' : 'Nicht verfügbar'}
+                      {!isOutOfStock() ? 'Auf Lager' : 'Ausverkauft'}
                     </span>
                   </div>
                 )}
@@ -603,10 +659,10 @@ export default function ProductCard({ product, variant = 'default' }: ProductCar
                           disabled={!optionInStock || optionStock <= 0}
                         >
                           {option.value} 
-                          {option.priceAdjustment !== undefined && option.priceAdjustment > 0 && ` (+${(option.priceAdjustment / 100).toFixed(2)})`}
-                          {option.priceAdjustment !== undefined && option.priceAdjustment < 0 && ` (${(option.priceAdjustment / 100).toFixed(2)})`}
+                          {option.priceAdjustment !== undefined && option.priceAdjustment > 0 && ` (+${(option.priceAdjustment / 100).toFixed(2)}€)`}
+                          {option.priceAdjustment !== undefined && option.priceAdjustment < 0 && ` (${(option.priceAdjustment / 100).toFixed(2)}€)`}
                           {optionStock > 0 && ` - ${optionStock} verfügbar`}
-                          {(!optionInStock || optionStock <= 0) && ' - Nicht verfügbar'}
+                          {(!optionInStock || optionStock <= 0) && ' - Ausverkauft'}
                         </option>
                       );
                     })}
@@ -631,7 +687,7 @@ export default function ProductCard({ product, variant = 'default' }: ProductCar
                       </span>
                     ) : (
                       <span className="text-red-600 font-medium">
-                        Nicht verfügbar
+                        Ausverkauft
                       </span>
                     )}
                   </div>

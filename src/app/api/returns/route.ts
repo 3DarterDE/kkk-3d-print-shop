@@ -3,12 +3,13 @@ import { requireUser } from '@/lib/auth';
 import { connectToDatabase } from '@/lib/mongodb';
 import Order from '@/lib/models/Order';
 import ReturnRequest from '@/lib/models/Return';
+import User from '@/lib/models/User';
 import { sendReturnReceivedEmail } from '@/lib/email';
 
 export async function POST(request: NextRequest) {
   try {
     const { user, response } = await requireUser();
-    if (!user) return response;
+    if (!user) return response!;
 
     const body = await request.json();
     const { orderId, items, notes } = body as {
@@ -22,6 +23,12 @@ export async function POST(request: NextRequest) {
     }
 
     await connectToDatabase();
+
+    // Fetch user data to get firstName and lastName
+    const userData = await User.findById(user._id.toString());
+    if (!userData) {
+      return NextResponse.json({ error: 'Benutzer nicht gefunden' }, { status: 404 });
+    }
 
     const order = await Order.findById(orderId).lean();
     if (!order || order.userId !== user._id.toString()) {
@@ -73,8 +80,10 @@ export async function POST(request: NextRequest) {
       orderNumber: order.orderNumber,
       userId: user._id.toString(),
       customer: {
-        name: user.name,
-        email: user.email,
+        name: userData.firstName && userData.lastName 
+          ? `${userData.firstName} ${userData.lastName}` 
+          : userData.name || 'Kunde',
+        email: userData.email,
       },
       items: normalizedItems,
       status: 'received',
@@ -88,9 +97,13 @@ export async function POST(request: NextRequest) {
 
     // Send confirmation email to customer
     try {
+      const customerName = userData.firstName && userData.lastName 
+        ? `${userData.firstName} ${userData.lastName}` 
+        : userData.name || 'Kunde';
+      
       await sendReturnReceivedEmail({
-        name: user.name,
-        email: user.email,
+        name: customerName,
+        email: userData.email,
         orderNumber: order.orderNumber,
         items: normalizedItems.map((it: any) => ({ name: it.name, quantity: it.quantity, variations: it.variations })),
       });

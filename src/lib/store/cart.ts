@@ -88,6 +88,7 @@ export const useCartStore = create<CartState>()(
               });
             }
           } else {
+            // Add new item with the correct price (already calculated with variations)
             set({ items: [...get().items, item] });
           }
           
@@ -195,7 +196,8 @@ export const useCartStore = create<CartState>()(
                     adjustedQuantity = availableStock;
                   }
                   
-                  // Always update with current product data, but preserve existing image data
+                  // Always update price to ensure it's current (handles price changes, sales, etc.)
+                  // This ensures prices stay up-to-date even if product prices change
                   itemsToUpdate.push({
                     ...currentItem,
                     price: correctPrice,

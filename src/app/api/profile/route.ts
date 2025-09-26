@@ -13,39 +13,46 @@ export async function GET() {
 
   await connectToDatabase();
   const user = await User.findOne({ auth0Id: session.user.sub }).lean();
+  if (!user) return NextResponse.json({ error: 'User not found' }, { status: 404 });
+  
   const orders = await Order.find({ userId: user._id.toString() }).sort({ createdAt: -1 }).limit(5).lean();
   // const addresses = await Address.find({ userId: user._id }).lean();
   return NextResponse.json({
     user: {
-      name: user?.name,
-      salutation: user?.salutation,
-      firstName: user?.firstName,
-      lastName: user?.lastName,
-      email: user?.email,
-      phone: user?.phone,
-      dateOfBirth: user?.dateOfBirth,
+      name: user.name,
+      salutation: user.salutation,
+      firstName: user.firstName,
+      lastName: user.lastName,
+      email: user.email,
+      phone: user.phone,
+      dateOfBirth: user.dateOfBirth,
       address: {
-        company: user?.address?.company,
-        street: user?.address?.street,
-        houseNumber: user?.address?.houseNumber,
-        addressLine2: user?.address?.addressLine2,
-        city: user?.address?.city,
-        postalCode: user?.address?.postalCode,
-        country: user?.address?.country
+        firstName: user.address?.firstName,
+        lastName: user.address?.lastName,
+        company: user.address?.company,
+        street: user.address?.street,
+        houseNumber: user.address?.houseNumber,
+        addressLine2: user.address?.addressLine2,
+        city: user.address?.city,
+        postalCode: user.address?.postalCode,
+        country: user.address?.country
       },
       billingAddress: {
-        company: user?.billingAddress?.company,
-        street: user?.billingAddress?.street,
-        houseNumber: user?.billingAddress?.houseNumber,
-        addressLine2: user?.billingAddress?.addressLine2,
-        city: user?.billingAddress?.city,
-        postalCode: user?.billingAddress?.postalCode,
-        country: user?.billingAddress?.country
+        firstName: user.billingAddress?.firstName,
+        lastName: user.billingAddress?.lastName,
+        company: user.billingAddress?.company,
+        street: user.billingAddress?.street,
+        houseNumber: user.billingAddress?.houseNumber,
+        addressLine2: user.billingAddress?.addressLine2,
+        city: user.billingAddress?.city,
+        postalCode: user.billingAddress?.postalCode,
+        country: user.billingAddress?.country
       },
-      paymentMethod: user?.paymentMethod,
-      isAdmin: user?.isAdmin,
-      isVerified: user?.isVerified,
-      createdAt: user?.createdAt,
+      paymentMethod: user.paymentMethod,
+      isAdmin: user.isAdmin,
+      isVerified: user.isVerified,
+      bonusPoints: user.bonusPoints,
+      createdAt: user.createdAt,
     },
     orders: orders || [],
     addresses: [], // später ersetzen

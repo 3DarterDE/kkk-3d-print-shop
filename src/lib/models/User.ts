@@ -11,6 +11,8 @@ export interface IUser {
   phone?: string;
   dateOfBirth?: Date;
   address?: {
+    firstName?: string;
+    lastName?: string;
     company?: string;
     street?: string;
     houseNumber?: string;
@@ -20,6 +22,8 @@ export interface IUser {
     country?: string;
   };
   billingAddress?: {
+    firstName?: string;
+    lastName?: string;
     company?: string;
     street?: string;
     houseNumber?: string;
@@ -33,11 +37,14 @@ export interface IUser {
   newsletterSubscribedAt?: Date;
   isAdmin: boolean;
   isVerified?: boolean;
+  bonusPoints: number; // Bonuspunkte-Guthaben des Users
   createdAt?: Date;
   updatedAt?: Date;
 }
 
 const AddressSchema = new Schema({
+  firstName: { type: String },
+  lastName: { type: String },
   company: { type: String },
   street: { type: String },
   houseNumber: { type: String },
@@ -71,6 +78,7 @@ const UserSchema = new Schema<IUser>({
   newsletterSubscribedAt: { type: Date },
   isAdmin: { type: Boolean, default: false, index: true },
   isVerified: { type: Boolean, default: false },
+  bonusPoints: { type: Number, default: 0 }, // Bonuspunkte-Guthaben, startet bei 0
 }, { timestamps: true });
 
 if (mongoose.models.User) {

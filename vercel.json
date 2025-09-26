@@ -1,0 +1,12 @@
+{
+  "crons": [
+    {
+      "path": "/api/cron/credit-bonus-points",
+      "schedule": "0 2 * * *"
+    },
+    {
+      "path": "/api/cron/cleanup-cache",
+      "schedule": "0 3 * * *"
+    }
+  ]
+}

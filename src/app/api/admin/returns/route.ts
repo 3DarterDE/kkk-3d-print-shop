@@ -6,7 +6,7 @@ import ReturnRequest from '@/lib/models/Return';
 export async function GET(request: NextRequest) {
   try {
     const { user, response } = await requireAdmin();
-    if (!user) return response;
+    if (!user) return response!;
 
     await connectToDatabase();
 

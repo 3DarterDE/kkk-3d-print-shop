@@ -2,6 +2,8 @@
 
 import { useEffect, useState } from "react";
 import { useCartStore } from "@/lib/store/cart";
+import { useUserData } from "@/lib/contexts/UserDataContext";
+import { useSearchParams } from "next/navigation";
 
 export type CheckoutFormData = {
   firstName: string;
@@ -10,6 +12,8 @@ export type CheckoutFormData = {
   email: string;
   phone: string;
   shippingAddress: {
+    firstName: string;
+    lastName: string;
     company: string;
     street: string;
     houseNumber: string;
@@ -19,7 +23,8 @@ export type CheckoutFormData = {
     country: string;
   };
   billingAddress: {
-    salutation: string;
+    firstName: string;
+    lastName: string;
     company: string;
     street: string;
     houseNumber: string;
@@ -45,17 +50,88 @@ export default function CheckoutClient({ initialIsLoggedIn, initialFormData, ini
   const [errorMessage, setErrorMessage] = useState('');
   const [fieldErrors, setFieldErrors] = useState<Record<string, boolean>>({});
   const [completedSteps, setCompletedSteps] = useState<number[]>([]);
+  const [redeemPoints, setRedeemPoints] = useState(false);
+  const [pointsToRedeem, setPointsToRedeem] = useState(0);
+
+  const { user } = useUserData();
+  const searchParams = useSearchParams();
   const [currentStep, setCurrentStep] = useState(initialStep);
   const [isLoggedIn, setIsLoggedIn] = useState(initialIsLoggedIn);
-  const { items, clear } = useCartStore();
+  const { items, clear, validateItems } = useCartStore();
   
   const [formData, setFormData] = useState<CheckoutFormData>(initialFormData);
   const [useSameAddress, setUseSameAddress] = useState(false);
+
+  // Bonuspunkte-Berechnung: Automatisch höchsten verfügbaren Rabatt nehmen
+  const getPointsDiscount = (points: number, orderTotal: number) => {
+    const maxDiscount = orderTotal - 1; // Mindestens 1 Cent zu bezahlen
+    
+    // Prüfe von höchstem zu niedrigstem Rabatt
+    if (points >= 5000 && 50 * 100 <= maxDiscount) return 50 * 100; // 50€
+    if (points >= 4000 && 35 * 100 <= maxDiscount) return 35 * 100; // 35€
+    if (points >= 3000 && 20 * 100 <= maxDiscount) return 20 * 100; // 20€
+    if (points >= 2000 && 10 * 100 <= maxDiscount) return 10 * 100; // 10€
+    if (points >= 1000 && 5 * 100 <= maxDiscount) return 5 * 100;   // 5€
+    
+    return 0;
+  };
+  
+  // Automatisch den besten verfügbaren Rabatt ermitteln
+  const getBestAvailableDiscount = (availablePoints: number, orderTotal: number) => {
+    const maxDiscount = orderTotal - 1; // Mindestens 1 Cent zu bezahlen
+    
+    if (availablePoints >= 5000 && 50 * 100 <= maxDiscount) return { points: 5000, amount: 50 };
+    if (availablePoints >= 4000 && 35 * 100 <= maxDiscount) return { points: 4000, amount: 35 };
+    if (availablePoints >= 3000 && 20 * 100 <= maxDiscount) return { points: 3000, amount: 20 };
+    if (availablePoints >= 2000 && 10 * 100 <= maxDiscount) return { points: 2000, amount: 10 };
+    if (availablePoints >= 1000 && 5 * 100 <= maxDiscount) return { points: 1000, amount: 5 };
+    
+    return null;
+  };
+  
+  const availablePoints = user?.bonusPoints || 0;
+  const totalWithShipping = total + (total < 8000 ? 495 : 0);
+  const pointsDiscount = redeemPoints && pointsToRedeem ? getPointsDiscount(pointsToRedeem, totalWithShipping) : 0;
+  
+  // Versandkosten berechnen: unter 80€ = 4,95€, ab 80€ kostenlos
+  const shippingCosts = total < 8000 ? 495 : 0; // 8000 Cent = 80€, 495 Cent = 4,95€
+  const subtotalAfterDiscount = Math.max(0, total - pointsDiscount);
+  const finalTotal = Math.max(0, totalWithShipping - pointsDiscount);
 
   useEffect(() => {
     const calculatedTotal = items.reduce((sum, item) => sum + (item.price * item.quantity), 0);
     setTotal(calculatedTotal);
   }, [items]);
+
+  // URL-Parameter für Bonuspunkte-Einlösung lesen
+  useEffect(() => {
+    const redeemPointsParam = searchParams.get('redeemPoints');
+    const pointsToRedeemParam = searchParams.get('pointsToRedeem');
+    
+    if (redeemPointsParam === 'true' && pointsToRedeemParam) {
+      setRedeemPoints(true);
+      setPointsToRedeem(parseInt(pointsToRedeemParam, 10));
+    }
+  }, [searchParams]);
+
+  // Automatisch den besten Rabatt auswählen basierend auf Gesamtbetrag inklusive Versandkosten
+  useEffect(() => {
+    if (redeemPoints && availablePoints >= 1000) {
+      // Berechne Gesamtbetrag inklusive Versandkosten für Bonuspunkte-Berechnung
+      const totalWithShipping = total + (total < 8000 ? 495 : 0);
+      const bestDiscount = getBestAvailableDiscount(availablePoints, totalWithShipping);
+      if (bestDiscount && pointsToRedeem !== bestDiscount.points) {
+        setPointsToRedeem(bestDiscount.points);
+      }
+    }
+  }, [redeemPoints, availablePoints, total]);
+
+  // Validate cart items on mount to ensure prices are current
+  useEffect(() => {
+    if (items.length > 0) {
+      validateItems();
+    }
+  }, [items.length, validateItems]);
 
   const handleInputChange = (field: string, value: string | boolean) => {
     if (field.includes('.')) {
@@ -86,12 +162,24 @@ export default function CheckoutClient({ initialIsLoggedIn, initialFormData, ini
         if (!formData.email) { errors.email = true; isValid = false; }
         break;
       case 2:
+        if (!formData.shippingAddress.firstName) { errors['shippingAddress.firstName'] = true; isValid = false; }
+        if (!formData.shippingAddress.lastName) { errors['shippingAddress.lastName'] = true; isValid = false; }
         if (!formData.shippingAddress.street) { errors['shippingAddress.street'] = true; isValid = false; }
         if (!formData.shippingAddress.houseNumber) { errors['shippingAddress.houseNumber'] = true; isValid = false; }
         if (!formData.shippingAddress.city) { errors['shippingAddress.city'] = true; isValid = false; }
         if (!formData.shippingAddress.postalCode) { errors['shippingAddress.postalCode'] = true; isValid = false; }
         break;
       case 3:
+        if (!useSameAddress) {
+          if (!formData.billingAddress.firstName) { errors['billingAddress.firstName'] = true; isValid = false; }
+          if (!formData.billingAddress.lastName) { errors['billingAddress.lastName'] = true; isValid = false; }
+          if (!formData.billingAddress.street) { errors['billingAddress.street'] = true; isValid = false; }
+          if (!formData.billingAddress.houseNumber) { errors['billingAddress.houseNumber'] = true; isValid = false; }
+          if (!formData.billingAddress.city) { errors['billingAddress.city'] = true; isValid = false; }
+          if (!formData.billingAddress.postalCode) { errors['billingAddress.postalCode'] = true; isValid = false; }
+        }
+        break;
+      case 4:
         if (!formData.paymentMethod) { errors.paymentMethod = true; isValid = false; }
         break;
     }
@@ -106,10 +194,12 @@ export default function CheckoutClient({ initialIsLoggedIn, initialFormData, ini
       case 1:
         return formData.salutation && formData.firstName && formData.lastName && formData.email;
       case 2:
-        return formData.shippingAddress.street && formData.shippingAddress.houseNumber && 
+        return formData.shippingAddress.firstName && formData.shippingAddress.lastName && 
+               formData.shippingAddress.street && formData.shippingAddress.houseNumber && 
                formData.shippingAddress.city && formData.shippingAddress.postalCode;
       case 3:
-        return useSameAddress || (formData.billingAddress.street && formData.billingAddress.houseNumber && 
+        return useSameAddress || (formData.billingAddress.firstName && formData.billingAddress.lastName && 
+               formData.billingAddress.street && formData.billingAddress.houseNumber && 
                formData.billingAddress.city && formData.billingAddress.postalCode);
       case 4:
         return formData.paymentMethod;
@@ -160,7 +250,7 @@ export default function CheckoutClient({ initialIsLoggedIn, initialFormData, ini
         items: items.map(item => ({
           productId: item.slug,
           name: item.title,
-          price: item.price / 100,
+          price: item.price,
           quantity: item.quantity,
           image: item.image,
           variations: item.variations
@@ -168,6 +258,8 @@ export default function CheckoutClient({ initialIsLoggedIn, initialFormData, ini
         shippingAddress: formData.shippingAddress,
         billingAddress: formData.useSameAddress ? formData.shippingAddress : formData.billingAddress,
         paymentMethod: formData.paymentMethod,
+        redeemPoints: redeemPoints,
+        pointsToRedeem: pointsToRedeem,
       };
 
       // For logged-in users, create order in database
@@ -406,6 +498,31 @@ export default function CheckoutClient({ initialIsLoggedIn, initialFormData, ini
                     />
                   </div>
 
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">Vorname *</label>
+                      <input 
+                        type="text" 
+                        value={formData.shippingAddress.firstName} 
+                        onChange={(e) => handleInputChange('shippingAddress.firstName', e.target.value)} 
+                        className={`w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${fieldErrors['shippingAddress.firstName'] ? 'border-red-500 bg-red-50' : 'border-gray-300'}`}
+                        required 
+                      />
+                      {fieldErrors['shippingAddress.firstName'] && (<p className="mt-1 text-sm text-red-600">Dieses Feld ist erforderlich</p>)}
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">Nachname *</label>
+                      <input 
+                        type="text" 
+                        value={formData.shippingAddress.lastName} 
+                        onChange={(e) => handleInputChange('shippingAddress.lastName', e.target.value)} 
+                        className={`w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${fieldErrors['shippingAddress.lastName'] ? 'border-red-500 bg-red-50' : 'border-gray-300'}`}
+                        required 
+                      />
+                      {fieldErrors['shippingAddress.lastName'] && (<p className="mt-1 text-sm text-red-600">Dieses Feld ist erforderlich</p>)}
+                    </div>
+                  </div>
+
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                     <div className="md:col-span-2">
                       <label className="block text-sm font-medium text-gray-700 mb-2">Straße *</label>
@@ -467,7 +584,17 @@ export default function CheckoutClient({ initialIsLoggedIn, initialFormData, ini
                     <input
                       type="checkbox"
                       checked={useSameAddress}
-                      onChange={(e) => setUseSameAddress(e.target.checked)}
+                      onChange={(e) => {
+                        setUseSameAddress(e.target.checked);
+                        if (e.target.checked) {
+                          setFormData(prev => ({
+                            ...prev,
+                            billingAddress: {
+                              ...prev.shippingAddress
+                            }
+                          }));
+                        }
+                      }}
                       className="mr-2"
                     />
                     <span className="text-sm text-gray-700">Gleich wie Lieferadresse</span>
@@ -486,6 +613,31 @@ export default function CheckoutClient({ initialIsLoggedIn, initialFormData, ini
                           className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                           placeholder="Firmenname (optional)"
                         />
+                      </div>
+
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-2">Vorname *</label>
+                          <input
+                            type="text"
+                            value={formData.billingAddress.firstName}
+                            onChange={(e) => handleInputChange('billingAddress.firstName', e.target.value)}
+                            className={`w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${fieldErrors['billingAddress.firstName'] ? 'border-red-500 bg-red-50' : 'border-gray-300'}`}
+                            required
+                          />
+                          {fieldErrors['billingAddress.firstName'] && (<p className="mt-1 text-sm text-red-600">Dieses Feld ist erforderlich</p>)}
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-2">Nachname *</label>
+                          <input
+                            type="text"
+                            value={formData.billingAddress.lastName}
+                            onChange={(e) => handleInputChange('billingAddress.lastName', e.target.value)}
+                            className={`w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${fieldErrors['billingAddress.lastName'] ? 'border-red-500 bg-red-50' : 'border-gray-300'}`}
+                            required
+                          />
+                          {fieldErrors['billingAddress.lastName'] && (<p className="mt-1 text-sm text-red-600">Dieses Feld ist erforderlich</p>)}
+                        </div>
                       </div>
                       <div className="grid grid-cols-1 md:grid-cols-12 gap-4">
                         <div className="md:col-span-8">
@@ -661,7 +813,7 @@ export default function CheckoutClient({ initialIsLoggedIn, initialFormData, ini
                         <p className="font-medium text-slate-800">{formData.shippingAddress.company}</p>
                       )}
                       <p className="font-medium text-slate-800">
-                        {formData.salutation} {formData.firstName} {formData.lastName}
+                        {formData.shippingAddress.firstName} {formData.shippingAddress.lastName}
                       </p>
                       <p className="text-slate-600">{formData.shippingAddress.street} {formData.shippingAddress.houseNumber}{formData.shippingAddress.addressLine2 && `, ${formData.shippingAddress.addressLine2}`}</p>
                       <p className="text-slate-600">{formData.shippingAddress.postalCode} {formData.shippingAddress.city}</p>
@@ -680,7 +832,7 @@ export default function CheckoutClient({ initialIsLoggedIn, initialFormData, ini
                         <p className="font-medium text-slate-800">{formData.billingAddress.company}</p>
                       )}
                       <p className="font-medium text-slate-800">
-                        {formData.salutation} {formData.firstName} {formData.lastName}
+                        {formData.billingAddress.firstName} {formData.billingAddress.lastName}
                       </p>
                       <p className="text-slate-600">{formData.billingAddress.street} {formData.billingAddress.houseNumber}{formData.billingAddress.addressLine2 && `, ${formData.billingAddress.addressLine2}`}</p>
                       <p className="text-slate-600">{formData.billingAddress.postalCode} {formData.billingAddress.city}</p>
@@ -742,10 +894,61 @@ export default function CheckoutClient({ initialIsLoggedIn, initialFormData, ini
 
               <div className="border-t border-slate-200 pt-4 space-y-2">
                 <div className="flex justify-between text-sm"><span className="text-slate-600">Zwischensumme</span><span className="text-slate-800">€{(total / 100).toFixed(2)}</span></div>
-                <div className="flex justify-between text-sm"><span className="text-slate-600">Versand</span><span className="text-slate-800">€0.00</span></div>
-                <div className="flex justify-between text-sm"><span className="text-slate-600">MwSt.</span><span className="text-slate-800">€{((total * 0.19) / 100).toFixed(2)}</span></div>
-                <div className="flex justify-between text-lg font-semibold border-t border-slate-200 pt-2"><span className="text-slate-800">Gesamt</span><span className="text-slate-800">€{((total * 1.19) / 100).toFixed(2)}</span></div>
+                
+                {/* Bonuspunkte-Rabatt */}
+                {redeemPoints && pointsToRedeem > 0 && (
+                  <div className="flex justify-between text-sm text-green-600">
+                    <span>Bonuspunkte-Rabatt ({pointsToRedeem} Punkte)</span>
+                    <span>-€{(pointsDiscount / 100).toFixed(2)}</span>
+                  </div>
+                )}
+                
+                <div className="flex justify-between text-sm">
+                  <span className="text-slate-600">Versand</span>
+                  <span className={shippingCosts > 0 ? "text-slate-800" : "text-green-600"}>
+                    {shippingCosts > 0 ? `€${(shippingCosts / 100).toFixed(2)}` : "Kostenlos"}
+                  </span>
+                </div>
+                <div className="flex justify-between text-sm">
+                  <div className="flex items-center">
+                    <div className="relative group">
+                      <svg className="w-4 h-4 mr-1 cursor-help" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                      </svg>
+                      {/* Tooltip */}
+                      <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-3 py-2 bg-gray-900 text-white text-xs rounded-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 whitespace-nowrap z-10">
+                        Alle Preise sind Endpreise zzgl. Versandkosten. Gemäß § 19 UStG wird keine Umsatzsteuer erhoben und ausgewiesen.
+                        {/* Tooltip arrow */}
+                        <div className="absolute top-full left-1/2 transform -translate-x-1/2 border-4 border-transparent border-t-gray-900"></div>
+                      </div>
+                    </div>
+                    <span className="text-slate-600">Preisinformationen</span>
+                  </div>
+                  <span className="text-slate-800">€0.00</span>
+                </div>
+                <div className="flex justify-between text-lg font-semibold border-t border-slate-200 pt-2"><span className="text-slate-800">Gesamt</span><span className="text-slate-800">€{(finalTotal / 100).toFixed(2)}</span></div>
               </div>
+
+              {/* Bonuspunkte-Hinweis */}
+              {isLoggedIn && availablePoints >= 1000 && !redeemPoints && (
+                <div className="mt-6 p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
+                  <div className="flex items-start">
+                    <svg className="w-5 h-5 text-yellow-600 mt-0.5 mr-3 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1" />
+                    </svg>
+                    <div>
+                      <p className="text-sm text-yellow-800 font-medium">Sie haben {availablePoints} Bonuspunkte!</p>
+                      <p className="text-sm text-yellow-700 mt-1">Sie können bis zu {getBestAvailableDiscount(availablePoints, totalWithShipping)?.points || 0} Punkte einlösen und dabei sparen.</p>
+                      <a 
+                        href="/cart" 
+                        className="inline-block mt-2 text-sm text-yellow-600 hover:text-yellow-700 font-medium underline"
+                      >
+                        Zum Warenkorb zurückkehren →
+                      </a>
+                    </div>
+                  </div>
+                </div>
+              )}
 
               {!isLoggedIn && (
                 <div className="mt-6 p-4 bg-blue-50 border border-blue-200 rounded-lg">

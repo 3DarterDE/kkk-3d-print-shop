@@ -27,6 +27,8 @@ export async function PUT(request: NextRequest) {
     if (dateOfBirth !== undefined) updateData.dateOfBirth = dateOfBirth ? new Date(dateOfBirth) : null;
     if (address !== undefined) {
       updateData.address = {
+        firstName: address.firstName || null,
+        lastName: address.lastName || null,
         company: address.company || null,
         street: address.street || null,
         houseNumber: address.houseNumber || null,
@@ -38,6 +40,8 @@ export async function PUT(request: NextRequest) {
     }
     if (billingAddress !== undefined) {
       updateData.billingAddress = {
+        firstName: billingAddress.firstName || null,
+        lastName: billingAddress.lastName || null,
         company: billingAddress.company || null,
         street: billingAddress.street || null,
         houseNumber: billingAddress.houseNumber || null,

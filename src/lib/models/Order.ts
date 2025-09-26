@@ -10,6 +10,8 @@ export interface IOrderItem {
 }
 
 export interface IShippingAddress {
+  firstName?: string;
+  lastName?: string;
   street: string;
   houseNumber: string;
   addressLine2?: string;
@@ -31,7 +33,9 @@ export interface IOrder extends Document {
   orderNumber: string;
   userId: string;
   status: 'pending' | 'processing' | 'shipped' | 'delivered' | 'cancelled' | 'return_requested' | 'return_completed';
-  total: number;
+  subtotal: number; // Bestellwert vor Versandkosten und Rabatten
+  shippingCosts: number; // Versandkosten in Cent
+  total: number; // Endbetrag (subtotal + shippingCosts - discounts)
   items: IOrderItem[];
   shippingAddress: IShippingAddress;
   billingAddress?: IShippingAddress;
@@ -43,6 +47,11 @@ export interface IOrder extends Document {
   isEmailSent?: boolean;
   emailSentAt?: Date;
   notes?: string;
+  bonusPointsEarned: number; // Bonuspunkte die bei dieser Bestellung verdient wurden
+  bonusPointsCredited: boolean; // Ob die Bonuspunkte bereits gutgeschrieben wurden
+  bonusPointsCreditedAt?: Date; // Wann die Bonuspunkte gutgeschrieben wurden
+  bonusPointsScheduledAt?: Date; // Wann die Bonuspunkte geplant sind (für Timer)
+  bonusPointsRedeemed?: number; // Bonuspunkte die bei dieser Bestellung eingelöst wurden
   createdAt: Date;
   updatedAt: Date;
 }
@@ -57,6 +66,8 @@ const OrderItemSchema = new Schema<IOrderItem>({
 }, { _id: false });
 
 const ShippingAddressSchema = new Schema<IShippingAddress>({
+  firstName: { type: String },
+  lastName: { type: String },
   street: { type: String, required: true },
   houseNumber: { type: String, required: true },
   addressLine2: { type: String },
@@ -93,6 +104,15 @@ const OrderSchema = new Schema<IOrder>({
     enum: ['pending', 'processing', 'shipped', 'delivered', 'cancelled', 'return_requested', 'return_completed'],
     default: 'pending' 
   },
+  subtotal: { 
+    type: Number, 
+    required: true 
+  },
+  shippingCosts: { 
+    type: Number, 
+    required: true,
+    default: 0
+  },
   total: { 
     type: Number, 
     required: true 
@@ -120,7 +140,12 @@ const OrderSchema = new Schema<IOrder>({
   },
   isEmailSent: { type: Boolean, default: false },
   emailSentAt: { type: Date },
-  notes: { type: String }
+  notes: { type: String },
+  bonusPointsEarned: { type: Number, required: true, default: 0 }, // Bonuspunkte die bei dieser Bestellung verdient wurden
+  bonusPointsCredited: { type: Boolean, default: false }, // Ob die Bonuspunkte bereits gutgeschrieben wurden
+  bonusPointsCreditedAt: { type: Date }, // Wann die Bonuspunkte gutgeschrieben wurden
+  bonusPointsScheduledAt: { type: Date }, // Wann die Bonuspunkte geplant sind (für Timer)
+  bonusPointsRedeemed: { type: Number, default: 0 } // Bonuspunkte die bei dieser Bestellung eingelöst wurden
 }, {
   timestamps: true
 });

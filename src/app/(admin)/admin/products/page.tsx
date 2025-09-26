@@ -335,10 +335,19 @@ export default function ProductsPage() {
         variation.name && variation.name.trim() !== '' && 
         variation.options.length > 0 && 
         variation.options.every(option => option.value && option.value.trim() !== '')
-      ).map(variation => ({
-        ...variation,
-        options: variation.options
-      })),
+      ).map(variation => {
+        console.log('Saving variation:', variation.name, 'options:', variation.options);
+        return {
+          ...variation,
+          options: variation.options.map(option => {
+            console.log('Saving option:', option.value, 'priceAdjustment:', option.priceAdjustment);
+            return {
+              ...option,
+              priceAdjustment: option.priceAdjustment || 0
+            };
+          })
+        };
+      }),
       recommendedProducts: recommendedProducts,
       sortOrder: editingProduct ? editingProduct.sortOrder : products.length,
       createdAt: editingProduct ? editingProduct.createdAt : new Date(),
@@ -1157,185 +1166,263 @@ export default function ProductsPage() {
                 <form onSubmit={handleFormSubmit} className="mt-6">
                   {/* Basic Tab */}
                   {activeModalTab === 'basic' && (
-                    <div className="space-y-6">
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700">Titel *</label>
-                        <input
-                          type="text"
-                          value={formData.title}
-                          onChange={(e) => setFormData({ ...formData, title: e.target.value })}
-                          className="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500"
-                          required
-                        />
-                      </div>
+                    <div className="space-y-8">
+                      {/* Produktinformationen */}
+                      <div className="bg-blue-50 border border-blue-200 rounded-lg p-6">
+                        <h3 className="text-lg font-semibold text-blue-900 mb-4 flex items-center">
+                          <span className="w-2 h-2 bg-blue-500 rounded-full mr-3"></span>
+                          Produktinformationen
+                        </h3>
+                        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                          <div className="space-y-4">
+                            <div>
+                              <label className="block text-sm font-medium text-gray-700 mb-2">
+                                Produkttitel *
+                                <span className="text-xs text-gray-500 ml-2">(wird als Produktname angezeigt)</span>
+                              </label>
+                              <input
+                                type="text"
+                                value={formData.title}
+                                onChange={(e) => setFormData({ ...formData, title: e.target.value })}
+                                className="w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500"
+                                placeholder="z.B. Winmau Blackout 1"
+                                required
+                              />
+                            </div>
 
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700">Artikelnummer (SKU) *</label>
-                        <div className="flex space-x-2">
-                          <input
-                            type="text"
-                            value={formData.sku}
-                            onChange={(e) => setFormData({ ...formData, sku: e.target.value })}
-                            placeholder="z.B. DAR-PRO-0001"
-                            className="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500"
-                            required
-                          />
-                          <button
-                            type="button"
-                            onClick={() => setFormData({ ...formData, sku: generateSKU(formData.title, formData.category) })}
-                            className="mt-1 px-3 py-2 text-sm bg-gray-100 hover:bg-gray-200 border border-gray-300 rounded-md"
-                            title="Automatisch generieren"
-                          >
-                            Auto
-                          </button>
+                            <div>
+                              <label className="block text-sm font-medium text-gray-700 mb-2">
+                                Artikelnummer (SKU) *
+                                <span className="text-xs text-gray-500 ml-2">(eindeutige Produkt-ID)</span>
+                              </label>
+                              <div className="flex space-x-2">
+                                <input
+                                  type="text"
+                                  value={formData.sku}
+                                  onChange={(e) => setFormData({ ...formData, sku: e.target.value })}
+                                  placeholder="z.B. DAR-PRO-0001"
+                                  className="flex-1 border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500"
+                                  required
+                                />
+                                <button
+                                  type="button"
+                                  onClick={() => setFormData({ ...formData, sku: generateSKU(formData.title, formData.category) })}
+                                  className="px-4 py-2 text-sm bg-blue-100 hover:bg-blue-200 text-blue-700 border border-blue-300 rounded-md transition-colors"
+                                  title="Automatisch generieren"
+                                >
+                                  Auto
+                                </button>
+                              </div>
+                              <p className="mt-1 text-xs text-gray-500">
+                                Format: KATEGORIE-TITEL-NUMMER
+                              </p>
+                            </div>
+
+                            <div>
+                              <label className="block text-sm font-medium text-gray-700 mb-2">
+                                Tags
+                                <span className="text-xs text-gray-500 ml-2">(für Suche und Filterung)</span>
+                              </label>
+                              <input
+                                type="text"
+                                value={formData.tags}
+                                onChange={(e) => setFormData({ ...formData, tags: e.target.value })}
+                                placeholder="dart, steel, professional, winmau"
+                                className="w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500"
+                              />
+                              <p className="mt-1 text-xs text-gray-500">
+                                Kommagetrennt eingeben
+                              </p>
+                            </div>
+                          </div>
+
+                          <div className="space-y-4">
+                            <div>
+                              <label className="block text-sm font-medium text-gray-700 mb-2">
+                                Kategorie *
+                                <span className="text-xs text-gray-500 ml-2">(Hauptkategorie)</span>
+                              </label>
+                              <select
+                                value={formData.category}
+                                onChange={(e) => {
+                                  const selectedCategory = e.target.value;
+                                  setFormData({ ...formData, category: selectedCategory, subcategory: '' });
+                                  setSelectedCategory(selectedCategory);
+                                }}
+                                className="w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500"
+                                required
+                              >
+                                <option value="">Kategorie wählen</option>
+                                {categories.map((category) => (
+                                  <option key={category._id} value={category._id}>
+                                    {category.name}
+                                  </option>
+                                ))}
+                              </select>
+                            </div>
+
+                            <div>
+                              <label className="block text-sm font-medium text-gray-700 mb-2">
+                                Unterkategorie
+                                <span className="text-xs text-gray-500 ml-2">(optional)</span>
+                              </label>
+                              <select
+                                value={formData.subcategory}
+                                onChange={(e) => setFormData({ ...formData, subcategory: e.target.value })}
+                                className="w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500"
+                                disabled={!formData.category}
+                              >
+                                <option value="">Unterkategorie wählen</option>
+                                {categories
+                                  .find(cat => cat._id === formData.category)
+                                  ?.subcategories?.map((subcategory) => (
+                                    <option key={subcategory._id} value={subcategory._id}>
+                                      {subcategory.name}
+                                    </option>
+                                  ))}
+                              </select>
+                            </div>
+
+                            <div>
+                              <label className="block text-sm font-medium text-gray-700 mb-2">
+                                Marke
+                                <span className="text-xs text-gray-500 ml-2">(optional)</span>
+                              </label>
+                              <select
+                                value={formData.brand}
+                                onChange={(e) => setFormData({ ...formData, brand: e.target.value })}
+                                className="w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500"
+                              >
+                                <option value="">Keine Marke</option>
+                                {brands.map((brand) => (
+                                  <option key={brand._id} value={brand.slug}>{brand.name}</option>
+                                ))}
+                              </select>
+                            </div>
+                          </div>
                         </div>
-                        <p className="mt-1 text-xs text-gray-500">
-                          Format: KATEGORIE-TITEL-NUMMER (z.B. DAR-PRO-0001)
-                        </p>
                       </div>
 
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700">Kategorie *</label>
-                        <select
-                          value={formData.category}
-                          onChange={(e) => {
-                            const selectedCategory = e.target.value;
-                            setFormData({ ...formData, category: selectedCategory, subcategory: '' });
-                            setSelectedCategory(selectedCategory);
-                          }}
-                          className="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500"
-                          required
-                        >
-                          <option value="">Kategorie wählen</option>
-                          {categories.map((category) => (
-                            <option key={category._id} value={category._id}>
-                              {category.name}
-                            </option>
-                          ))}
-                        </select>
-                      </div>
+                      {/* Preise und Verfügbarkeit */}
+                      <div className="bg-green-50 border border-green-200 rounded-lg p-6">
+                        <h3 className="text-lg font-semibold text-green-900 mb-4 flex items-center">
+                          <span className="w-2 h-2 bg-green-500 rounded-full mr-3"></span>
+                          Preise und Verfügbarkeit
+                        </h3>
+                        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                          <div className="space-y-4">
+                            <div>
+                              <label className="block text-sm font-medium text-gray-700 mb-2">
+                                Grundpreis (€) *
+                                <span className="text-xs text-gray-500 ml-2">(Standardpreis)</span>
+                              </label>
+                              <input
+                                type="number"
+                                step="0.01"
+                                min="0"
+                                value={formData.price}
+                                onChange={(e) => setFormData({ ...formData, price: e.target.value })}
+                                className="w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500"
+                                placeholder="0.00"
+                                required
+                              />
+                            </div>
 
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700">Marke</label>
-                        <select
-                          value={formData.brand}
-                          onChange={(e) => setFormData({ ...formData, brand: e.target.value })}
-                          className="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500"
-                        >
-                          <option value="">Keine Marke</option>
-                          {brands.map((brand) => (
-                            <option key={brand._id} value={brand.slug}>{brand.name}</option>
-                          ))}
-                        </select>
-                      </div>
+                            <div>
+                              <label className="block text-sm font-medium text-gray-700 mb-2">
+                                Angebotspreis (€)
+                                <span className="text-xs text-gray-500 ml-2">(reduzierter Preis)</span>
+                              </label>
+                              <input
+                                type="number"
+                                step="0.01"
+                                min="0"
+                                value={formData.offerPrice}
+                                onChange={(e) => setFormData({ ...formData, offerPrice: e.target.value })}
+                                className="w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500"
+                                placeholder="0.00"
+                              />
+                            </div>
+                          </div>
 
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700">Unterkategorie</label>
-                        <div className="relative">
-                          <select
-                            value={formData.subcategory}
-                            onChange={(e) => setFormData({ ...formData, subcategory: e.target.value })}
-                            className="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500"
-                          >
-                            <option value="">Unterkategorie wählen</option>
-                            {categories
-                              .find(cat => cat._id === formData.category)
-                              ?.subcategories?.map((subcategory) => (
-                                <option key={subcategory._id} value={subcategory._id}>
-                                  {subcategory.name}
-                                </option>
-                              ))}
-                          </select>
+                          <div className="space-y-4">
+                            <div>
+                              <label className={`block text-sm font-medium ${variations.length > 0 && variations.some(v => v.options.length > 0) ? 'text-gray-400' : 'text-gray-700'} mb-2`}>
+                                Lagerbestand
+                                <span className="text-xs text-gray-500 ml-2">
+                                  {variations.length > 0 && variations.some(v => v.options.length > 0) ? '(wird über Varianten gesteuert)' : '(Anzahl verfügbarer Artikel)'}
+                                </span>
+                              </label>
+                              <input
+                                type="number"
+                                min="0"
+                                value={formData.inStock ? formData.stockQuantity : '0'}
+                                onChange={(e) => setFormData({ ...formData, stockQuantity: e.target.value })}
+                                disabled={!formData.inStock || (variations.length > 0 && variations.some(v => v.options.length > 0))}
+                                className={`w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 ${
+                                  !formData.inStock || (variations.length > 0 && variations.some(v => v.options.length > 0)) ? 'bg-gray-100 text-gray-500 cursor-not-allowed' : ''
+                                }`}
+                                placeholder="0"
+                              />
+                            </div>
+
+                            <div className="space-y-3">
+                              <div className="flex items-center justify-between">
+                                <label className="flex items-center">
+                                  <input
+                                    type="checkbox"
+                                    checked={formData.inStock}
+                                    onChange={(e) => setFormData({ 
+                                      ...formData, 
+                                      inStock: e.target.checked,
+                                      stockQuantity: e.target.checked ? formData.stockQuantity : '0'
+                                    })}
+                                    disabled={variations.length > 0 && variations.some(v => v.options.length > 0)}
+                                    className={`rounded border-gray-300 text-blue-600 shadow-sm focus:border-blue-300 focus:ring focus:ring-blue-200 focus:ring-opacity-50 ${
+                                      variations.length > 0 && variations.some(v => v.options.length > 0) ? 'opacity-50 cursor-not-allowed' : ''
+                                    }`}
+                                  />
+                                  <span className={`ml-2 text-sm ${variations.length > 0 && variations.some(v => v.options.length > 0) ? 'text-gray-400' : 'text-gray-700'}`}>
+                                    Auf Lager
+                                  </span>
+                                </label>
+                                {variations.length > 0 && variations.some(v => v.options.length > 0) && (
+                                  <span className="text-xs text-gray-500">(wird über Varianten gesteuert)</span>
+                                )}
+                              </div>
+
+                              <div className="flex items-center justify-between">
+                                <label className="flex items-center">
+                                  <input
+                                    type="checkbox"
+                                    checked={formData.isOnSale}
+                                    onChange={(e) => setFormData({ ...formData, isOnSale: e.target.checked })}
+                                    className="rounded border-gray-300 text-blue-600 shadow-sm focus:border-blue-300 focus:ring focus:ring-blue-200 focus:ring-opacity-50"
+                                  />
+                                  <span className="ml-2 text-sm text-gray-700">Im Angebot</span>
+                                </label>
+                                {formData.isOnSale && (
+                                  <span className="text-xs text-green-600">Angebotspreis wird angezeigt</span>
+                                )}
+                              </div>
+
+                              <div className="flex items-center justify-between">
+                                <label className="flex items-center">
+                                  <input
+                                    type="checkbox"
+                                    checked={formData.isTopSeller}
+                                    onChange={(e) => setFormData({ ...formData, isTopSeller: e.target.checked })}
+                                    className="rounded border-gray-300 text-blue-600 shadow-sm focus:border-blue-300 focus:ring focus:ring-blue-200 focus:ring-opacity-50"
+                                  />
+                                  <span className="ml-2 text-sm text-gray-700">Top Seller</span>
+                                </label>
+                                {formData.isTopSeller && (
+                                  <span className="text-xs text-yellow-600">Wird als Bestseller markiert</span>
+                                )}
+                              </div>
+                            </div>
+                          </div>
                         </div>
-                      </div>
-
-                      <div className="grid grid-cols-2 gap-4">
-                        <div>
-                          <label className="block text-sm font-medium text-gray-700">Preis (€) *</label>
-                          <input
-                            type="number"
-                            step="0.01"
-                            value={formData.price}
-                            onChange={(e) => setFormData({ ...formData, price: e.target.value })}
-                            className="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500"
-                            required
-                          />
-                        </div>
-                        <div>
-                          <label className="block text-sm font-medium text-gray-700">Angebotspreis (€)</label>
-                          <input
-                            type="number"
-                            step="0.01"
-                            value={formData.offerPrice}
-                            onChange={(e) => setFormData({ ...formData, offerPrice: e.target.value })}
-                            className="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500"
-                          />
-                        </div>
-                      </div>
-
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700">Tags</label>
-                        <input
-                          type="text"
-                          value={formData.tags}
-                          onChange={(e) => setFormData({ ...formData, tags: e.target.value })}
-                          placeholder="Tag1, Tag2, Tag3"
-                          className="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500"
-                        />
-                      </div>
-
-                      <div className="flex items-center space-x-6">
-                        <label className="flex items-center">
-                          <input
-                            type="checkbox"
-                            checked={formData.isOnSale}
-                            onChange={(e) => setFormData({ ...formData, isOnSale: e.target.checked })}
-                            className="rounded border-gray-300 text-blue-600 shadow-sm focus:border-blue-300 focus:ring focus:ring-blue-200 focus:ring-opacity-50"
-                          />
-                          <span className="ml-2 text-sm text-gray-700">Im Angebot</span>
-                        </label>
-                        <label className="flex items-center">
-                          <input
-                            type="checkbox"
-                            checked={formData.isTopSeller}
-                            onChange={(e) => setFormData({ ...formData, isTopSeller: e.target.checked })}
-                            className="rounded border-gray-300 text-blue-600 shadow-sm focus:border-blue-300 focus:ring focus:ring-blue-200 focus:ring-opacity-50"
-                          />
-                          <span className="ml-2 text-sm text-gray-700">Top Seller</span>
-                        </label>
-                        <label className="flex items-center">
-                          <input
-                            type="checkbox"
-                            checked={formData.inStock}
-                            onChange={(e) => setFormData({ 
-                              ...formData, 
-                              inStock: e.target.checked,
-                              stockQuantity: e.target.checked ? formData.stockQuantity : '0'
-                            })}
-                            disabled={variations.length > 0 && variations.some(v => v.options.length > 0)}
-                            className={`rounded border-gray-300 text-blue-600 shadow-sm focus:border-blue-300 focus:ring focus:ring-blue-200 focus:ring-opacity-50 ${
-                              variations.length > 0 && variations.some(v => v.options.length > 0) ? 'opacity-50 cursor-not-allowed' : ''
-                            }`}
-                          />
-                          <span className={`ml-2 text-sm ${variations.length > 0 && variations.some(v => v.options.length > 0) ? 'text-gray-400' : 'text-gray-700'}`}>
-                            Auf Lager {variations.length > 0 && variations.some(v => v.options.length > 0) ? '(wird über Varianten gesteuert)' : ''}
-                          </span>
-                        </label>
-                      </div>
-
-                      <div>
-                        <label className={`block text-sm font-medium ${variations.length > 0 && variations.some(v => v.options.length > 0) ? 'text-gray-400' : 'text-gray-700'}`}>
-                          Lagerbestand {variations.length > 0 && variations.some(v => v.options.length > 0) ? '(wird über Varianten gesteuert)' : ''}
-                        </label>
-                        <input
-                          type="number"
-                          value={formData.inStock ? formData.stockQuantity : '0'}
-                          onChange={(e) => setFormData({ ...formData, stockQuantity: e.target.value })}
-                          disabled={!formData.inStock || (variations.length > 0 && variations.some(v => v.options.length > 0))}
-                          className={`mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 ${
-                            !formData.inStock || (variations.length > 0 && variations.some(v => v.options.length > 0)) ? 'bg-gray-100 text-gray-500 cursor-not-allowed' : ''
-                          }`}
-                        />
                       </div>
                     </div>
                   )}
@@ -1690,55 +1777,9 @@ export default function ProductsPage() {
                             </div>
                             
                             {variation.options.map((option, optionIndex) => (
-                              <div key={optionIndex} className="grid grid-cols-4 gap-3 items-center">
-                                <input
-                                  type="text"
-                                  placeholder="Wert (z.B. L, XL, Rot)"
-                                  value={option.value}
-                                  onChange={(e) => {
-                                    const newVariations = [...variations];
-                                    newVariations[variationIndex].options[optionIndex].value = e.target.value;
-                                    setVariations(newVariations);
-                                  }}
-                                  className="border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500"
-                                />
-                                <input
-                                  type="number"
-                                  placeholder="Preisanpassung (€)"
-                                  step="0.01"
-                                  value={option.priceAdjustment}
-                                  onChange={(e) => {
-                                    const newVariations = [...variations];
-                                    newVariations[variationIndex].options[optionIndex].priceAdjustment = parseFloat(e.target.value) || 0;
-                                    setVariations(newVariations);
-                                  }}
-                                  className="border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500"
-                                />
-                                <input
-                                  type="number"
-                                  placeholder="Lagerbestand"
-                                  value={option.stockQuantity}
-                                  onChange={(e) => {
-                                    const newVariations = [...variations];
-                                    newVariations[variationIndex].options[optionIndex].stockQuantity = parseInt(e.target.value) || 0;
-                                    setVariations(newVariations);
-                                  }}
-                                  className="border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500"
-                                />
-                                <div className="flex items-center space-x-2">
-                                  <label className="flex items-center">
-                                    <input
-                                      type="checkbox"
-                                      checked={option.inStock}
-                                      onChange={(e) => {
-                                        const newVariations = [...variations];
-                                        newVariations[variationIndex].options[optionIndex].inStock = e.target.checked;
-                                        setVariations(newVariations);
-                                      }}
-                                      className="rounded border-gray-300 text-blue-600 shadow-sm focus:border-blue-300 focus:ring focus:ring-blue-200 focus:ring-opacity-50"
-                                    />
-                                    <span className="ml-1 text-sm text-gray-700">Auf Lager</span>
-                                  </label>
+                              <div key={optionIndex} className="bg-gray-50 border border-gray-200 rounded-lg p-4 space-y-3">
+                                <div className="flex items-center justify-between">
+                                  <h6 className="text-sm font-medium text-gray-700">Option {optionIndex + 1}</h6>
                                   <button
                                     type="button"
                                     onClick={() => {
@@ -1756,10 +1797,99 @@ export default function ProductsPage() {
                                         }));
                                       }
                                     }}
-                                    className="text-red-600 hover:text-red-800 text-sm"
+                                    className="text-red-600 hover:text-red-800 text-sm font-medium"
                                   >
-                                    ×
+                                    Option entfernen
                                   </button>
+                                </div>
+                                
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                  <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                                      Wert
+                                    </label>
+                                    <input
+                                      type="text"
+                                      placeholder="z.B. L, XL, Rot, Blau"
+                                      value={option.value}
+                                      onChange={(e) => {
+                                        const newVariations = [...variations];
+                                        newVariations[variationIndex].options[optionIndex].value = e.target.value;
+                                        setVariations(newVariations);
+                                      }}
+                                      className="w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500"
+                                    />
+                                    <p className="text-xs text-gray-500 mt-1">Der Wert der Variation (Größe, Farbe, etc.)</p>
+                                  </div>
+                                  
+                                  <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                                      Preisanpassung
+                                    </label>
+                                    <input
+                                      type="number"
+                                      placeholder="0.00"
+                                      step="0.01"
+                                      value={option.priceAdjustment / 100}
+                                      onChange={(e) => {
+                                        const newVariations = [...variations];
+                                        const euroValue = parseFloat(e.target.value) || 0;
+                                        const centValue = euroValue * 100;
+                                        console.log('Price adjustment change:', { euroValue, centValue });
+                                        newVariations[variationIndex].options[optionIndex].priceAdjustment = centValue;
+                                        setVariations(newVariations);
+                                        console.log('Updated variations:', newVariations);
+                                      }}
+                                      className="w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500"
+                                    />
+                                    <p className="text-xs text-gray-500 mt-1">Zusätzlicher Preis in € (positiv oder negativ)</p>
+                                  </div>
+                                </div>
+                                
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                  <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                                      Lagerbestand
+                                    </label>
+                                    <input
+                                      type="number"
+                                      placeholder="0"
+                                      min="0"
+                                      value={option.stockQuantity}
+                                      onChange={(e) => {
+                                        const newVariations = [...variations];
+                                        newVariations[variationIndex].options[optionIndex].stockQuantity = parseInt(e.target.value) || 0;
+                                        setVariations(newVariations);
+                                      }}
+                                      className="w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500"
+                                    />
+                                    <p className="text-xs text-gray-500 mt-1">Anzahl verfügbarer Artikel</p>
+                                  </div>
+                                  
+                                  <div className="flex items-center space-x-3">
+                                    <label className="flex items-center">
+                                      <input
+                                        type="checkbox"
+                                        checked={option.inStock}
+                                        onChange={(e) => {
+                                          const newVariations = [...variations];
+                                          newVariations[variationIndex].options[optionIndex].inStock = e.target.checked;
+                                          
+                                          // Automatisch Stock auf 0 setzen wenn nicht auf Lager
+                                          if (!e.target.checked) {
+                                            newVariations[variationIndex].options[optionIndex].stockQuantity = 0;
+                                          }
+                                          
+                                          setVariations(newVariations);
+                                        }}
+                                        className="rounded border-gray-300 text-blue-600 shadow-sm focus:border-blue-300 focus:ring focus:ring-blue-200 focus:ring-opacity-50"
+                                      />
+                                      <span className="ml-2 text-sm text-gray-700">Auf Lager</span>
+                                    </label>
+                                    <div className="text-xs text-gray-500">
+                                      {option.inStock ? 'Verfügbar' : 'Nicht verfügbar'}
+                                    </div>
+                                  </div>
                                 </div>
                               </div>
                             ))}

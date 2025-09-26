@@ -7,6 +7,7 @@ import Breadcrumb from "@/components/Breadcrumb";
 import Footer from "@/components/Footer";
 import CartValidationProvider from "../components/CartValidationProvider";
 import VerificationRedirect from "@/components/VerificationRedirect";
+import ScrollToTopButton from "@/components/ScrollToTopButton";
 import { UserDataProvider } from "@/lib/contexts/UserDataContext";
 
 const geistSans = Geist({
@@ -55,6 +56,7 @@ export default function RootLayout({
             <CategoryNavigation />
             <main className="pt-16">{children}</main>
             <Footer />
+            <ScrollToTopButton />
           </UserDataProvider>
         </CartValidationProvider>
       </body>

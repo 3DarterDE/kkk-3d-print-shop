@@ -71,6 +71,7 @@ export default async function ProductPage({ params }: { params: Promise<{ slug: 
     inStock: product.inStock,
     stockQuantity: product.stockQuantity,
     sortOrder: product.sortOrder,
+    reviews: product.reviews || { averageRating: 0, totalReviews: 0 },
     createdAt: product.createdAt,
     updatedAt: product.updatedAt
   };
@@ -111,7 +112,8 @@ export default async function ProductPage({ params }: { params: Promise<{ slug: 
             inStock: option.inStock,
             stockQuantity: option.stockQuantity
           })) || []
-        })) || []
+        })) || [],
+        reviews: p.reviews || { averageRating: 0, totalReviews: 0 }
       }));
   }
 

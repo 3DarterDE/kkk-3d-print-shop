@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import { useAuth } from '@/lib/hooks/useAuth';
 import Link from "next/link";
 import { useUserData } from "@/lib/contexts/UserDataContext";
+import { IUser } from "@/lib/models/User";
 
 type UserProfile = {
   name?: string;
@@ -11,7 +12,11 @@ type UserProfile = {
   email?: string;
   phone?: string;
   dateOfBirth?: string;
+  salutation?: 'Herr' | 'Frau' | 'Divers';
   address?: {
+    firstName?: string;
+    lastName?: string;
+    company?: string;
     street?: string;
     houseNumber?: string;
     addressLine2?: string;
@@ -20,6 +25,9 @@ type UserProfile = {
     country?: string;
   };
   billingAddress?: {
+    firstName?: string;
+    lastName?: string;
+    company?: string;
     street?: string;
     houseNumber?: string;
     addressLine2?: string;
@@ -30,6 +38,7 @@ type UserProfile = {
   paymentMethod?: 'card' | 'paypal' | 'bank';
   isAdmin?: boolean;
   isVerified?: boolean;
+  bonusPoints?: number;
   createdAt?: string;
 };
 
@@ -80,6 +89,8 @@ export default function ProfilePage() {
     phone: '',
     dateOfBirth: '',
     address: {
+      firstName: '',
+      lastName: '',
       company: '',
       street: '',
       houseNumber: '',
@@ -89,6 +100,8 @@ export default function ProfilePage() {
       country: 'Deutschland'
     },
     billingAddress: {
+      firstName: '',
+      lastName: '',
       company: '',
       street: '',
       houseNumber: '',
@@ -109,6 +122,8 @@ export default function ProfilePage() {
         phone: user.phone || '',
         dateOfBirth: user.dateOfBirth ? new Date(user.dateOfBirth).toISOString().split('T')[0] : '',
         address: {
+          firstName: user.address?.firstName || user.firstName || '',
+          lastName: user.address?.lastName || user.lastName || '',
           company: user.address?.company || '',
           street: user.address?.street || '',
           houseNumber: user.address?.houseNumber || '',
@@ -118,6 +133,8 @@ export default function ProfilePage() {
           country: user.address?.country || 'Deutschland'
         },
         billingAddress: {
+          firstName: user.billingAddress?.firstName || user.address?.firstName || user.firstName || '',
+          lastName: user.billingAddress?.lastName || user.address?.lastName || user.lastName || '',
           company: user.billingAddress?.company || '',
           street: user.billingAddress?.street || '',
           houseNumber: user.billingAddress?.houseNumber || '',
@@ -256,6 +273,8 @@ export default function ProfilePage() {
         phone: user.phone || '',
         dateOfBirth: user.dateOfBirth ? new Date(user.dateOfBirth).toISOString().split('T')[0] : '',
         address: {
+          firstName: user.address?.firstName || user.firstName || '',
+          lastName: user.address?.lastName || user.lastName || '',
           company: user.address?.company || '',
           street: user.address?.street || '',
           houseNumber: user.address?.houseNumber || '',
@@ -265,6 +284,8 @@ export default function ProfilePage() {
           country: user.address?.country || 'Deutschland'
         },
         billingAddress: {
+          firstName: user.billingAddress?.firstName || user.address?.firstName || user.firstName || '',
+          lastName: user.billingAddress?.lastName || user.address?.lastName || user.lastName || '',
           company: user.billingAddress?.company || '',
           street: user.billingAddress?.street || '',
           houseNumber: user.billingAddress?.houseNumber || '',
@@ -381,6 +402,10 @@ export default function ProfilePage() {
                   <div className="w-2 h-2 bg-slate-300 rounded-full mr-3 group-hover:bg-blue-500 transition-colors"></div>
                   Meine Bestellungen
                 </Link>
+                <Link href="/bonus" prefetch className="flex items-center px-4 py-3 text-sm font-medium text-slate-600 hover:text-blue-600 hover:bg-blue-50 rounded-xl transition-all duration-200 group">
+                  <div className="w-2 h-2 bg-slate-300 rounded-full mr-3 group-hover:bg-blue-500 transition-colors"></div>
+                  Bonuspunkte
+                </Link>
                 <a href="#" className="flex items-center px-4 py-3 text-sm font-medium text-slate-600 hover:text-blue-600 hover:bg-blue-50 rounded-xl transition-all duration-200 group">
                   <div className="w-2 h-2 bg-slate-300 rounded-full mr-3 group-hover:bg-blue-500 transition-colors"></div>
                   Mein Wunschzettel
@@ -490,7 +515,9 @@ export default function ProfilePage() {
                   <h3 className="text-lg font-semibold text-slate-800">Versandadresse</h3>
                 </div>
                 <div className="space-y-2">
-                  <p className="text-slate-700 font-medium">{user.firstName} {user.lastName}</p>
+                  <p className="text-slate-700 font-medium">
+                    {user.address?.firstName || user.firstName} {user.address?.lastName || user.lastName}
+                  </p>
                   <p className="text-slate-600">
                     {user.address?.street} {user.address?.houseNumber}
                     {user.address?.addressLine2 && `, ${user.address.addressLine2}`}
@@ -522,7 +549,9 @@ export default function ProfilePage() {
                   <h3 className="text-lg font-semibold text-slate-800">Rechnungsadresse</h3>
                 </div>
                 <div className="space-y-2">
-                  <p className="text-slate-700 font-medium">{user.firstName} {user.lastName}</p>
+                  <p className="text-slate-700 font-medium">
+                    {user.billingAddress?.firstName || user.address?.firstName || user.firstName} {user.billingAddress?.lastName || user.address?.lastName || user.lastName}
+                  </p>
                   <p className="text-slate-600">
                     {user.billingAddress?.street} {user.billingAddress?.houseNumber}
                     {user.billingAddress?.addressLine2 && `, ${user.billingAddress.addressLine2}`}
@@ -582,6 +611,24 @@ export default function ProfilePage() {
                   ) : (
                     <p className="text-slate-600">Keine Zahlungsmethode hinterlegt</p>
                   )}
+                </div>
+              </div>
+
+              {/* Bonuspunkte Card */}
+              <div className="bg-white/70 backdrop-blur-sm border border-white/30 rounded-2xl p-4 sm:p-6 relative shadow-lg hover:shadow-xl transition-all duration-300 group">
+                <div className="flex items-center mb-4">
+                  <div className="w-10 h-10 bg-gradient-to-r from-yellow-600 to-yellow-500 rounded-xl flex items-center justify-center mr-3">
+                    <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1" />
+                    </svg>
+                  </div>
+                  <h3 className="text-lg font-semibold text-slate-800">Bonuspunkte</h3>
+                </div>
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between">
+                    <span className="text-slate-700 font-medium">Bonuspunkte</span>
+                    <span className="text-2xl font-bold text-yellow-600">{user.bonusPoints || 0}</span>
+                  </div>
                 </div>
               </div>
             </div>
@@ -768,6 +815,27 @@ export default function ProfilePage() {
                         placeholder="Firmenname (optional)"
                       />
                     </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Vorname</label>
+                        <input
+                          type="text"
+                          value={formData.address.firstName}
+                          onChange={(e) => handleInputChange('address.firstName', e.target.value)}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Nachname</label>
+                        <input
+                          type="text"
+                          value={formData.address.lastName}
+                          onChange={(e) => handleInputChange('address.lastName', e.target.value)}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm"
+                        />
+                      </div>
+                    </div>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                     <div className="md:col-span-1">
                       <label className="block text-sm font-medium text-gray-700 mb-1">Straße</label>
@@ -841,7 +909,17 @@ export default function ProfilePage() {
                       <input
                         type="checkbox"
                         checked={useSameAddress}
-                        onChange={(e) => setUseSameAddress(e.target.checked)}
+                        onChange={(e) => {
+                          setUseSameAddress(e.target.checked);
+                          if (e.target.checked) {
+                            setFormData(prev => ({
+                              ...prev,
+                              billingAddress: {
+                                ...prev.address
+                              }
+                            }));
+                          }
+                        }}
                         className="mr-2"
                       />
                       <span className="text-sm text-gray-700">Gleich wie Versandadresse</span>
@@ -861,6 +939,27 @@ export default function ProfilePage() {
                           className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm"
                           placeholder="Firmenname (optional)"
                         />
+                      </div>
+
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">Vorname</label>
+                          <input
+                            type="text"
+                            value={formData.billingAddress.firstName}
+                            onChange={(e) => handleInputChange('billingAddress.firstName', e.target.value)}
+                            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">Nachname</label>
+                          <input
+                            type="text"
+                            value={formData.billingAddress.lastName}
+                            onChange={(e) => handleInputChange('billingAddress.lastName', e.target.value)}
+                            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm"
+                          />
+                        </div>
                       </div>
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                       <div className="md:col-span-1">

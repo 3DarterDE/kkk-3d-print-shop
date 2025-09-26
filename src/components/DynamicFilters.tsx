@@ -114,7 +114,16 @@ export default function DynamicFilters({
         }
       }
     }
-  }, [currentCategoryProducts, initialProducts.length]);
+  }, [currentCategoryProducts, initialProducts.length, productFilters]);
+
+  // Reset initial products when category changes or when we have all products (for "Alle Produkte")
+  useEffect(() => {
+    if (allProducts.length > 0 && currentCategoryProducts.length === allProducts.length) {
+      // This is "Alle Produkte" - reset and use all products
+      setInitialProducts([]);
+      setInitialProductFilters({});
+    }
+  }, [allProducts.length, currentCategoryProducts.length]);
 
   // Determine which filters to show based on the initial snapshot only (stable while user toggles filters)
   useEffect(() => {
@@ -123,7 +132,17 @@ export default function DynamicFilters({
     const timeoutId = setTimeout(() => {
       if (initialProducts.length > 0 && Object.keys(productFilters).length > 0) {
         const relevantFilters = allFilters.filter((filter: any) => {
+          // Check if any product in the current view has this filter
           return initialProducts.some(product => {
+            const productFilterList = productFilters[product._id] || [];
+            return productFilterList.some(pf => pf.filterId === filter._id?.toString());
+          });
+        });
+        setFilters(relevantFilters);
+      } else if (allProducts.length > 0 && Object.keys(productFilters).length > 0) {
+        // Fallback: if no initialProducts but we have allProducts, use allProducts
+        const relevantFilters = allFilters.filter((filter: any) => {
+          return allProducts.some(product => {
             const productFilterList = productFilters[product._id] || [];
             return productFilterList.some(pf => pf.filterId === filter._id?.toString());
           });
@@ -135,7 +154,7 @@ export default function DynamicFilters({
     }, 100);
 
     return () => clearTimeout(timeoutId);
-  }, [productFilters, allFilters, initialProducts, initialProductFilters]);
+  }, [productFilters, allFilters, initialProducts, initialProductFilters, allProducts]);
 
   // Auto-expand top 3 filters with most products
   useEffect(() => {

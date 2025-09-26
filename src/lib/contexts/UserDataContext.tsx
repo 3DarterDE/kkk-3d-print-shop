@@ -12,6 +12,8 @@ type UserProfile = {
   phone?: string;
   dateOfBirth?: string;
   address?: {
+    firstName?: string;
+    lastName?: string;
     company?: string;
     street?: string;
     houseNumber?: string;
@@ -21,6 +23,8 @@ type UserProfile = {
     country?: string;
   };
   billingAddress?: {
+    firstName?: string;
+    lastName?: string;
     company?: string;
     street?: string;
     houseNumber?: string;
@@ -32,6 +36,7 @@ type UserProfile = {
   paymentMethod?: 'card' | 'paypal' | 'bank';
   isAdmin?: boolean;
   isVerified?: boolean;
+  bonusPoints?: number;
   createdAt?: string;
 };
 
@@ -56,6 +61,7 @@ type Order = {
     country: string;
   };
   paymentMethod?: string;
+  bonusPointsEarned: number;
   createdAt: string;
   updatedAt: string;
 };

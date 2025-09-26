@@ -43,7 +43,10 @@ export async function GET(
       totalOrders: orders.length,
       totalSpent: orders.reduce((sum, order) => sum + order.total, 0),
       averageOrderValue: orders.length > 0 ? orders.reduce((sum, order) => sum + order.total, 0) / orders.length : 0,
-      lastOrderDate: orders.length > 0 ? orders[0].createdAt : null
+      lastOrderDate: orders.length > 0 ? orders[0].createdAt : null,
+      totalShippingCosts: orders.reduce((sum, order) => sum + ((order as any).shippingCosts || 0) / 100, 0),
+      totalBonusPointsEarned: orders.reduce((sum, order) => sum + ((order as any).bonusPointsEarned || 0), 0),
+      totalBonusPointsRedeemed: orders.reduce((sum, order) => sum + ((order as any).bonusPointsRedeemed || 0), 0)
     };
 
     // Remove sensitive data

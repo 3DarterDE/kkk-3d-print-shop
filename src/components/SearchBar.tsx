@@ -15,6 +15,7 @@ interface SearchResult {
   isOnSale?: boolean;
   isTopSeller?: boolean;
   inStock?: boolean;
+  isAvailable?: boolean;
   stockQuantity?: number;
   images?: string[];
   imageSizes?: { main: string; thumb: string; small: string };
@@ -22,6 +23,11 @@ interface SearchResult {
   category?: string;
   subcategory?: string;
   description?: string;
+  parentCategory?: {
+    _id: string;
+    name: string;
+    slug: string;
+  };
   type: 'product' | 'category';
 }
 
@@ -37,13 +43,15 @@ export default function SearchBar({
   className = "", 
   placeholder = "Produkte durchsuchen...",
   showResults = true,
-  maxResults = 8,
+  maxResults = 10,
   onClear
 }: SearchBarProps) {
   const [query, setQuery] = useState('');
   const [results, setResults] = useState<SearchResult[]>([]);
   const [categories, setCategories] = useState<SearchResult[]>([]);
   const [descriptionProducts, setDescriptionProducts] = useState<SearchResult[]>([]);
+  const [totalProductsFound, setTotalProductsFound] = useState(0);
+  const [totalCategoriesFound, setTotalCategoriesFound] = useState(0);
   const [isLoading, setIsLoading] = useState(false);
   const [showDropdown, setShowDropdown] = useState(false);
   const [selectedIndex, setSelectedIndex] = useState(-1);
@@ -160,6 +168,8 @@ export default function SearchBar({
       setResults([]);
       setCategories([]);
       setDescriptionProducts([]);
+      setTotalProductsFound(0);
+      setTotalCategoriesFound(0);
       setShowDropdown(false);
       return;
     }
@@ -172,6 +182,8 @@ export default function SearchBar({
         setResults(data.products || []);
         setCategories(data.categories || []);
         setDescriptionProducts(data.descriptionProducts || []);
+        setTotalProductsFound(data.totalProductsFound || 0);
+        setTotalCategoriesFound(data.totalCategoriesFound || 0);
         setShowDropdown(true);
         setSelectedIndex(-1);
       } catch (error) {
@@ -179,6 +191,8 @@ export default function SearchBar({
         setResults([]);
         setCategories([]);
         setDescriptionProducts([]);
+        setTotalProductsFound(0);
+        setTotalCategoriesFound(0);
       } finally {
         setIsLoading(false);
       }
@@ -244,14 +258,21 @@ export default function SearchBar({
   };
 
   const handleProductClick = (product: SearchResult) => {
-    router.push(`/shop/${product.slug}`);
+    router.push(`/${product.slug}`);
     setShowDropdown(false);
     setQuery('');
     inputRef.current?.blur();
   };
 
   const handleCategoryClick = (category: SearchResult) => {
-    router.push(`/shop?category=${category.slug}`);
+    // Build the correct URL based on whether it's a subcategory
+    let url = `/shop/${category.slug}`;
+    if (category.parentCategory) {
+      // If it's a subcategory, include the parent category in the URL
+      url = `/shop/${category.parentCategory.slug}/${category.slug}`;
+    }
+    
+    router.push(url);
     setShowDropdown(false);
     setQuery('');
     inputRef.current?.blur();
@@ -269,6 +290,8 @@ export default function SearchBar({
     setResults([]);
     setCategories([]);
     setDescriptionProducts([]);
+    setTotalProductsFound(0);
+    setTotalCategoriesFound(0);
     setShowDropdown(false);
     setSelectedIndex(-1);
     inputRef.current?.focus();
@@ -324,7 +347,15 @@ export default function SearchBar({
               {/* Results Header */}
               <div className="px-4 py-2 bg-gray-50 border-b border-gray-200 rounded-t-lg">
                 <p className="text-sm text-gray-600">
-                  {results.length + categories.length + descriptionProducts.length} Ergebnis{(results.length + categories.length + descriptionProducts.length) !== 1 ? 'se' : ''} gefunden
+                  {totalProductsFound > maxResults ? (
+                    <>
+                      {maxResults} von {totalProductsFound} Produkten und {totalCategoriesFound} Kategorien gefunden
+                    </>
+                  ) : (
+                    <>
+                      {results.length + categories.length + descriptionProducts.length} Ergebnis{(results.length + categories.length + descriptionProducts.length) !== 1 ? 'se' : ''} gefunden
+                    </>
+                  )}
                   {query && (
                     <span className="ml-1">
                       für "<span className="font-medium">{query}</span>"
@@ -341,7 +372,7 @@ export default function SearchBar({
                     {results.length > 1 && (
                       <div className="px-4 py-2 bg-blue-50 border-b border-blue-100">
                         <p className="text-xs font-medium text-blue-700 uppercase tracking-wide">
-                          Produkte ({results.length})
+                          Produkte ({totalProductsFound > maxResults ? `${maxResults} von ${totalProductsFound}` : results.length})
                         </p>
                       </div>
                     )}
@@ -390,12 +421,12 @@ export default function SearchBar({
                                   {((product.price || 0) / 100).toFixed(2)} €
                                 </div>
                               )}
-                              {!product.inStock && (
+                              {!(product.isAvailable ?? product.inStock) && (
                                 <div className="text-xs text-red-600 font-medium mt-0.5">
                                   Ausverkauft
                                 </div>
                               )}
-                              {product.isTopSeller && product.inStock && (
+                              {product.isTopSeller && (product.isAvailable ?? product.inStock) && (
                                 <div className="text-xs text-blue-600 font-medium mt-0.5">
                                   Top Seller
                                 </div>
@@ -413,7 +444,7 @@ export default function SearchBar({
                   <>
                     <div className="px-4 py-2 bg-green-50 border-b border-green-100">
                       <p className="text-xs font-medium text-green-700 uppercase tracking-wide">
-                        Kategorien ({categories.length})
+                        Kategorien ({totalCategoriesFound > 5 ? `${categories.length} von ${totalCategoriesFound}` : categories.length})
                       </p>
                     </div>
                     {categories.map((category, index) => (
@@ -511,12 +542,12 @@ export default function SearchBar({
                                   {((product.price || 0) / 100).toFixed(2)} €
                                 </div>
                               )}
-                              {!product.inStock && (
+                              {!(product.isAvailable ?? product.inStock) && (
                                 <div className="text-xs text-red-600 font-medium mt-0.5">
                                   Ausverkauft
                                 </div>
                               )}
-                              {product.isTopSeller && product.inStock && (
+                              {product.isTopSeller && (product.isAvailable ?? product.inStock) && (
                                 <div className="text-xs text-blue-600 font-medium mt-0.5">
                                   Top Seller
                                 </div>
@@ -528,23 +559,28 @@ export default function SearchBar({
                     ))}
                   </>
                 )}
+
+                {/* Show All Results Button */}
+                {(totalProductsFound > maxResults || totalCategoriesFound > 5) && (
+                  <div className="px-4 py-3 border-t border-gray-200 bg-gray-50">
+                    <button
+                      onClick={() => {
+                        router.push(`/shop?search=${encodeURIComponent(query)}`);
+                        setShowDropdown(false);
+                        setQuery('');
+                        inputRef.current?.blur();
+                      }}
+                      className="w-full px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 transition-colors flex items-center justify-center gap-2"
+                    >
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                      </svg>
+                      Alle Ergebnisse anzeigen ({totalProductsFound + totalCategoriesFound})
+                    </button>
+                  </div>
+                )}
               </div>
 
-              {/* View All Results */}
-              {(results.length >= maxResults || categories.length > 0 || descriptionProducts.length > 0) && (
-                <div className="px-4 py-2 bg-gray-50 border-t border-gray-200 rounded-b-lg">
-                  <button
-                    onClick={() => {
-                      router.push(`/shop?search=${encodeURIComponent(query)}`);
-                      setShowDropdown(false);
-                      setQuery('');
-                    }}
-                    className="w-full text-sm text-blue-600 hover:text-blue-700 font-medium"
-                  >
-                    Alle Ergebnisse anzeigen →
-                  </button>
-                </div>
-              )}
             </>
           ) : query.trim() && !isLoading ? (
             <div className="px-4 py-6 text-center">

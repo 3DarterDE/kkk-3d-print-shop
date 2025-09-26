@@ -9,6 +9,7 @@ import { useState, useEffect, useMemo, useCallback } from "react";
 import { useAuth } from '@/lib/hooks/useAuth';
 import { TiShoppingCart } from "react-icons/ti";
 import { useRouter } from "next/navigation";
+import CartSidebar from "./CartSidebar";
 
 interface Category {
   _id: string;
@@ -24,6 +25,7 @@ export default function Navbar() {
   const [isScrolled, setIsScrolled] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isAdminMenuOpen, setIsAdminMenuOpen] = useState(false);
+  const [isCartOpen, setIsCartOpen] = useState(false);
   const [isMounted, setIsMounted] = useState(false);
   const [categories, setCategories] = useState<Category[]>([]);
   const [isLoadingCategories, setIsLoadingCategories] = useState(true);
@@ -49,6 +51,14 @@ export default function Navbar() {
 
   const closeAdminMenu = useCallback(() => {
     setIsAdminMenuOpen(false);
+  }, []);
+
+  const toggleCart = useCallback(() => {
+    setIsCartOpen(prev => !prev);
+  }, []);
+
+  const closeCart = useCallback(() => {
+    setIsCartOpen(false);
   }, []);
 
   useEffect(() => {
@@ -158,7 +168,6 @@ export default function Navbar() {
             {[
               { href: "/", label: "Startseite" },
               { href: "/shop", label: "Shop" },
-              { href: "/blog", label: "Blog" },
               { href: "/kontakt", label: "Kontakt" }
             ].map((item) => (
               <Link
@@ -176,16 +185,17 @@ export default function Navbar() {
           <div className="hidden lg:block flex-1 max-w-md mx-8">
             <SearchBar 
               placeholder="Luke Littler, , Boards..."
-              maxResults={6}
+              maxResults={10}
             />
           </div>
 
           {/* Auth, Cart, Admin (if any) */}
           <div className="flex items-center gap-2">
             <CustomerButton />
-            <Link 
-              href="/cart" 
+            <button 
+              onClick={toggleCart}
               className="relative flex items-center text-white hover:text-blue-200 transition-all duration-300 group"
+              aria-label="Warenkorb öffnen"
             >
               <div className="relative group-hover:drop-shadow-[0_0_6px_rgba(173,216,230,0.6)] transition-all duration-300">
                 <TiShoppingCart className="w-6 h-6 transition-transform duration-300 group-hover:scale-110" />
@@ -195,7 +205,7 @@ export default function Navbar() {
                   </span>
                 )}
               </div>
-            </Link>
+            </button>
 
             {isAdmin && (
               <div className="relative" data-admin-menu>
@@ -364,6 +374,9 @@ export default function Navbar() {
             </div>
           )}
         </div>
+
+        {/* Cart Sidebar */}
+        <CartSidebar isOpen={isCartOpen} onClose={closeCart} />
     </header>
   );
 }

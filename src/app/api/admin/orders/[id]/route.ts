@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { requireUser } from '@/lib/auth';
 import { connectToDatabase } from '@/lib/mongodb';
 import Order from '@/lib/models/Order';
+import { AdminBonusPoints } from '@/lib/models/AdminBonusPoints';
 
 export async function PATCH(
   request: NextRequest,
@@ -54,6 +55,35 @@ export async function PATCH(
 
     if (!order) {
       return NextResponse.json({ error: 'Order not found' }, { status: 404 });
+    }
+
+    // If status is being changed to 'delivered', create automatic bonus points timer
+    if (status === 'delivered' && order.bonusPointsEarned > 0 && !order.bonusPointsCredited && !order.bonusPointsScheduledAt) {
+      try {
+        const scheduledDate = new Date();
+        scheduledDate.setDate(scheduledDate.getDate() + 14); // 2 weeks
+
+        const adminBonusPoints = new AdminBonusPoints({
+          userId: order.userId,
+          orderId: (order._id as any).toString(),
+          pointsAwarded: order.bonusPointsEarned,
+          reason: 'Automatische Bonuspunkte nach Lieferung',
+          awardedBy: (user as any)._id.toString(),
+          bonusPointsCredited: false,
+          bonusPointsScheduledAt: scheduledDate
+        });
+
+        await adminBonusPoints.save();
+
+        // Update the order to mark as scheduled
+        order.bonusPointsScheduledAt = scheduledDate;
+        await order.save();
+
+        console.log(`Automatic bonus points timer created for order ${order.orderNumber}: ${order.bonusPointsEarned} points scheduled for ${scheduledDate.toISOString()}`);
+      } catch (error) {
+        console.error('Error creating automatic bonus points timer:', error);
+        // Don't fail the status update if bonus points timer creation fails
+      }
     }
 
     return NextResponse.json({

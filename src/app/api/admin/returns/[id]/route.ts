@@ -4,6 +4,7 @@ import { connectToDatabase } from '@/lib/mongodb';
 import ReturnRequest from '@/lib/models/Return';
 import { Product } from '@/lib/models/Product';
 import Order from '@/lib/models/Order';
+import User from '@/lib/models/User';
 import { sendReturnCompletedEmail } from '@/lib/email';
 
 async function incrementStockForAcceptedItems(returnDoc: any) {
@@ -34,12 +35,13 @@ async function incrementStockForAcceptedItems(returnDoc: any) {
   }
 }
 
-export async function GET(_request: NextRequest, { params }: { params: { id: string } }) {
+export async function GET(_request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { user, response } = await requireAdmin();
-    if (!user) return response;
+    if (!user) return response!;
     await connectToDatabase();
-    const doc = await ReturnRequest.findById(params.id).lean();
+    const { id } = await params;
+    const doc = await ReturnRequest.findById(id).lean();
     if (!doc) return NextResponse.json({ error: 'Nicht gefunden' }, { status: 404 });
     return NextResponse.json({ returnRequest: doc });
   } catch (error) {
@@ -48,16 +50,17 @@ export async function GET(_request: NextRequest, { params }: { params: { id: str
   }
 }
 
-export async function PATCH(request: NextRequest, { params }: { params: { id: string } }) {
+export async function PATCH(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { user, response } = await requireAdmin();
-    if (!user) return response;
+    if (!user) return response!;
     await connectToDatabase();
 
     const payload = await request.json();
     const { items, status, notes, refund } = payload as { items?: Array<{ productId: string; accepted: boolean; quantity?: number }>; status?: 'processing'|'completed'|'rejected'; notes?: string; refund?: { method?: string; reference?: string; amount?: number } };
 
-    const returnDoc = await ReturnRequest.findById(params.id);
+    const { id } = await params;
+    const returnDoc = await ReturnRequest.findById(id);
     if (!returnDoc) return NextResponse.json({ error: 'Nicht gefunden' }, { status: 404 });
 
     if (Array.isArray(items)) {
@@ -94,10 +97,18 @@ export async function PATCH(request: NextRequest, { params }: { params: { id: st
 
       // fetch order to get orderNumber and user data if needed
       const order = await Order.findById(returnDoc.orderId).lean();
+      
+      // Fetch user data to get firstName and lastName
+      const userData = await User.findById(returnDoc.userId);
+      const customerName = userData?.firstName && userData?.lastName 
+        ? `${userData.firstName} ${userData.lastName}` 
+        : returnDoc.customer?.name || 'Kunde';
+      
       const acceptedItems = returnDoc.items.filter((it: any) => it.accepted).map((it: any) => ({ name: it.name, quantity: it.quantity, variations: it.variations }));
       const rejectedItems = returnDoc.items.filter((it: any) => !it.accepted).map((it: any) => ({ name: it.name, quantity: it.quantity, variations: it.variations }));
+      
       await sendReturnCompletedEmail({
-        name: returnDoc.customer?.name,
+        name: customerName,
         email: returnDoc.customer?.email,
         orderNumber: order?.orderNumber || returnDoc.orderNumber,
         acceptedItems,

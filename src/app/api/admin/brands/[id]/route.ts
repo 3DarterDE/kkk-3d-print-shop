@@ -3,10 +3,11 @@ import { connectToDatabase } from '@/lib/mongodb';
 import Brand from '@/lib/models/Brand';
 import { requireAdmin } from '@/lib/auth';
 
-export async function GET(request: NextRequest, { params }: { params: { id: string } }) {
+export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     await connectToDatabase();
-    const brand = await Brand.findById(params.id).lean();
+    const { id } = await params;
+    const brand = await Brand.findById(id).lean();
     
     if (!brand) {
       return NextResponse.json({ error: 'Brand not found' }, { status: 404 });
@@ -19,7 +20,7 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
   }
 }
 
-export async function PUT(request: NextRequest, { params }: { params: { id: string } }) {
+export async function PUT(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { response } = await requireAdmin();
     if (response) return response;
@@ -28,8 +29,9 @@ export async function PUT(request: NextRequest, { params }: { params: { id: stri
     const { name, description, image, imageSizes, sortOrder, isActive } = body;
 
     await connectToDatabase();
+    const { id } = await params;
     
-    const brand = await Brand.findById(params.id);
+    const brand = await Brand.findById(id);
     if (!brand) {
       return NextResponse.json({ error: 'Brand not found' }, { status: 404 });
     }
@@ -58,14 +60,15 @@ export async function PUT(request: NextRequest, { params }: { params: { id: stri
   }
 }
 
-export async function DELETE(request: NextRequest, { params }: { params: { id: string } }) {
+export async function DELETE(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { response } = await requireAdmin();
     if (response) return response;
 
     await connectToDatabase();
+    const { id } = await params;
     
-    const brand = await Brand.findById(params.id);
+    const brand = await Brand.findById(id);
     if (!brand) {
       return NextResponse.json({ error: 'Brand not found' }, { status: 404 });
     }
