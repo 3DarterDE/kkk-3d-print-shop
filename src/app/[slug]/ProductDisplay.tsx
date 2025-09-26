@@ -150,42 +150,28 @@ export default function ProductDisplay({ product, descriptionHtml, recommendedPr
     }
   }, [product.variations]);
 
-  // Initialize reviews from product data (already loaded)
+  // Load reviews for the product (always via API to get proper user data)
   useEffect(() => {
-    if (product.reviews) {
-      setReviews(product.reviews.reviews || []);
-      setReviewStats(product.reviews.reviewStats || {
-        averageRating: 0,
-        totalReviews: 0,
-        ratingDistribution: { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 }
-      });
-      setReviewsLoading(false);
-    }
-  }, [product.reviews]);
-
-  // Load additional reviews when page changes
-  useEffect(() => {
-    if (reviewsPage > 1) {
-      const loadMoreReviews = async () => {
-        try {
-          setReviewsLoading(true);
-          const response = await fetch(`/api/reviews/product/${product.slug}?page=${reviewsPage}&limit=5`);
-          if (response.ok) {
-            const data = await response.json();
-            setReviews(data.reviews);
-            setReviewStats(data.statistics);
-            setReviewsPagination(data.pagination);
-          }
-        } catch (error) {
-          console.error('Error loading reviews:', error);
-        } finally {
-          setReviewsLoading(false);
+    const loadReviews = async () => {
+      try {
+        setReviewsLoading(true);
+        const response = await fetch(`/api/reviews/product/${product.slug}?page=${reviewsPage}&limit=5`);
+        if (response.ok) {
+          const data = await response.json();
+          setReviews(data.reviews);
+          setReviewStats(data.statistics);
+          setReviewsPagination(data.pagination);
         }
-      };
+      } catch (error) {
+        console.error('Error loading reviews:', error);
+      } finally {
+        setReviewsLoading(false);
+      }
+    };
 
-      loadMoreReviews();
-    }
+    loadReviews();
   }, [product.slug, reviewsPage]);
+
 
   // Handle scroll to hide breadcrumb behind search bar
   useEffect(() => {

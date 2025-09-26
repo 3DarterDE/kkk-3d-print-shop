@@ -44,7 +44,7 @@ export const fetchProductBySlug = cache(async (slug: string): Promise<ProductDoc
   // Load review statistics and reviews for the product
   let reviews = null;
   let reviewStats = null;
-  if (product) {
+  if (product && !Array.isArray(product)) {
     // Use product slug as productId (since reviews are stored with slug)
     const productQueryId = product.slug;
     
@@ -110,7 +110,7 @@ export const fetchProductBySlug = cache(async (slug: string): Promise<ProductDoc
       isVerified: review.isVerified,
       createdAt: review.createdAt.toISOString(),
       user: {
-        name: review.isAnonymous === true ? 'Anonymer Kunde' : 
+        name: review.isAnonymous ? 'Anonymer Kunde' : 
               (review.userId?.firstName && review.userId?.lastName ? 
                 `${review.userId.firstName} ${review.userId.lastName}` : 
                 review.userId?.name || 'Unbekannter Kunde'),
@@ -127,11 +127,11 @@ export const fetchProductBySlug = cache(async (slug: string): Promise<ProductDoc
 
   console.log(`fetchProductBySlug - Connect: ${connectTime}ms, Query: ${queryTime}ms, Total: ${Date.now() - start}ms`);
   
-  if (product) {
+  if (product && !Array.isArray(product)) {
     // Serialize the product object for client components
     const serializedProduct = {
       ...product,
-      _id: product._id.toString(),
+      _id: (product._id as any).toString(),
       createdAt: product.createdAt instanceof Date ? product.createdAt.toISOString() : product.createdAt,
       updatedAt: product.updatedAt instanceof Date ? product.updatedAt.toISOString() : product.updatedAt,
       reviews
@@ -184,7 +184,7 @@ export const fetchRecommendedProducts = cache(async (productIds: string[]): Prom
     // Add review data to products and serialize for client
     const productsWithReviews = products.map(product => ({
       ...product,
-      _id: product._id.toString(),
+      _id: (product._id as any).toString(),
       createdAt: product.createdAt instanceof Date ? product.createdAt.toISOString() : product.createdAt,
       updatedAt: product.updatedAt instanceof Date ? product.updatedAt.toISOString() : product.updatedAt,
       reviews: reviewMap.get(product.slug) || {
@@ -200,7 +200,7 @@ export const fetchRecommendedProducts = cache(async (productIds: string[]): Prom
   console.log(`fetchRecommendedProducts - Connect: ${connectTime}ms, Query: ${queryTime}ms, Total: ${Date.now() - start}ms`);
   return products.map(product => ({
     ...product,
-    _id: product._id.toString(),
+    _id: (product._id as any).toString(),
     createdAt: product.createdAt instanceof Date ? product.createdAt.toISOString() : product.createdAt,
     updatedAt: product.updatedAt instanceof Date ? product.updatedAt.toISOString() : product.updatedAt
   })) as unknown as ProductDocument[];

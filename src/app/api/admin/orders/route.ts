@@ -67,9 +67,9 @@ export async function GET(request: NextRequest) {
     // Format orders with user information
     const formattedOrders = orders.map(order => ({
       ...order,
-      userEmail: order.userId?.email || 'Unbekannt',
+      userEmail: (order.userId as any)?.email || 'Unbekannt',
       userName: order.userId ? 
-        `${order.userId.firstName || ''} ${order.userId.lastName || ''}`.trim() || 'Unbekannt' : 
+        `${(order.userId as any).firstName || ''} ${(order.userId as any).lastName || ''}`.trim() || 'Unbekannt' : 
         'Unbekannt'
     }));
 
