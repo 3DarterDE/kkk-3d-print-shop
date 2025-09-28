@@ -63,9 +63,26 @@ export default function AddToCartButton({
     const buttonCenterX = buttonRect.left + buttonRect.width / 2;
     const buttonCenterY = buttonRect.top + buttonRect.height / 2;
     
-    // Target position (cart icon in navbar - responsive to screen width)
-    const targetX = window.innerWidth - (window.innerWidth * 0.2); // 20% from right edge
-    const targetY = 20; // Slightly higher for better alignment
+    // Find the actual cart icon position in the navbar
+    const cartIcon = document.querySelector('[data-cart-icon]') || 
+                     document.querySelector('svg[class*="shopping"]') || 
+                     document.querySelector('button[class*="cart"]') ||
+                     document.querySelector('a[href*="cart"]') ||
+                     document.querySelector('[aria-label*="cart" i]') ||
+                     document.querySelector('[aria-label*="warenkorb" i]');
+    
+    let targetX, targetY;
+    
+    if (cartIcon) {
+      const cartRect = cartIcon.getBoundingClientRect();
+      targetX = cartRect.left + cartRect.width / 2;
+      targetY = cartRect.top + cartRect.height / 2;
+    } else {
+      // Fallback to approximate position if cart icon not found
+      const isMobile = window.innerWidth < 768;
+      targetX = window.innerWidth - (window.innerWidth * (isMobile ? 0.08 : 0.18));
+      targetY = 20;
+    }
     
     // Set animation style with calculated positions
     setFlyAnimationStyle({
