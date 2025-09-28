@@ -385,14 +385,14 @@ export default function ShopPage({ searchParams }: { searchParams: Promise<{ cat
 
   // Helper function to check if product or any of its variations are available
   const isProductAvailable = (product: any) => {
-    // Check main product stock
-    if (product.inStock) return true;
+    // Check main product stock - both inStock and stockQuantity must be valid
+    if (product.inStock && (product.stockQuantity || 0) > 0) return true;
     
     // Check if any variation is available
     if (product.variations && product.variations.length > 0) {
       return product.variations.some((variation: any) => 
         variation.options && variation.options.some((option: any) => 
-          option.inStock === true || (option.stockQuantity && option.stockQuantity > 0)
+          option.inStock === true && (option.stockQuantity && option.stockQuantity > 0)
         )
       );
     }
@@ -1534,7 +1534,7 @@ export default function ShopPage({ searchParams }: { searchParams: Promise<{ cat
                   )}
                 </div>
                 <div className="space-y-2">
-                  {/* Top Seller */}
+                  {/* Bestseller */}
                   {initialViewProducts.some(p => p.isTopSeller) && (
                     <label className="flex items-center">
                       <input
@@ -1544,7 +1544,7 @@ export default function ShopPage({ searchParams }: { searchParams: Promise<{ cat
                         className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
                       />
                       <span className="ml-1 text-sm text-gray-700 flex items-center justify-between w-full">
-                        <span>Top Seller</span>
+                        <span>Bestseller</span>
                       </span>
                     </label>
                   )}
@@ -1827,7 +1827,7 @@ export default function ShopPage({ searchParams }: { searchParams: Promise<{ cat
                 )}
               </div>
               <div className="space-y-2">
-                {/* Top Seller */}
+                {/* Bestseller */}
                 {initialViewProducts.some(p => p.isTopSeller) && (
                   <label className="flex items-center">
                     <input
@@ -1837,7 +1837,7 @@ export default function ShopPage({ searchParams }: { searchParams: Promise<{ cat
                       className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
                     />
                     <span className="ml-1 text-sm text-gray-700 flex items-center justify-between w-full">
-                      <span>Top Seller</span>
+                      <span>Bestseller</span>
                     </span>
                   </label>
                 )}
@@ -2036,10 +2036,10 @@ export default function ShopPage({ searchParams }: { searchParams: Promise<{ cat
                   </div>
                 )}
                 
-                {/* Top Seller Filter Button */}
+                {/* Bestseller Filter Button */}
                 {showTopSellers && (
                   <div className="inline-flex items-center px-3 py-1 rounded-md text-sm bg-gray-100 text-gray-800 border border-gray-200">
-                    <span className="mr-2">Top Seller</span>
+                    <span className="mr-2">Bestseller</span>
                     <button
                       onClick={() => updateTopSellersFilter(false)}
                       className="ml-1 hover:text-red-600 transition-colors"

@@ -12,7 +12,7 @@ import BrandsCarousel from "@/components/BrandsCarousel";
 import { headers } from "next/headers";
 
 export default async function Home() {
-  // Lade Top Seller Produkte mit allen benötigten Feldern
+  // Lade Bestseller Produkte mit allen benötigten Feldern
   await connectToDatabase();
   const allProducts = await Product.find({ 
     isActive: true, 
@@ -47,6 +47,25 @@ export default async function Home() {
       totalReviews: stat.totalReviews
     });
   });
+
+  // Calculate overall review statistics for the homepage
+  const overallReviewStats = await Review.aggregate([
+    {
+      $group: {
+        _id: null,
+        averageRating: { $avg: '$rating' },
+        totalReviews: { $sum: 1 }
+      }
+    }
+  ]);
+
+  const overallStats = overallReviewStats.length > 0 ? {
+    averageRating: Math.round(overallReviewStats[0].averageRating * 10) / 10,
+    totalReviews: overallReviewStats[0].totalReviews
+  } : {
+    averageRating: 0,
+    totalReviews: 0
+  };
 
   const topSellerProducts = allProducts
     .filter((product: any) => {
@@ -228,30 +247,43 @@ export default async function Home() {
               <span><strong>Rabatte</strong> für <strong>Kunden</strong></span>
             </div>
             <div className="flex items-center gap-2">
-              <div className="flex text-yellow-400">
-                <svg className="w-4 h-4 fill-current" viewBox="0 0 20 20">
-                  <path d="M10 15l-5.878 3.09 1.123-6.545L.489 6.91l6.572-.955L10 0l2.939 5.955 6.572.955-4.756 4.635 1.123 6.545z"/>
-                </svg>
-                <svg className="w-4 h-4 fill-current" viewBox="0 0 20 20">
-                  <path d="M10 15l-5.878 3.09 1.123-6.545L.489 6.91l6.572-.955L10 0l2.939 5.955 6.572.955-4.756 4.635 1.123 6.545z"/>
-                </svg>
-                <svg className="w-4 h-4 fill-current" viewBox="0 0 20 20">
-                  <path d="M10 15l-5.878 3.09 1.123-6.545L.489 6.91l6.572-.955L10 0l2.939 5.955 6.572.955-4.756 4.635 1.123 6.545z"/>
-                </svg>
-                <svg className="w-4 h-4 fill-current" viewBox="0 0 20 20">
-                  <path d="M10 15l-5.878 3.09 1.123-6.545L.489 6.91l6.572-.955L10 0l2.939 5.955 6.572.955-4.756 4.635 1.123 6.545z"/>
-                </svg>
-                <svg className="w-4 h-4 fill-current" viewBox="0 0 20 20">
-                  <path d="M10 15l-5.878 3.09 1.123-6.545L.489 6.91l6.572-.955L10 0l2.939 5.955 6.572.955-4.756 4.635 1.123 6.545z"/>
-                </svg>
+              <div className="flex">
+                {overallStats.totalReviews > 0 ? (
+                  [1, 2, 3, 4, 5].map((star) => {
+                    const rating = overallStats.averageRating;
+                    const fillPercentage = Math.max(0, Math.min(100, (rating - (star - 1)) * 100));
+                    
+                    return (
+                      <span key={star} className="relative text-lg">
+                        <span className="text-gray-300">★</span>
+                        <span 
+                          className="absolute inset-0 text-yellow-400 overflow-hidden"
+                          style={{ width: `${fillPercentage}%` }}
+                        >
+                          ★
+                        </span>
+                      </span>
+                    );
+                  })
+                ) : (
+                  [1, 2, 3, 4, 5].map((star) => (
+                    <span key={star} className="text-lg text-gray-300">★</span>
+                  ))
+                )}
               </div>
-              <span className="text-gray-700">4.8 • 150+ Bewertungen</span>
+              <span className="text-gray-700">
+                {overallStats.totalReviews > 0 ? (
+                  `${overallStats.averageRating} • ${overallStats.totalReviews} Bewertung${overallStats.totalReviews !== 1 ? 'en' : ''}`
+                ) : (
+                  'Noch keine Bewertungen'
+                )}
+              </span>
             </div>
           </div>
         </div>
       </section>
 
-      {/* Top Seller Produkte */}
+      {/* Bestseller Produkte */}
       <TopSellerSection products={topSellerProducts} />
 
       {/* Beliebte Marken */}

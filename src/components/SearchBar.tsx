@@ -428,7 +428,7 @@ export default function SearchBar({
                               )}
                               {product.isTopSeller && (product.isAvailable ?? product.inStock) && (
                                 <div className="text-xs text-blue-600 font-medium mt-0.5">
-                                  Top Seller
+                                  Bestseller
                                 </div>
                               )}
                             </div>
@@ -549,7 +549,7 @@ export default function SearchBar({
                               )}
                               {product.isTopSeller && (product.isAvailable ?? product.inStock) && (
                                 <div className="text-xs text-blue-600 font-medium mt-0.5">
-                                  Top Seller
+                                  Bestseller
                                 </div>
                               )}
                             </div>

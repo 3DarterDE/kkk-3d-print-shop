@@ -324,11 +324,11 @@ export default function DynamicFilters({
 
   // Availability check similar to shop page
   const isProductAvailable = (product: any) => {
-    if (product.inStock) return true;
+    if (product.inStock && (product.stockQuantity || 0) > 0) return true;
     if (product.variations && product.variations.length > 0) {
       return product.variations.some((variation: any) => 
         variation.options && variation.options.some((option: any) => 
-          option.inStock === true || (option.stockQuantity && option.stockQuantity > 0)
+          option.inStock === true && (option.stockQuantity && option.stockQuantity > 0)
         )
       );
     }
@@ -353,7 +353,7 @@ export default function DynamicFilters({
       return product.variations.some((variation: any) => 
         variation.options && variation.options.some((option: any) => 
           option.value === optionValue && 
-          (option.inStock === true || (option.stockQuantity && option.stockQuantity > 0))
+          (option.inStock === true && (option.stockQuantity && option.stockQuantity > 0))
         )
       );
     }

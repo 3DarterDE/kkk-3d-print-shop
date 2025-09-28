@@ -23,7 +23,7 @@ export default function TopSellerSection({ products }: TopSellerSectionProps) {
                 currentIndex={currentIndex}
                 onIndexChange={setCurrentIndex}
               />
-              <h2 className="text-3xl font-bold text-gray-900">Top Seller</h2>
+              <h2 className="text-3xl font-bold text-gray-900">Bestseller</h2>
               <TopSellerCarousel 
                 products={products} 
                 showNavigation="right" 

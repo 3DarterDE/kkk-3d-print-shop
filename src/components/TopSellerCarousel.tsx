@@ -18,7 +18,7 @@ export default function TopSellerCarousel({ products, showNavigation = true, cur
   if (products.length === 0) {
     return (
       <div className="text-center py-12">
-        <p className="text-gray-500">Keine Top Seller Produkte gefunden.</p>
+        <p className="text-gray-500">Keine Bestseller Produkte gefunden.</p>
       </div>
     );
   }

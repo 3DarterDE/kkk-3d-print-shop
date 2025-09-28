@@ -70,6 +70,7 @@ export default async function ProductPage({ params }: { params: Promise<{ slug: 
     recommendedProducts: product.recommendedProducts,
     inStock: product.inStock,
     stockQuantity: product.stockQuantity,
+    isTopSeller: product.isTopSeller,
     sortOrder: product.sortOrder,
     reviews: (product as any).reviews || { averageRating: 0, totalReviews: 0 },
     createdAt: product.createdAt,

@@ -1,12 +1,13 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import AddToCartButton from "./AddToCartButton";
 import SearchBar from "@/components/SearchBar";
 import Breadcrumb from "@/components/Breadcrumb";
 import { getOptimizedImageUrl, getContextualImageSize, generateSrcSet } from "@/lib/image-utils";
 import ProductCard from "@/components/ProductCard";
 import { getStockQuantityForVariations, isVariationInStock } from "@/lib/variation-stock";
+import { FaTruckFast } from "react-icons/fa6";
 
 interface ProductDisplayProps {
   product: any;
@@ -54,8 +55,20 @@ export default function ProductDisplay({ product, descriptionHtml, recommendedPr
   const [quantity, setQuantity] = useState(1);
   const [isLightboxOpen, setIsLightboxOpen] = useState(false);
   const [isLightboxClosing, setIsLightboxClosing] = useState(false);
-  const [activeTab, setActiveTab] = useState('description');
+  const [activeTab, setActiveTab] = useState('reviews');
   const [selectedVariations, setSelectedVariations] = useState<Record<string, string>>({});
+  
+  // Swipe functionality (Mobile + PC)
+  const [touchStart, setTouchStart] = useState<number | null>(null);
+  const [touchEnd, setTouchEnd] = useState<number | null>(null);
+  const [mouseStart, setMouseStart] = useState<number | null>(null);
+  const [mouseEnd, setMouseEnd] = useState<number | null>(null);
+  const [isDragging, setIsDragging] = useState(false);
+  const [dragOffset, setDragOffset] = useState(0);
+  const [isTransitioning, setIsTransitioning] = useState(false);
+  const [windowWidth, setWindowWidth] = useState(0);
+  const viewportRef = useRef<HTMLDivElement | null>(null);
+  const [hasMoved, setHasMoved] = useState(false); // distinguishes click vs drag
   const [isScrolled, setIsScrolled] = useState(false);
   const [reviews, setReviews] = useState<Review[]>([]);
   const [reviewStats, setReviewStats] = useState<ReviewStats | null>(null);
@@ -67,6 +80,10 @@ export default function ProductDisplay({ product, descriptionHtml, recommendedPr
     total: number;
     pages: number;
   } | null>(null);
+  
+  // Reviews swipe functionality
+  const [reviewsTouchStart, setReviewsTouchStart] = useState<number | null>(null);
+  const [reviewsTouchEnd, setReviewsTouchEnd] = useState<number | null>(null);
 
   // Handle lightbox close with animation
   const handleLightboxClose = () => {
@@ -118,7 +135,7 @@ export default function ProductDisplay({ product, descriptionHtml, recommendedPr
   // Check if any variation is available (for overall availability display)
   const isAnyVariationAvailable = () => {
     if (!product.variations || product.variations.length === 0) {
-      return product.inStock;
+      return product.inStock && (product.stockQuantity || 0) > 0;
     }
     
     // Check if any variation option is in stock
@@ -155,7 +172,7 @@ export default function ProductDisplay({ product, descriptionHtml, recommendedPr
     const loadReviews = async () => {
       try {
         setReviewsLoading(true);
-        const response = await fetch(`/api/reviews/product/${product.slug}?page=${reviewsPage}&limit=5`);
+        const response = await fetch(`/api/reviews/product/${product.slug}?page=${reviewsPage}&limit=3`);
         if (response.ok) {
           const data = await response.json();
           setReviews(data.reviews);
@@ -173,7 +190,7 @@ export default function ProductDisplay({ product, descriptionHtml, recommendedPr
   }, [product.slug, reviewsPage]);
 
 
-  // Handle scroll to hide breadcrumb behind search bar
+  // Handle scroll to hide breadcrumb behind search bar and measure viewport
   useEffect(() => {
     const handleScroll = () => {
       const scrollTop = window.scrollY;
@@ -181,8 +198,26 @@ export default function ProductDisplay({ product, descriptionHtml, recommendedPr
       setIsScrolled(scrollTop > 20);
     };
 
+    // Measure viewport width for slider (SSR safe)
+    const measure = () => {
+      if (viewportRef.current) {
+        setWindowWidth(viewportRef.current.clientWidth);
+      } else {
+        setWindowWidth(window.innerWidth);
+      }
+    };
+    measure();
+    
+    const handleResize = () => {
+      measure();
+    };
+
     window.addEventListener('scroll', handleScroll);
-    return () => window.removeEventListener('scroll', handleScroll);
+    window.addEventListener('resize', handleResize);
+    return () => {
+      window.removeEventListener('scroll', handleScroll);
+      window.removeEventListener('resize', handleResize);
+    };
   }, []);
 
   // Combine images and videos for display with video at position 2
@@ -209,6 +244,151 @@ export default function ProductDisplay({ product, descriptionHtml, recommendedPr
   const videoIndex = product.videos?.indexOf(currentMedia) || 0;
   const videoThumbnail = product.videoThumbnails?.[videoIndex];
 
+  // Swipe handlers
+  const minSwipeDistance = 50;
+
+  const changeImage = (direction: 'left' | 'right') => {
+    if (isTransitioning) return;
+    
+    setIsTransitioning(true);
+    
+    if (direction === 'left') {
+      // Nach links: nächstes Bild oder zum ersten springen
+      setSelectedImageIndex(selectedImageIndex < allMedia.length - 1 ? selectedImageIndex + 1 : 0);
+    } else if (direction === 'right') {
+      // Nach rechts: vorheriges Bild oder zum letzten springen
+      setSelectedImageIndex(selectedImageIndex > 0 ? selectedImageIndex - 1 : allMedia.length - 1);
+    }
+    
+    setTimeout(() => {
+      setIsTransitioning(false);
+    }, 300);
+  };
+
+  const handleTouchStart = (e: React.TouchEvent) => {
+    e.preventDefault();
+    setTouchEnd(null);
+    setTouchStart(e.targetTouches[0].clientX);
+    setIsDragging(true);
+    setDragOffset(0);
+    setHasMoved(false);
+  };
+
+  const handleTouchMove = (e: React.TouchEvent) => {
+    e.preventDefault();
+    if (!touchStart) return;
+    const currentTouch = e.targetTouches[0].clientX;
+    setTouchEnd(currentTouch);
+    setDragOffset(currentTouch - touchStart);
+    if (Math.abs(currentTouch - touchStart) > 5) setHasMoved(true);
+  };
+
+  const handleTouchEnd = () => {
+    if (!touchStart || !touchEnd) return;
+    
+    const distance = touchStart - touchEnd;
+    const isLeftSwipe = distance > minSwipeDistance;
+    const isRightSwipe = distance < -minSwipeDistance;
+
+    if (isLeftSwipe) {
+      changeImage('left');
+    }
+    if (isRightSwipe) {
+      changeImage('right');
+    }
+    
+    setIsDragging(false);
+    setDragOffset(0);
+    // Open lightbox only on tap (no movement/swipe)
+    if (!isLeftSwipe && !isRightSwipe && !hasMoved && !isVideo) {
+      setIsLightboxOpen(true);
+    }
+  };
+
+  const handleMouseDown = (e: React.MouseEvent) => {
+    e.preventDefault();
+    setMouseEnd(null);
+    setMouseStart(e.clientX);
+    setIsDragging(true);
+    setDragOffset(0);
+    setHasMoved(false);
+  };
+
+  const handleMouseMove = (e: React.MouseEvent) => {
+    if (!mouseStart || !isDragging) return;
+    const currentMouse = e.clientX;
+    setMouseEnd(currentMouse);
+    setDragOffset(currentMouse - mouseStart);
+    if (Math.abs(currentMouse - mouseStart) > 5) setHasMoved(true);
+  };
+
+  const handleMouseUp = () => {
+    if (!mouseStart || !mouseEnd) return;
+    
+    const distance = mouseStart - mouseEnd;
+    const isLeftSwipe = distance > minSwipeDistance;
+    const isRightSwipe = distance < -minSwipeDistance;
+
+    if (isLeftSwipe) {
+      changeImage('left');
+    }
+    if (isRightSwipe) {
+      changeImage('right');
+    }
+    
+    setIsDragging(false);
+    setDragOffset(0);
+    // Open lightbox only on click (no movement/swipe)
+    if (!isLeftSwipe && !isRightSwipe && !hasMoved && !isVideo) {
+      setIsLightboxOpen(true);
+    }
+  };
+
+  const handleMouseLeave = () => {
+    if (isDragging) {
+      // Convert dragOffset to the same sign convention as distance
+      const distance = -dragOffset; // mouseStart - current
+      const isLeftSwipe = distance > minSwipeDistance;
+      const isRightSwipe = distance < -minSwipeDistance;
+
+      if (isLeftSwipe) {
+        changeImage('left');
+      } else if (isRightSwipe) {
+        changeImage('right');
+      }
+    }
+    setIsDragging(false);
+    setDragOffset(0);
+    setHasMoved(false);
+  };
+
+  // Reviews swipe handlers
+  const handleReviewsTouchStart = (e: React.TouchEvent) => {
+    setReviewsTouchStart(e.targetTouches[0].clientX);
+  };
+
+  const handleReviewsTouchMove = (e: React.TouchEvent) => {
+    setReviewsTouchEnd(e.targetTouches[0].clientX);
+  };
+
+  const handleReviewsTouchEnd = () => {
+    if (!reviewsTouchStart || !reviewsTouchEnd || !reviewsPagination) return;
+    
+    const distance = reviewsTouchStart - reviewsTouchEnd;
+    const isLeftSwipe = distance > 50;
+    const isRightSwipe = distance < -50;
+
+    if (isLeftSwipe && reviewsPage < reviewsPagination.pages) {
+      setReviewsPage(reviewsPage + 1);
+    } else if (isRightSwipe && reviewsPage > 1) {
+      setReviewsPage(reviewsPage - 1);
+    }
+    
+    setReviewsTouchStart(null);
+    setReviewsTouchEnd(null);
+  };
+
+
   return (
     <>
       {/* Fixed Search Bar - immer sichtbar auf Mobile */}
@@ -231,49 +411,99 @@ export default function ProductDisplay({ product, descriptionHtml, recommendedPr
         <Breadcrumb category={category?.slug} subcategory={subcategory?.slug} productName={product.title} />
       </div>
 
-      <div className="max-w-7xl mx-auto px-4 py-10 pt-30 md:pt-10">
+      <div className="max-w-7xl mx-auto px-4 md:py-10 pt-30 md:pt-10">
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
         {/* Left: Main Product Image/Video */}
         <div className="lg:col-span-7">
           <div className="bg-white rounded-xl shadow-lg p-4">
-            <h3 className="text-sm font-semibold text-gray-700 mb-3 flex items-center">
-              <svg className="w-4 h-4 mr-2 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
-              </svg>
-              Hauptansicht
-            </h3>
+            
             <div 
-              className={`w-full h-[500px] bg-gray-50 rounded-lg overflow-hidden relative flex items-center justify-center transition-all ${
-                isVideo ? 'cursor-default' : 'cursor-pointer hover:opacity-90 hover:scale-[1.02]'
-              }`}
-              onClick={() => !isVideo && setIsLightboxOpen(true)}
+              className={`w-full h-[350px] md:h-[600px] bg-gray-50 rounded-lg overflow-hidden relative ${
+                isVideo ? 'cursor-default' : 'cursor-grab hover:opacity-90 hover:scale-[1.02]'
+              } ${isDragging ? 'cursor-grabbing' : ''}`}
+              ref={viewportRef}
+              onTouchStart={handleTouchStart}
+              onTouchMove={handleTouchMove}
+              onTouchEnd={handleTouchEnd}
+              onMouseDown={handleMouseDown}
+              onMouseMove={handleMouseMove}
+              onMouseUp={handleMouseUp}
+              onMouseLeave={handleMouseLeave}
              >
-            {currentMedia ? (
-              isVideo ? (
+              {/* Galerie Container mit allen Bildern */}
+              <div 
+                className="flex h-full"
+                style={{
+                  width: `${allMedia.length * 100}%`,
+                  transform: `translateX(${-(selectedImageIndex * (100 / allMedia.length)) + (windowWidth > 0 ? (dragOffset / windowWidth) * (100 / allMedia.length) : 0)}%)`,
+                  transition: isDragging ? 'none' : 'transform 300ms ease-out'
+                }}
+              >
+                {allMedia.map((media, index) => {
+                  const isCurrentVideo = media && product.videos?.includes(media);
+                  const videoIdx = product.videos?.indexOf(media) || 0;
+                  const videoThumb = product.videoThumbnails?.[videoIdx];
+                  
+                  const slideWidthPercent = 100 / allMedia.length;
+                  return (
+                    <div
+                      key={index}
+                      className="h-full flex-shrink-0 flex items-center justify-center"
+                      style={{ width: `${slideWidthPercent}%` }}
+                    >
+                      {isCurrentVideo ? (
                 <video
-                  key={selectedImageIndex}
                   controls
                   className="max-w-full max-h-full object-cover"
-                  poster={videoThumbnail || product.images?.[0]}
+                          poster={videoThumb || product.images?.[0]}
                   preload="metadata"
                 >
-                  <source src={currentMedia} type="video/mp4" />
+                          <source src={media} type="video/mp4" />
                   Your browser does not support the video tag.
                 </video>
               ) : (
                 <img
-                  key={selectedImageIndex}
-                  src={getOptimizedImageUrl(currentMedia, getContextualImageSize('product-detail'), product.imageSizes, product.images?.indexOf(currentMedia) || 0)}
-                  alt={product.title}
+                          src={getOptimizedImageUrl(media, getContextualImageSize('product-detail'), product.imageSizes, product.images?.indexOf(media) || 0)}
+                          alt={`${product.title} - Bild ${index + 1}`}
                   className="max-w-full max-h-full object-contain transition-opacity duration-500"
-                  srcSet={generateSrcSet(currentMedia)}
+                          srcSet={generateSrcSet(media)}
                   sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
                 />
-              )
-            ) : (
-              <div className="flex items-center justify-center text-gray-400 text-lg">
-                No Media
+                      )}
               </div>
+                  );
+                })}
+              </div>
+            
+            {/* Navigation Buttons - nur auf Desktop */}
+            {allMedia.length > 1 && (
+              <>
+                {/* Left Arrow - immer sichtbar */}
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    changeImage('right');
+                  }}
+                  className="absolute left-4 top-1/2 transform -translate-y-1/2 bg-black bg-opacity-50 hover:bg-opacity-70 text-white p-2 rounded-full transition-all duration-200 hidden md:block"
+                >
+                  <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+                  </svg>
+                </button>
+                
+                {/* Right Arrow - immer sichtbar */}
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    changeImage('left');
+                  }}
+                  className="absolute right-4 top-1/2 transform -translate-y-1/2 bg-black bg-opacity-50 hover:bg-opacity-70 text-white p-2 rounded-full transition-all duration-200 hidden md:block"
+                >
+                  <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                  </svg>
+                </button>
+              </>
             )}
             
             {/* Media counter */}
@@ -286,12 +516,6 @@ export default function ProductDisplay({ product, descriptionHtml, recommendedPr
             
             {/* Thumbnails below main image */}
             <div className="mt-4">
-              <h3 className="text-sm font-semibold text-gray-700 mb-3 flex items-center">
-                <svg className="w-4 h-4 mr-2 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                </svg>
-                Galerie
-              </h3>
               <div className="flex gap-2 overflow-x-auto pb-2">
                 {allMedia.map((media: string, index: number) => {
                   const isVideoThumbnail = product.videos?.includes(media);
@@ -348,13 +572,548 @@ export default function ProductDisplay({ product, descriptionHtml, recommendedPr
               </div>
             </div>
           </div>
+          {/* Navigation Menu */}
+          <div className="mt-6 mb-4 hidden lg:block">
+            <div className="bg-white rounded-xl shadow-lg p-4">
+              <nav className="flex justify-center gap-6">
+                <button
+                  onClick={() => {
+                    const element = document.getElementById('reviews-section');
+                    if (element) {
+                      const elementPosition = element.offsetTop;
+                      const offsetPosition = elementPosition - 100; // 100px offset from top
+                      window.scrollTo({
+                        top: offsetPosition,
+                        behavior: 'smooth'
+                      });
+                    }
+                  }}
+                  className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-gray-700 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                >
+                  <svg className="w-4 h-4 text-yellow-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.197-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.784-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z" />
+                  </svg>
+                  Bewertungen
+                </button>
+                <button
+                  onClick={() => {
+                    const element = document.getElementById('properties-section');
+                    if (element) {
+                      const elementPosition = element.offsetTop;
+                      const offsetPosition = elementPosition - 100; // 100px offset from top
+                      window.scrollTo({
+                        top: offsetPosition,
+                        behavior: 'smooth'
+                      });
+                    }
+                  }}
+                  className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-gray-700 hover:text-green-600 hover:bg-green-50 rounded-lg transition-colors"
+                >
+                  <svg className="w-4 h-4 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                  Eigenschaften
+                </button>
+                <button
+                  onClick={() => {
+                    const element = document.getElementById('description-section');
+                    if (element) {
+                      const elementPosition = element.offsetTop;
+                      const offsetPosition = elementPosition - 100; // 100px offset from top
+                      window.scrollTo({
+                        top: offsetPosition,
+                        behavior: 'smooth'
+                      });
+                    }
+                  }}
+                  className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-gray-700 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                >
+                  <svg className="w-4 h-4 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                  </svg>
+                  Beschreibung
+                </button>
+              </nav>
+          </div>
         </div>
 
-        {/* Right: Product Info & Purchase */}
-        <div className="lg:col-span-5">
-          <div className="bg-white rounded-xl shadow-lg p-6">
+          {/* Product Information Sections (no tabs) */}
+          <div className="space-y-6">
+            
+            {/* Product Info Box - Mobile only (over Reviews) */}
+            <div className="lg:hidden bg-white rounded-xl shadow-lg p-6 mt-6">
+              {/* Product Title */}
+              <div className="mb-2">
+                <h1 className="text-2xl font-bold text-gray-900">{product.title}</h1>
+              </div>
+
+              {/* Stars & Review */}
+              <div className="flex items-center gap-2 mb-4">
+                {reviewStats && reviewStats.totalReviews > 0 ? (
+                  <>
+                    <div className="flex">
+                      {[1, 2, 3, 4, 5].map((star) => {
+                        const rating = reviewStats.averageRating;
+                        const fillPercentage = Math.max(0, Math.min(100, (rating - (star - 1)) * 100));
+                        
+                        return (
+                          <span key={star} className="relative text-xl">
+                            <span className="text-gray-300">★</span>
+                            <span
+                              className="absolute inset-0 text-yellow-400 overflow-hidden"
+                              style={{ width: `${fillPercentage}%` }}
+                            >
+                              ★
+                            </span>
+                          </span>
+                        );
+                      })}
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm font-medium text-gray-900">
+                        {reviewStats.averageRating.toFixed(1)}
+                      </span>
+                      <span className="text-sm text-gray-600">
+                        ({reviewStats.totalReviews} Bewertungen)
+                      </span>
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <div className="flex">
+                      {[1, 2, 3, 4, 5].map((star) => (
+                        <span key={star} className="text-xl text-gray-300">
+                          ★
+                        </span>
+                      ))}
+                    </div>
+                    <span className="text-sm text-gray-600">Noch keine Bewertungen</span>
+                  </>
+                )}
+              </div>
+
+              {/* Price */}
+              <div className="mb-4">
+                <div className="flex items-center gap-2">
+                  <span className="text-3xl font-bold text-gray-900">
+                    {(calculateFinalPrice() / 100).toFixed(2)} €
+                  </span>
+                  {product.isOnSale && product.offerPrice && (
+                    <span className="text-lg text-gray-400 line-through">
+                      {(() => {
+                        // Calculate original price with variations for strikethrough
+                        let originalPriceWithVariations = product.price;
+                        if (product.variations) {
+                          product.variations.forEach((variation: any) => {
+                            const selectedOption = variation.options.find((option: any) => 
+                              option.value === selectedVariations[variation.name]
+                            );
+                            if (selectedOption && selectedOption.priceModifier) {
+                              originalPriceWithVariations += selectedOption.priceModifier;
+                            }
+                          });
+                        }
+                        return (originalPriceWithVariations / 100).toFixed(2);
+                      })()} €
+                    </span>
+                  )}
+                </div>
+                {product.isOnSale && (
+                  <div className="text-sm text-green-600 font-medium mt-1">
+                    Du sparst {((product.price - (product.offerPrice || product.price)) / product.price * 100).toFixed(0)}%
+                  </div>
+                )}
+              </div>
+
+              {/* Variations */}
+              {product.variations && product.variations.length > 0 && (
+                <div className="mb-4">
+                  {product.variations.map((variation: any) => (
+                    <div key={variation.name} className="mb-3">
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        {variation.name}:
+                      </label>
+                      <div className="flex flex-wrap gap-2">
+                        {variation.options.map((option: any) => (
+                          <button
+                            key={option.value}
+                            onClick={() => setSelectedVariations(prev => ({
+                              ...prev,
+                              [variation.name]: option.value
+                            }))}
+                            className={`px-3 py-2 text-sm rounded-lg border transition-colors ${
+                              selectedVariations[variation.name] === option.value
+                                ? 'bg-blue-600 text-white border-blue-600'
+                                : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'
+                            }`}
+                          >
+                            {option.value}
+                            {option.priceModifier && option.priceModifier !== 0 && (
+                              <span className="ml-1 text-xs">
+                                {option.priceModifier > 0 ? '+' : ''}{option.priceModifier.toFixed(2)}€
+                              </span>
+                            )}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {/* Quantity Selector */}
+              <div className="mb-4">
+                <div className="flex items-center justify-between mb-2">
+                  <label className="text-sm font-medium text-gray-700">
+                    Anzahl:
+                  </label>
+                  <span className="text-sm text-gray-600">
+                    {isCurrentVariationInStock() ? `${getCurrentStockQuantity()} verfügbar` : 'Ausverkauft'}
+                  </span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => setQuantity(Math.max(1, quantity - 1))}
+                    className="w-8 h-8 rounded-lg border border-gray-300 flex items-center justify-center hover:bg-gray-50"
+                  >
+                    -
+                  </button>
+                  <span className="px-3 py-1 text-sm font-medium">{quantity}</span>
+                  <button
+                    onClick={() => setQuantity(Math.min(getCurrentStockQuantity(), quantity + 1))}
+                    disabled={quantity >= getCurrentStockQuantity() || getCurrentStockQuantity() <= 0}
+                    className={`w-8 h-8 rounded-lg border border-gray-300 flex items-center justify-center hover:bg-gray-50 ${
+                      quantity >= getCurrentStockQuantity() || getCurrentStockQuantity() <= 0
+                        ? 'opacity-50 cursor-not-allowed'
+                        : ''
+                    }`}
+                  >
+                    +
+                  </button>
+                </div>
+              </div>
+
+              {/* Add to Cart Button */}
+              <div className="mb-4">
+                <AddToCartButton 
+                  slug={product.slug} 
+                  title={product.title} 
+                  price={calculateFinalPrice()}
+                  quantity={quantity}
+                  variations={selectedVariations}
+                  disabled={!areAllVariationsSelected()}
+                  inStock={isCurrentVariationInStock()}
+                  stockQuantity={getCurrentStockQuantity()}
+                  image={product.images?.[0]}
+                  imageSizes={product.imageSizes}
+                />
+                
+                {/* Availability Text */}
+                <div className="mt-2 text-sm text-gray-600">
+                  {isAnyVariationAvailable() ? (
+                    <span className="flex items-center">
+                      <FaTruckFast className="w-6 h-6 mr-2 text-gray-500" />
+                      <span className="font-bold">Sofort verfügbar</span> <span className="ml-1">• Lieferzeit 2-4 Werktage</span>
+                    </span>
+                  ) : (
+                    <span className="text-red-600"></span>
+                  )}
+                </div>
+              </div>
+
+              {/* Shipping Info */}
+              <div className="bg-green-50 border border-green-200 rounded-lg p-3 mb-4">
+                <div className="flex items-center gap-2">
+                  <svg className="w-5 h-5 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" />
+                  </svg>
+                  <span className="text-sm text-green-800">
+                    Paketversand DE: Jetzt bestellen für eine Lieferung in 1-3 Werktage mit Versandkosten von 0.00 €
+                  </span>
+                </div>
+              </div>
+            </div>
+            {/* Navigation Menu - Mobile only (under purchase box) */}
+            <div className="block lg:hidden mt-4">
+              <div className="bg-white rounded-xl shadow-lg p-4">
+                <nav className="flex justify-center items-center gap-2">
+                  <button
+                    onClick={() => {
+                      const element = document.getElementById('reviews-section');
+                      if (element) {
+                        const elementPosition = element.offsetTop;
+                        const offsetPosition = elementPosition - 100; // 100px offset from top
+                        window.scrollTo({
+                          top: offsetPosition,
+                          behavior: 'smooth'
+                        });
+                      }
+                    }}
+                    className="px-3 py-2 text-sm font-medium text-gray-700 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                  >
+                    Bewertungen
+                  </button>
+                  <span className="text-gray-300">|</span>
+                  <button
+                    onClick={() => {
+                      const element = document.getElementById('properties-section');
+                      if (element) {
+                        const elementPosition = element.offsetTop;
+                        const offsetPosition = elementPosition - 100; // 100px offset from top
+                        window.scrollTo({
+                          top: offsetPosition,
+                          behavior: 'smooth'
+                        });
+                      }
+                    }}
+                    className="px-3 py-2 text-sm font-medium text-gray-700 hover:text-green-600 hover:bg-green-50 rounded-lg transition-colors"
+                  >
+                    Eigenschaften
+                  </button>
+                  <span className="text-gray-300">|</span>
+                  <button
+                    onClick={() => {
+                      const element = document.getElementById('description-section');
+                      if (element) {
+                        const elementPosition = element.offsetTop;
+                        const offsetPosition = elementPosition - 100; // 100px offset from top
+                        window.scrollTo({
+                          top: offsetPosition,
+                          behavior: 'smooth'
+                        });
+                      }
+                    }}
+                    className="px-3 py-2 text-sm font-medium text-gray-700 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                  >
+                    Beschreibung
+                  </button>
+                </nav>
+              </div>
+            </div>
+            
+            {/* Reviews Section */}
+            <div id="reviews-section" className="bg-white rounded-xl shadow-lg p-6">
+              <div className="flex items-center justify-between mb-6">
+                <h2 className="text-xl font-bold text-gray-900 flex items-center">
+                  
+                  Bewertungen ({reviewStats?.totalReviews || 0})
+                  {reviewStats && reviewStats.totalReviews > 0 && (
+                    <div className="flex items-center ml-4">
+                      <div className="flex">
+                        {[1, 2, 3, 4, 5].map((star) => {
+                          const rating = reviewStats.averageRating;
+                          const fillPercentage = Math.max(0, Math.min(100, (rating - (star - 1)) * 100));
+                          
+                          return (
+                            <span key={star} className="relative text-lg">
+                              <span className="text-gray-300">★</span>
+                              <span 
+                                className="absolute inset-0 text-yellow-400 overflow-hidden"
+                                style={{ width: `${fillPercentage}%` }}
+                              >
+                                ★
+                              </span>
+                            </span>
+                          );
+                        })}
+                      </div>
+                      <span className="text-sm font-medium text-gray-900 ml-2">
+                        {reviewStats.averageRating.toFixed(1)}
+                      </span>
+                    </div>
+                  )}
+                </h2>
+                
+                {/* Pagination */}
+                {reviewsPagination && reviewsPagination.pages > 1 && (
+                  <div className="hidden md:flex items-center gap-2">
+                    <button
+                      onClick={() => setReviewsPage(Math.max(1, reviewsPage - 1))}
+                      disabled={reviewsPage === 1}
+                      className={`px-2 py-1 text-xs rounded transition-colors ${
+                        reviewsPage === 1
+                          ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                          : 'bg-white border border-gray-300 text-gray-700 hover:bg-gray-50'
+                      }`}
+                    >
+                      ← Zurück
+                    </button>
+                    <span className="text-xs text-gray-600 px-2">
+                      {reviewsPage} von {reviewsPagination.pages}
+                    </span>
+                    <button
+                      onClick={() => setReviewsPage(Math.min(reviewsPagination.pages, reviewsPage + 1))}
+                      disabled={reviewsPage === reviewsPagination.pages}
+                      className={`px-2 py-1 text-xs rounded transition-colors ${
+                        reviewsPage === reviewsPagination.pages
+                          ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                          : 'bg-white border border-gray-300 text-gray-700 hover:bg-gray-50'
+                      }`}
+                    >
+                      Weiter →
+                    </button>
+                  </div>
+                )}
+              </div>
+              
+              {reviewStats && reviewStats.totalReviews > 0 ? (
+                <>
+                  
+                  {/* Individual Reviews */}
+                  <div 
+                    className="space-y-4 relative"
+                    onTouchStart={handleReviewsTouchStart}
+                    onTouchMove={handleReviewsTouchMove}
+                    onTouchEnd={handleReviewsTouchEnd}
+                  >
+                    {reviewsLoading ? (
+                      <div className="space-y-4">
+                        {/* Skeleton Loading für Reviews */}
+                        {[1, 2, 3].map((index) => (
+                          <div key={index} className="border border-gray-200 rounded-lg p-4 animate-pulse">
+                            <div className="flex items-start justify-between mb-3">
+                              <div className="flex items-center gap-2">
+                                <div className="flex gap-1">
+                                  {[1, 2, 3, 4, 5].map((star) => (
+                                    <div key={star} className="w-4 h-4 bg-gray-300 rounded-sm"></div>
+                                  ))}
+                                </div>
+                                <div className="h-4 w-24 bg-gray-300 rounded"></div>
+                                <div className="h-5 w-20 bg-green-200 rounded-full"></div>
+                              </div>
+                              <div className="h-3 w-16 bg-gray-300 rounded"></div>
+                            </div>
+                            <div className="h-4 w-3/4 bg-gray-300 rounded mb-2"></div>
+                            <div className="space-y-2">
+                              <div className="h-3 w-full bg-gray-300 rounded"></div>
+                              <div className="h-3 w-5/6 bg-gray-300 rounded"></div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    ) : reviews.length > 0 ? (
+                      <>
+                        {reviews.map((review) => (
+                        <div key={review._id} className="border border-gray-200 rounded-lg p-4">
+                          <div className="flex items-start justify-between mb-2">
+                            <div className="flex items-center gap-2">
+                              <div className="flex">
+                                {[1, 2, 3, 4, 5].map((star) => {
+                                  const rating = review.rating;
+                                  const fillPercentage = Math.max(0, Math.min(100, (rating - (star - 1)) * 100));
+                                  
+                                  return (
+                                    <span key={star} className="relative text-lg">
+                                      <span className="text-gray-300">★</span>
+                                      <span 
+                                        className="absolute inset-0 text-yellow-400 overflow-hidden"
+                                        style={{ width: `${fillPercentage}%` }}
+                                      >
+                                        ★
+                                      </span>
+                                    </span>
+                                  );
+                                })}
+                              </div>
+                              <span className="text-sm font-medium text-gray-900">
+                                {review.user.name === 'Anonymer Kunde' ? 'Anonym' : review.user.name}
+                              </span>
+                              {review.isVerified && (
+                                <span className="text-xs bg-green-100 text-green-800 px-2 py-1 rounded-full">
+                                  ✓
+                                </span>
+                              )}
+                            </div>
+                            <span className="text-xs text-gray-500">
+                              {new Date(review.createdAt).toLocaleDateString('de-DE')}
+                            </span>
+                          </div>
+                          {review.title && (
+                            <h4 className="font-medium text-gray-900 mb-2">{review.title}</h4>
+                          )}
+                          {review.comment && (
+                            <p className="text-gray-700 text-sm">{review.comment}</p>
+                          )}
+                        </div>
+                        ))}
+                      </>
+                    ) : (
+                      <p className="text-gray-500 text-center py-8">
+                        Noch keine Bewertungen vorhanden.
+                      </p>
+                    )}
+                  </div>
+                </>
+              ) : (
+                <div className="text-center py-12">
+                  <div className="text-6xl mb-4">⭐</div>
+                  <h3 className="text-lg font-semibold text-gray-900 mb-2">
+                    Noch keine Bewertungen
+                  </h3>
+                  <p className="text-gray-600 mb-4">
+                    Sei der Erste, der dieses Produkt bewertet!
+                  </p>
+                  <button className="bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700 transition-colors">
+                    Bewertung schreiben
+                  </button>
+                </div>
+              )}
+              
+              {/* Mobile Page Counter */}
+              {reviewsPagination && reviewsPagination.pages > 1 && (
+                <div className="flex justify-end mt-4 md:hidden">
+                  <span className="text-xs text-gray-500">
+                    {reviewsPage} von {reviewsPagination.pages}
+                  </span>
+                </div>
+              )}
+            </div>
+
+            {/* Properties Section */}
+            <div id="properties-section" className="bg-white rounded-xl shadow-lg p-6">
+              <h2 className="text-xl font-bold text-gray-900 mb-6 flex items-center">
+                <svg className="w-6 h-6 mr-3 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+                Eigenschaften
+              </h2>
+              
+              {product.properties && product.properties.length > 0 ? (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {product.properties.map((property: any, index: number) => (
+                    <div key={index} className="flex justify-between py-2 border-b border-gray-200">
+                      <span className="font-medium text-gray-900">{property.name}:</span>
+                      <span className="text-gray-700">{property.value}</span>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-gray-500">Keine Eigenschaften verfügbar.</p>
+              )}
+            </div>
+
+            {/* Description Section */}
+            <div id="description-section" className="bg-white rounded-xl shadow-lg p-6">
+              <h2 className="text-xl font-bold text-gray-900 mb-6 flex items-center">
+                <svg className="w-6 h-6 mr-3 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                </svg>
+                Beschreibung
+              </h2>
+              
+              <div
+                className="prose max-w-none"
+                dangerouslySetInnerHTML={{ __html: descriptionHtml }}
+              />
+            </div>
+          </div>
+        </div>
+
+        {/* Right: Product Info & Purchase (sticky on desktop) */}
+        <div className="hidden lg:col-span-5 lg:block">
+          <div className="bg-white rounded-xl shadow-lg p-6 lg:sticky lg:top-28">
             {/* Product Title */}
-             <div className="mb-4">
+             <div className="mb-2">
                <h1 className="text-2xl font-bold text-gray-900">{product.title}</h1>
              </div>
 
@@ -363,18 +1122,22 @@ export default function ProductDisplay({ product, descriptionHtml, recommendedPr
               {reviewStats && reviewStats.totalReviews > 0 ? (
                 <>
                   <div className="flex">
-                    {[1, 2, 3, 4, 5].map((star) => (
+                    {[1, 2, 3, 4, 5].map((star) => {
+                      const rating = reviewStats.averageRating;
+                      const fillPercentage = Math.max(0, Math.min(100, (rating - (star - 1)) * 100));
+                      
+                      return (
+                        <span key={star} className="relative text-xl">
+                          <span className="text-gray-300">★</span>
                       <span
-                        key={star}
-                        className={`text-lg ${
-                          star <= Math.round(reviewStats.averageRating)
-                            ? 'text-yellow-400'
-                            : 'text-gray-300'
-                        }`}
+                            className="absolute inset-0 text-yellow-400 overflow-hidden"
+                            style={{ width: `${fillPercentage}%` }}
                       >
                         ★
                       </span>
-                    ))}
+                        </span>
+                      );
+                    })}
                   </div>
                   <div className="flex items-center gap-2">
                     <span className="text-sm font-medium text-gray-900">
@@ -389,7 +1152,7 @@ export default function ProductDisplay({ product, descriptionHtml, recommendedPr
                 <>
                   <div className="flex">
                     {[1, 2, 3, 4, 5].map((star) => (
-                      <span key={star} className="text-lg text-gray-300">
+                      <span key={star} className="text-xl text-gray-300">
                         ★
                       </span>
                     ))}
@@ -451,16 +1214,42 @@ export default function ProductDisplay({ product, descriptionHtml, recommendedPr
               </div>
             </div>
 
+
+
+            {/* Bestseller Badge */}
+            {product.isTopSeller && (
+              <div className="mb-4 p-3 rounded-lg bg-yellow-50 border border-yellow-200">
+                <div className="flex items-center">
+                  <div className="w-3 h-3 rounded-full mr-2 bg-yellow-500"></div>
+                  <span className="font-medium text-yellow-700">
+                    Bestseller
+                  </span>
+                  <span className="ml-2 text-sm text-yellow-600">• Beliebtes Produkt</span>
+                </div>
+              </div>
+            )}
+
+            {/* PayPal Info */}
+            <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-4">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 bg-blue-600 rounded-lg flex items-center justify-center">
+                  <span className="text-white font-bold text-lg">P</span>
+                </div>
+                <div>
+                  <span className="text-sm font-medium text-blue-800">
+                    Bezahlen Sie nach 30 Tagen
+                  </span>
+                  <div className="text-xs text-blue-600">
+                    Mehr erfahren
+                  </div>
+                </div>
+              </div>
+            </div>
+
             {/* Variations */}
             {product.variations && product.variations.length > 0 && (
-              <div className="mb-6 p-4 bg-blue-50 rounded-lg">
-                <h3 className="text-lg font-semibold text-gray-900 mb-3 flex items-center">
-                  <svg className="w-5 h-5 mr-2 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z" />
-                  </svg>
-                  Variationen
-                </h3>
-                <div className="space-y-4">
+              <div className="mb-4">
+                <div className="space-y-3">
                   {product.variations.map((variation: any, index: number) => (
                     <div key={index}>
                       <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -488,7 +1277,7 @@ export default function ProductDisplay({ product, descriptionHtml, recommendedPr
                               {option.priceAdjustment !== undefined && option.priceAdjustment > 0 && ` (+${(option.priceAdjustment / 100).toFixed(2)} €)`}
                               {option.priceAdjustment !== undefined && option.priceAdjustment < 0 && ` (${(option.priceAdjustment / 100).toFixed(2)} €)`}
                               {optionStock > 0 && ` - ${optionStock} verfügbar`}
-                              {(!optionInStock || optionStock <= 0) && ' - Nicht verfügbar'}
+                              {(!optionInStock || optionStock <= 0) && ' - Ausverkauft'}
                             </option>
                           );
                         })}
@@ -498,36 +1287,6 @@ export default function ProductDisplay({ product, descriptionHtml, recommendedPr
                 </div>
               </div>
             )}
-
-            {/* Availability */}
-            <div className={`mb-4 p-3 rounded-lg ${isAnyVariationAvailable() ? 'bg-green-50' : 'bg-red-50'}`}>
-              <div className="flex items-center">
-                <div className={`w-3 h-3 rounded-full mr-2 ${isAnyVariationAvailable() ? 'bg-green-500' : 'bg-red-500'}`}></div>
-                <span className={`font-medium ${isAnyVariationAvailable() ? 'text-green-700' : 'text-red-700'}`}>
-                  {isAnyVariationAvailable() ? "Sofort verfügbar!" : "Nicht verfügbar"}
-                </span>
-                {isAnyVariationAvailable() && (
-                  <span className="ml-2 text-sm text-green-600">• Versand in 1-2 Werktagen</span>
-                )}
-              </div>
-            </div>
-
-            {/* PayPal Info */}
-            <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-4">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 bg-blue-600 rounded-lg flex items-center justify-center">
-                  <span className="text-white font-bold text-lg">P</span>
-                </div>
-                <div>
-                  <span className="text-sm font-medium text-blue-800">
-                    Bezahlen Sie nach 30 Tagen
-                  </span>
-                  <div className="text-xs text-blue-600">
-                    Mehr erfahren
-                  </div>
-                </div>
-              </div>
-            </div>
 
             {/* Quantity Selector */}
             <div className="mb-6 p-4 bg-gray-50 rounded-lg">
@@ -545,8 +1304,8 @@ export default function ProductDisplay({ product, descriptionHtml, recommendedPr
                       {getCurrentStockQuantity()} verfügbar
                     </span>
                   ) : (
-                    <span className="text-red-600 font-medium">
-                      Nicht verfügbar
+                    <span className="font-medium">
+                      Ausverkauft
                     </span>
                   )}
                 </div>
@@ -589,6 +1348,18 @@ export default function ProductDisplay({ product, descriptionHtml, recommendedPr
               image={product.images?.[0]}
               imageSizes={product.imageSizes}
             />
+            
+            {/* Availability Text */}
+            <div className="mt-2 text-sm text-gray-600">
+              {isAnyVariationAvailable() ? (
+                <span className="flex items-center">
+                  <FaTruckFast className="w-6 h-6 mr-2 text-gray-500" />
+                  <span className="font-bold">Sofort verfügbar</span> <span className="ml-1">• Lieferzeit 2-4 Werktage</span>
+                </span>
+              ) : (
+                <span className="text-red-600"></span>
+              )}
+            </div>
             </div>
 
             {/* Shipping Info */}
@@ -607,250 +1378,6 @@ export default function ProductDisplay({ product, descriptionHtml, recommendedPr
         </div>
       </div>
 
-      {/* Product Description Tabs */}
-      <div className="mt-12">
-        <div className="bg-white rounded-xl shadow-lg overflow-hidden">
-          <div className="border-b border-gray-200 bg-gray-50">
-            <nav className="flex">
-              <button 
-                onClick={() => setActiveTab('description')}
-                className={`flex-1 py-4 px-6 text-sm font-medium flex items-center justify-center transition-colors ${
-                  activeTab === 'description' 
-                    ? 'bg-blue-50 text-blue-600 border-b-2 border-blue-500' 
-                    : 'text-gray-500 hover:text-gray-700 hover:bg-gray-100'
-                }`}
-              >
-                <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                </svg>
-                Beschreibung
-              </button>
-              <button 
-                onClick={() => setActiveTab('properties')}
-                className={`flex-1 py-4 px-6 text-sm font-medium flex items-center justify-center transition-colors ${
-                  activeTab === 'properties' 
-                    ? 'bg-blue-50 text-blue-600 border-b-2 border-blue-500' 
-                    : 'text-gray-500 hover:text-gray-700 hover:bg-gray-100'
-                }`}
-              >
-                <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                </svg>
-                Eigenschaften
-              </button>
-              <button 
-                onClick={() => setActiveTab('reviews')}
-                className={`flex-1 py-4 px-6 text-sm font-medium flex items-center justify-center transition-colors ${
-                  activeTab === 'reviews' 
-                    ? 'bg-blue-50 text-blue-600 border-b-2 border-blue-500' 
-                    : 'text-gray-500 hover:text-gray-700 hover:bg-gray-100'
-                }`}
-              >
-                <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.197-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.784-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z" />
-                </svg>
-                Bewertungen ({reviewStats?.totalReviews || 0})
-              </button>
-            </nav>
-          </div>
-          
-          <div className="p-6">
-          {activeTab === 'description' && (
-            <div
-              className="prose max-w-none"
-              dangerouslySetInnerHTML={{ __html: descriptionHtml }}
-            />
-          )}
-          
-          {activeTab === 'properties' && (
-            <div className="space-y-4">
-              {product.properties && product.properties.length > 0 ? (
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  {product.properties.map((property: any, index: number) => (
-                    <div key={index} className="flex justify-between py-2 border-b border-gray-200">
-                      <span className="font-medium text-gray-900">{property.name}:</span>
-                      <span className="text-gray-700">{property.value}</span>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <p className="text-gray-500">Keine Eigenschaften verfügbar.</p>
-              )}
-            </div>
-          )}
-          
-          {activeTab === 'reviews' && (
-            <div className="space-y-6">
-              {reviewStats && reviewStats.totalReviews > 0 ? (
-                <>
-                  {/* Review Statistics */}
-                  <div className="bg-gray-50 rounded-lg p-6">
-                    <div className="flex items-center gap-6 mb-4">
-                      <div className="text-center">
-                        <div className="text-4xl font-bold text-gray-900">
-                          {reviewStats.averageRating.toFixed(1)}
-                        </div>
-                        <div className="flex justify-center mt-1">
-                          {[1, 2, 3, 4, 5].map((star) => (
-                            <span
-                              key={star}
-                              className={`text-lg ${
-                                star <= Math.round(reviewStats.averageRating)
-                                  ? 'text-yellow-400'
-                                  : 'text-gray-300'
-                              }`}
-                            >
-                              ★
-                            </span>
-                          ))}
-                        </div>
-                        <div className="text-sm text-gray-600 mt-1">
-                          {reviewStats.totalReviews} Bewertungen
-                        </div>
-                      </div>
-                      
-                      {/* Rating Distribution */}
-                      <div className="flex-1">
-                        {[5, 4, 3, 2, 1].map((rating) => (
-                          <div key={rating} className="flex items-center gap-2 mb-2">
-                            <span className="text-sm text-gray-600 w-8">{rating}</span>
-                            <span className="text-yellow-400">★</span>
-                            <div className="flex-1 bg-gray-200 rounded-full h-2">
-                              <div 
-                                className="bg-yellow-400 h-2 rounded-full"
-                                style={{ 
-                                  width: `${reviewStats.totalReviews > 0 ? (reviewStats.ratingDistribution[rating as keyof typeof reviewStats.ratingDistribution] / reviewStats.totalReviews) * 100 : 0}%` 
-                                }}
-                              ></div>
-                            </div>
-                            <span className="text-sm text-gray-600 w-8">
-                              {reviewStats.ratingDistribution[rating as keyof typeof reviewStats.ratingDistribution]}
-                            </span>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  </div>
-                  
-                  {/* Individual Reviews */}
-                  <div className="space-y-4">
-                    <h3 className="text-lg font-semibold text-gray-900">Kundenbewertungen</h3>
-                    {reviewsLoading ? (
-                      <div className="text-center py-8">
-                        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
-                        <p className="text-gray-500 mt-2">Lade Bewertungen...</p>
-                      </div>
-                    ) : reviews.length > 0 ? (
-                      reviews.map((review) => (
-                        <div key={review._id} className="border border-gray-200 rounded-lg p-4">
-                          <div className="flex items-start justify-between mb-2">
-                            <div className="flex items-center gap-2">
-                              <div className="flex">
-                                {[1, 2, 3, 4, 5].map((star) => (
-                                  <span
-                                    key={star}
-                                    className={`text-sm ${
-                                      star <= review.rating
-                                        ? 'text-yellow-400'
-                                        : 'text-gray-300'
-                                    }`}
-                                  >
-                                    ★
-                                  </span>
-                                ))}
-                              </div>
-                              <span className="text-sm font-medium text-gray-900">
-                                {review.user.name}
-                              </span>
-                              {review.isVerified && (
-                                <span className="text-xs bg-green-100 text-green-800 px-2 py-1 rounded-full">
-                                  ✓ Verifizierter Kauf
-                                </span>
-                              )}
-                            </div>
-                            <span className="text-xs text-gray-500">
-                              {new Date(review.createdAt).toLocaleDateString('de-DE')}
-                            </span>
-                          </div>
-                          {review.title && (
-                            <h4 className="font-medium text-gray-900 mb-2">{review.title}</h4>
-                          )}
-                          {review.comment && (
-                            <p className="text-gray-700 text-sm">{review.comment}</p>
-                          )}
-                        </div>
-                      ))
-                    ) : (
-                      <p className="text-gray-500 text-center py-8">
-                        Noch keine Bewertungen vorhanden.
-                      </p>
-                    )}
-                    
-                    {/* Pagination */}
-                    {reviewsPagination && reviewsPagination.pages > 1 && (
-                      <div className="flex items-center justify-center gap-2 mt-6">
-                        <button
-                          onClick={() => setReviewsPage(Math.max(1, reviewsPage - 1))}
-                          disabled={reviewsPage === 1}
-                          className={`px-3 py-2 text-sm rounded-lg transition-colors ${
-                            reviewsPage === 1
-                              ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
-                              : 'bg-white border border-gray-300 text-gray-700 hover:bg-gray-50'
-                          }`}
-                        >
-                          ← Zurück
-                        </button>
-                        
-                        <div className="flex items-center gap-1">
-                          {Array.from({ length: reviewsPagination.pages }, (_, i) => i + 1).map((page) => (
-                            <button
-                              key={page}
-                              onClick={() => setReviewsPage(page)}
-                              className={`px-3 py-2 text-sm rounded-lg transition-colors ${
-                                page === reviewsPage
-                                  ? 'bg-blue-600 text-white'
-                                  : 'bg-white border border-gray-300 text-gray-700 hover:bg-gray-50'
-                              }`}
-                            >
-                              {page}
-                            </button>
-                          ))}
-                        </div>
-                        
-                        <button
-                          onClick={() => setReviewsPage(Math.min(reviewsPagination.pages, reviewsPage + 1))}
-                          disabled={reviewsPage === reviewsPagination.pages}
-                          className={`px-3 py-2 text-sm rounded-lg transition-colors ${
-                            reviewsPage === reviewsPagination.pages
-                              ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
-                              : 'bg-white border border-gray-300 text-gray-700 hover:bg-gray-50'
-                          }`}
-                        >
-                          Weiter →
-                        </button>
-                      </div>
-                    )}
-                  </div>
-                </>
-              ) : (
-                <div className="text-center py-12">
-                  <div className="text-6xl mb-4">⭐</div>
-                  <h3 className="text-lg font-semibold text-gray-900 mb-2">
-                    Noch keine Bewertungen
-                  </h3>
-                  <p className="text-gray-600 mb-4">
-                    Sei der Erste, der dieses Produkt bewertet!
-                  </p>
-                  <button className="bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700 transition-colors">
-                    Bewertung schreiben
-                  </button>
-                </div>
-              )}
-            </div>
-          )}
-          </div>
-        </div>
-      </div>
 
       {/* Recommended Products Section */}
       {recommendedProducts && recommendedProducts.length > 0 && (
@@ -862,7 +1389,7 @@ export default function ProductDisplay({ product, descriptionHtml, recommendedPr
               </svg>
               Das könnte dich auch interessieren
             </h3>
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+            <div className="grid grid-cols-1 lg:grid-cols-4 gap-3 md:gap-4">
             {recommendedProducts.slice(0, 4).map((recProduct: any, index: number) => (
               <ProductCard 
                 key={recProduct._id || index}
@@ -883,7 +1410,8 @@ export default function ProductDisplay({ product, descriptionHtml, recommendedPr
                     small: imgSize.small
                   })),
                   tags: recProduct.tags || [],
-                  variations: recProduct.variations || []
+                  variations: recProduct.variations || [],
+                  reviews: recProduct.reviews || null
                 }} 
               />
             ))}

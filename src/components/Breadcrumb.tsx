@@ -56,7 +56,7 @@ export default function Breadcrumb({ className = "", category: propCategory, sub
 
   const getFilterName = (filterValue: string) => {
     const filterNames: { [key: string]: string } = {
-      'topseller': 'Top Seller',
+      'topseller': 'Bestseller',
       'sale': 'Sale',
       'neu': 'Neu'
     };

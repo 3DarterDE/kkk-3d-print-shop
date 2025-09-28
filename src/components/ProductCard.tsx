@@ -345,25 +345,35 @@ export default function ProductCard({ product, variant = 'default' }: ProductCar
             </div>
             
             {/* Reviews */}
-            <div className="flex items-center gap-1 mt-2">
+            <div className="flex items-center gap-1 mt-1">
               <div className="flex">
-                {[1, 2, 3, 4, 5].map((star) => (
-                  <span
-                    key={star}
-                    className={`text-sm ${
-                      product.reviews && product.reviews.totalReviews > 0
-                        ? star <= Math.round(product.reviews.averageRating)
-                          ? 'text-yellow-400'
-                          : 'text-gray-300'
-                        : 'text-gray-300'
-                    }`}
-                  >
-                    ★
-                  </span>
-                ))}
+                {[1, 2, 3, 4, 5].map((star) => {
+                  if (!product.reviews || product.reviews.totalReviews === 0) {
+                    return (
+                      <span key={star} className="text-xl text-gray-300">
+                        ★
+                      </span>
+                    );
+                  }
+                  
+                  const rating = product.reviews.averageRating;
+                  const fillPercentage = Math.max(0, Math.min(100, (rating - (star - 1)) * 100));
+                  
+                  return (
+                    <span key={star} className="relative text-xl">
+                      <span className="text-gray-300">★</span>
+                      <span 
+                        className="absolute inset-0 text-yellow-400 overflow-hidden"
+                        style={{ width: `${fillPercentage}%` }}
+                      >
+                        ★
+                      </span>
+                    </span>
+                  );
+                })}
               </div>
               {product.reviews && product.reviews.totalReviews > 0 ? (
-                <span className="text-sm text-gray-500">
+                <span className="text-base text-gray-500">
                   {product.reviews.averageRating.toFixed(1)} ({product.reviews.totalReviews})
                 </span>
               ) : (
@@ -374,7 +384,7 @@ export default function ProductCard({ product, variant = 'default' }: ProductCar
             </div>
 
             {/* Price and Cart Button Row */}
-            <div className="flex items-center justify-between mt-3">
+            <div className="flex items-center justify-between mt-2">
               {/* Price */}
               <div className="flex-1 min-w-0">
                 {product.isOnSale && product.offerPrice ? (
@@ -403,15 +413,6 @@ export default function ProductCard({ product, variant = 'default' }: ProductCar
                 )}
               </div>
               
-              {/* Stock Status - nur bei Standard-Variante anzeigen */}
-              {variant !== 'carousel' && (
-                <div className="flex items-center gap-1 mr-2 flex-shrink-0">
-                  <div className={`w-2 h-2 rounded-full ${!isOutOfStock() ? 'bg-green-500' : 'bg-red-500'}`}></div>
-                  <span className={`text-[10px] font-medium ${!isOutOfStock() ? 'text-green-600' : 'text-red-600'}`}>
-                    {!isOutOfStock() ? 'Auf Lager' : 'Ausverkauft'}
-                  </span>
-                </div>
-              )}
               
               {/* Add to cart button */}
               <button
@@ -429,7 +430,9 @@ export default function ProductCard({ product, variant = 'default' }: ProductCar
                 {product.variations && product.variations.length > 0 ? (
                   <div className="relative">
                     <TiShoppingCart className="w-4 h-4" />
-                    <FaPlus className="w-2 h-2 absolute -top-1 -right-1 bg-white text-blue-600 rounded-full" />
+                    <FaPlus className={`w-2 h-2 absolute -top-1 -right-1 bg-white rounded-full ${
+                      isOutOfStock() ? 'text-gray-400' : 'text-blue-600'
+                    }`} />
                   </div>
                 ) : (
                   <TiShoppingCart className="w-4 h-4" />
@@ -469,6 +472,20 @@ export default function ProductCard({ product, variant = 'default' }: ProductCar
               </div>
             )}
             
+            {/* Stock status - nur bei Ausverkauft anzeigen */}
+            {variant !== 'carousel' && isOutOfStock() && (
+              <div className="absolute top-2 left-2 z-20 bg-gray-500 text-white text-xs px-2 py-1 rounded-md shadow-lg">
+                Ausverkauft
+              </div>
+            )}
+            
+            {/* Bestseller Badge */}
+            {variant !== 'carousel' && product.isTopSeller && !isOutOfStock() && (
+              <div className="absolute top-2 left-2 z-20 bg-black text-white text-xs px-2 py-1 rounded-md shadow-lg">
+                Bestseller
+              </div>
+            )}
+            
             {/* Image indicator dots */}
             {hasMultipleImages && (
               <div className="absolute bottom-2 left-1/2 transform -translate-x-1/2 flex space-x-1 z-10">
@@ -486,9 +503,9 @@ export default function ProductCard({ product, variant = 'default' }: ProductCar
             )}
           </div>
           
-          <div className="p-3 sm:p-4 relative flex flex-col gap-2">
+          <div className="pt-0 pb-2 px-2 sm:pt-0 sm:pb-3 sm:px-3 relative flex flex-col gap-1">
             <div 
-              className="font-semibold text-gray-900 mb-1 sm:mb-2 truncate cursor-pointer group-hover:underline transition-all duration-200 text-base sm:text-lg" 
+              className="font-semibold text-gray-900 mb-0 truncate cursor-pointer group-hover:underline transition-all duration-200 text-base sm:text-lg" 
               style={{ textUnderlineOffset: '4px', textDecorationThickness: '1px' }}
               title={product.title}
             >
@@ -496,25 +513,35 @@ export default function ProductCard({ product, variant = 'default' }: ProductCar
             </div>
             
             {/* Reviews */}
-            <div className="flex items-center gap-2 mb-2">
+            <div className="flex items-center gap-2">
               <div className="flex items-center">
-                {[1, 2, 3, 4, 5].map((star) => (
-                  <span
-                    key={star}
-                    className={`text-sm ${
-                      product.reviews && product.reviews.totalReviews > 0
-                        ? star <= Math.round(product.reviews.averageRating)
-                          ? 'text-yellow-400'
-                          : 'text-gray-300'
-                        : 'text-gray-300'
-                    }`}
-                  >
-                    ★
-                  </span>
-                ))}
+                {[1, 2, 3, 4, 5].map((star) => {
+                  if (!product.reviews || product.reviews.totalReviews === 0) {
+                    return (
+                      <span key={star} className="text-xl text-gray-300">
+                        ★
+                      </span>
+                    );
+                  }
+                  
+                  const rating = product.reviews.averageRating;
+                  const fillPercentage = Math.max(0, Math.min(100, (rating - (star - 1)) * 100));
+                  
+                  return (
+                    <span key={star} className="relative text-xl">
+                      <span className="text-gray-300">★</span>
+                      <span 
+                        className="absolute inset-0 text-yellow-400 overflow-hidden"
+                        style={{ width: `${fillPercentage}%` }}
+                      >
+                        ★
+                      </span>
+                    </span>
+                  );
+                })}
               </div>
               {product.reviews && product.reviews.totalReviews > 0 ? (
-                <span className="text-xs text-gray-600">
+                <span className="text-sm text-gray-600">
                   ({product.reviews.totalReviews})
                 </span>
               ) : (
@@ -525,7 +552,7 @@ export default function ProductCard({ product, variant = 'default' }: ProductCar
             </div>
             
             {/* Price with large Euro and small Cent */}
-            <div className="mb-2 sm:mb-3 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 sm:gap-0">
+            <div className="mb-1 sm:mb-2 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1 sm:gap-0">
               <div className="flex-1">
                 {product.isOnSale && product.offerPrice ? (
                   <div className="flex items-baseline gap-1 sm:gap-2">
@@ -553,18 +580,8 @@ export default function ProductCard({ product, variant = 'default' }: ProductCar
                 )}
               </div>
               
-              {/* Stock status and cart button */}
-              <div className="flex items-center gap-2 mt-2 sm:mt-0">
-                {/* Stock status - nur bei Standard-Variante anzeigen */}
-                {variant !== 'carousel' && (
-                  <div className="flex items-center gap-1">
-                    <div className={`w-2 h-2 rounded-full ${!isOutOfStock() ? 'bg-green-500' : 'bg-red-500'}`}></div>
-                    <span className={`text-[10px] sm:text-xs font-medium ${!isOutOfStock() ? 'text-green-600' : 'text-red-600'}`}>
-                      {!isOutOfStock() ? 'Auf Lager' : 'Ausverkauft'}
-                    </span>
-                  </div>
-                )}
-                
+              {/* Cart button */}
+              <div className="flex items-center gap-2 mt-1 sm:mt-0">
                 {/* Add to cart button */}
                 <button
                   onClick={handleAddToCart}
@@ -581,7 +598,9 @@ export default function ProductCard({ product, variant = 'default' }: ProductCar
                   {product.variations && product.variations.length > 0 ? (
                     <div className="relative">
                       <TiShoppingCart className="w-5 h-5 sm:w-4 sm:h-4" />
-                      <FaPlus className="w-3 h-3 sm:w-2 sm:h-2 absolute -top-1 -right-1 bg-white text-blue-600 rounded-full" />
+                      <FaPlus className={`w-3 h-3 sm:w-2 sm:h-2 absolute -top-1 -right-1 bg-white rounded-full ${
+                        isOutOfStock() ? 'text-gray-400' : 'text-blue-600'
+                      }`} />
                     </div>
                   ) : (
                     <TiShoppingCart className="w-5 h-5 sm:w-4 sm:h-4" />
