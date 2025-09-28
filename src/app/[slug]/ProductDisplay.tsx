@@ -418,7 +418,7 @@ export default function ProductDisplay({ product, descriptionHtml, recommendedPr
           <div className="bg-white rounded-xl shadow-lg p-4">
             
             <div 
-              className={`w-full h-[350px] md:h-[600px] bg-gray-50 rounded-lg overflow-hidden relative ${
+              className={`w-full h-[334x] md:h-[600px] bg-gray-50 rounded-lg overflow-hidden relative ${
                 isVideo ? 'cursor-default' : 'cursor-grab hover:opacity-90 hover:scale-[1.02]'
               } ${isDragging ? 'cursor-grabbing' : ''}`}
               ref={viewportRef}
