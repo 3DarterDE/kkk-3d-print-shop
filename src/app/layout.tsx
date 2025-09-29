@@ -5,6 +5,8 @@ import Navbar from "@/components/Navbar";
 import CategoryNavigation from "@/components/CategoryNavigation";
 import Breadcrumb from "@/components/Breadcrumb";
 import Footer from "@/components/Footer";
+import MobileSearchBar from "@/components/MobileSearchBar";
+import MobileSpacer from "@/components/MobileSpacer";
 import CartValidationProvider from "../components/CartValidationProvider";
 import VerificationRedirect from "@/components/VerificationRedirect";
 import ScrollToTopButton from "@/components/ScrollToTopButton";
@@ -54,7 +56,11 @@ export default function RootLayout({
             <VerificationRedirect />
             <Navbar />
             <CategoryNavigation />
-            <main className="pt-16">{children}</main>
+            
+            <MobileSearchBar />
+            <MobileSpacer />
+            
+            <main className="pt-16 md:pt-16">{children}</main>
             <Footer />
             <ScrollToTopButton />
           </UserDataProvider>

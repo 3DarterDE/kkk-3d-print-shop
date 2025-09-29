@@ -128,6 +128,7 @@ export default function ShopPageClient({
           setCurrentBrandData({
             _id: brand._id,
             name: brand.name,
+            slug: brand.slug,
             description: brand.description,
             image: brand.image,
             imageSizes: brand.imageSizes
@@ -145,6 +146,7 @@ export default function ShopPageClient({
               setCurrentCategoryData({
                 _id: subcategory._id,
                 name: subcategory.name,
+                slug: subcategory.slug,
                 description: subcategory.description,
                 image: subcategory.image,
                 imageSizes: subcategory.imageSizes
@@ -154,6 +156,7 @@ export default function ShopPageClient({
             setCurrentCategoryData({
               _id: category._id,
               name: category.name,
+              slug: category.slug,
               description: category.description,
               image: category.image,
               imageSizes: category.imageSizes
@@ -255,10 +258,7 @@ export default function ShopPageClient({
               </div>
               
               <div className="flex-1 max-w-md">
-                <SearchBar 
-                  searchQuery={searchQuery}
-                  onSearchChange={setSearchQuery}
-                />
+                <SearchBar />
               </div>
             </div>
           </div>

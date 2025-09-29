@@ -199,12 +199,12 @@ export default async function Home() {
         </div>
         
         {/* Content */}
-        <div className="relative z-20 text-center text-white max-w-4xl mx-auto px-6">
+        <div className="relative z-20 text-center text-white max-w-7xl mx-auto px-4 sm:px-6 lg:px-4">
           <h1 className="text-5xl md:text-6xl font-bold tracking-tight mb-6 animate-fade-in-up hover:scale-105 transition-transform duration-300">
             Dart & Autodarts
             <span className="block text-blue-200">Spezialist</span>
           </h1>
-          <p className="text-xl md:text-2xl text-blue-100 mb-8 max-w-3xl mx-auto animate-fade-in-up delay-200 hover:scale-105 transition-transform duration-300">
+          <p className="text-xl md:text-2xl text-blue-100 mb-8 max-w-7xl mx-auto animate-fade-in-up delay-200 hover:scale-105 transition-transform duration-300">
             Professionelle Dart-Ausrüstung und Autodarts Konfiguration mit modernster Technologie
           </p>
           <div className="flex flex-col sm:flex-row gap-4 justify-center animate-fade-in-up delay-400">
@@ -220,7 +220,7 @@ export default async function Home() {
 
       {/* Informationsleiste */}
       <section className="bg-white border-b border-gray-200">
-        <div className="max-w-7xl mx-auto px-6 py-4">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-4 py-4">
           <div className="flex flex-wrap items-center justify-between text-sm text-gray-700">
             <div className="flex items-center gap-2">
               <svg className="w-4 h-4 text-green-500" fill="currentColor" viewBox="0 0 20 20">
@@ -293,7 +293,7 @@ export default async function Home() {
       <SaleSection products={filteredSaleProducts} />
 
       {/* Hauptinhalt */}
-      <section className="max-w-7xl mx-auto px-6 py-2">
+      <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-4 py-1">
         <div className="mt-16 grid grid-cols-1 md:grid-cols-4 gap-6">
           <div className="bg-white rounded-lg border border-blue-200 overflow-hidden hover:shadow-lg hover:-translate-y-2 transition-all duration-300 animate-fade-in-up">
             <div className="h-1 bg-gradient-to-r from-blue-300 via-blue-500 to-blue-300"></div>

@@ -7,8 +7,9 @@ import Breadcrumb from "@/components/Breadcrumb";
 import SearchBar from "@/components/SearchBar";
 import CategoryDescriptionSection from "@/components/CategoryDescriptionSection";
 import { getOptimizedImageUrl, getContextualImageSize } from "@/lib/image-utils";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
+
 
 export const dynamic = 'force-dynamic';
 
@@ -235,7 +236,7 @@ export default function ShopPage({ searchParams }: { searchParams: Promise<{ cat
         }
         
         const productsData = await productsResponse.json();
-        const products = hasSearch ? productsData.products : productsData;
+        const products = productsData.products || productsData;
         
         // Set data immediately
         setAllProducts(products);
@@ -1281,13 +1282,6 @@ export default function ShopPage({ searchParams }: { searchParams: Promise<{ cat
 
   return (
     <>
-      {/* Fixed Search Bar - immer sichtbar auf Mobile */}
-      <div className="fixed top-16 left-0 right-0 z-40 bg-white border-b border-gray-200 px-4 py-3 md:hidden">
-        <SearchBar 
-          placeholder="Luke Littler, Dartpfeile..."
-          maxResults={10}
-        />
-      </div>
 
       {/* Fixed Mobile Breadcrumb - direkt unter der Suchleiste, verschwindet beim Scrollen */}
       <div className={`fixed top-32 left-0 right-0 z-30 bg-white border-a border-gray-200 md:hidden transition-transform duration-250 ${
@@ -1302,7 +1296,7 @@ export default function ShopPage({ searchParams }: { searchParams: Promise<{ cat
       </div>
 
       
-      <div className="max-w-7xl mx-auto px-px py-10 pt-30 md:pt-10 md:px-4">
+      <div className="max-w-7xl mx-auto px-px py-10 pt-10 md:pt-10 md:px-4">
         {/* Search Results Info - only show if there are products or if we're not in a category */}
       {searchQuery && (filteredProducts.length > 0 || !resolvedSearchParams.category) && (
         <div className="mb-6 px-4 md:px-0">
@@ -1358,7 +1352,7 @@ export default function ShopPage({ searchParams }: { searchParams: Promise<{ cat
                   <div className="space-y-3">
                     {/* Range Slider Container */}
                     <div className="relative">
-                      <div className="relative h-2 bg-gray-200 rounded-lg mx-2">
+                      <div className="relative h-2 bg-gray-200 rounded-lg mx-2" style={{ touchAction: 'none' }}>
                         {/* Active range track */}
                       <div 
                           className="absolute h-2 bg-blue-500 rounded-lg"
@@ -1371,31 +1365,29 @@ export default function ShopPage({ searchParams }: { searchParams: Promise<{ cat
                         {/* Min thumb */}
                         <div
                           className="absolute w-4 h-4 bg-blue-500 rounded-full cursor-pointer transform -translate-y-1 -translate-x-2 hover:scale-110 transition-transform"
-                        style={{
-                          left: `${toPercent(priceRange.min, calculateCurrentPriceRange().min, calculateCurrentPriceRange().max)}%`,
-                          zIndex: 10
-                        }}
+                          style={{
+                            left: `${toPercent(priceRange.min, calculateCurrentPriceRange().min, calculateCurrentPriceRange().max)}%`,
+                            zIndex: 10,
+                            touchAction: 'none'
+                          }}
                           onMouseDown={(e) => {
                             e.preventDefault();
-                            const startX = e.clientX;
-                            const startValue = priceRange.min;
                             const currentRange = calculateCurrentPriceRange();
                             const minPrice = currentRange.min;
                             const maxPrice = currentRange.max;
                             const range = maxPrice - minPrice;
-                            const trackContainer = (e.currentTarget as HTMLElement).closest('.relative') as HTMLElement | null;
-                            const trackEl = trackContainer ? (trackContainer.querySelector('.h-2.bg-gray-200.rounded-lg') as HTMLElement | null) : null;
+                            const sliderElement = (e.target as Element).closest('.relative');
+                            if (!sliderElement) return;
                             
                             const handleMouseMove = (e: MouseEvent) => {
-                              const rect = trackEl ? trackEl.getBoundingClientRect() : null;
-                              if (!rect) return;
+                              const rect = sliderElement.getBoundingClientRect();
                               
-                              const deltaX = e.clientX - startX;
-                              const deltaPercent = (deltaX / rect.width) * 100;
-                              const deltaValue = (deltaPercent / 100) * range;
-                              const newValue = Math.max(minPrice, Math.min(maxPrice, startValue + deltaValue));
-                              const clampedValue = Math.min(newValue, priceRange.max - 100);
+                              // Calculate position as percentage of slider width
+                              const percent = Math.max(0, Math.min(100, ((e.clientX - rect.left) / rect.width) * 100));
+                              const newValue = minPrice + (percent / 100) * range;
+                              const clampedValue = Math.max(minPrice, Math.min(priceRange.max - 100, Math.round(newValue)));
                               
+                              // Check if values are back to original range - if so, remove filter
                               if (clampedValue === minPrice && priceRange.max === maxPrice) {
                                 const originalRange = calculateCurrentPriceRange();
                                 setPriceRange(originalRange);
@@ -1417,36 +1409,74 @@ export default function ShopPage({ searchParams }: { searchParams: Promise<{ cat
                             document.addEventListener('mousemove', handleMouseMove);
                             document.addEventListener('mouseup', handleMouseUp);
                           }}
+                          onTouchStart={(e) => {
+                            e.preventDefault();
+                            const currentRange = calculateCurrentPriceRange();
+                            const minPrice = currentRange.min;
+                            const maxPrice = currentRange.max;
+                            const range = maxPrice - minPrice;
+                            const sliderElement = (e.target as Element).closest('.relative');
+                            if (!sliderElement) return;
+                            
+                            const handleTouchMove = (e: TouchEvent) => {
+                              if (e.touches.length === 0) return;
+                              const rect = sliderElement.getBoundingClientRect();
+                              
+                              // Calculate position as percentage of slider width
+                              const percent = Math.max(0, Math.min(100, ((e.touches[0].clientX - rect.left) / rect.width) * 100));
+                              const newValue = minPrice + (percent / 100) * range;
+                              const clampedValue = Math.max(minPrice, Math.min(priceRange.max - 100, Math.round(newValue)));
+                              
+                              // Check if values are back to original range - if so, remove filter
+                              if (clampedValue === minPrice && priceRange.max === maxPrice) {
+                                const originalRange = calculateCurrentPriceRange();
+                                setPriceRange(originalRange);
+                                setIsPriceFilterModified(false);
+                              } else {
+                                setPriceRange(prev => ({
+                                  ...prev,
+                                  min: clampedValue
+                                }));
+                                setIsPriceFilterModified(true);
+                              }
+                            };
+                            
+                            const handleTouchEnd = () => {
+                              document.removeEventListener('touchmove', handleTouchMove);
+                              document.removeEventListener('touchend', handleTouchEnd);
+                            };
+                            
+                            document.addEventListener('touchmove', handleTouchMove);
+                            document.addEventListener('touchend', handleTouchEnd);
+                          }}
                         />
                         
                         {/* Max thumb */}
                         <div
                           className="absolute w-4 h-4 bg-blue-500 rounded-full cursor-pointer transform -translate-y-1 -translate-x-2 hover:scale-110 transition-transform"
-                        style={{
-                          left: `${toPercent(priceRange.max, calculateCurrentPriceRange().min, calculateCurrentPriceRange().max)}%`,
-                          zIndex: 10
-                        }}
+                          style={{
+                            left: `${toPercent(priceRange.max, calculateCurrentPriceRange().min, calculateCurrentPriceRange().max)}%`,
+                            zIndex: 10,
+                            touchAction: 'none'
+                          }}
                           onMouseDown={(e) => {
                             e.preventDefault();
-                            const startX = e.clientX;
-                            const startValue = priceRange.max;
                             const currentRange = calculateCurrentPriceRange();
                             const minPrice = currentRange.min;
                             const maxPrice = currentRange.max;
                             const range = maxPrice - minPrice;
-                            const trackContainer = (e.currentTarget as HTMLElement).closest('.relative') as HTMLElement | null;
-                            const trackEl = trackContainer ? (trackContainer.querySelector('.h-2.bg-gray-200.rounded-lg') as HTMLElement | null) : null;
+                            const sliderElement = (e.target as Element).closest('.relative');
+                            if (!sliderElement) return;
                             
                             const handleMouseMove = (e: MouseEvent) => {
-                              const rect = trackEl ? trackEl.getBoundingClientRect() : null;
-                              if (!rect) return;
+                              const rect = sliderElement.getBoundingClientRect();
                               
-                              const deltaX = e.clientX - startX;
-                              const deltaPercent = (deltaX / rect.width) * 100;
-                              const deltaValue = (deltaPercent / 100) * range;
-                              const newValue = Math.max(minPrice, Math.min(maxPrice, startValue + deltaValue));
-                              const clampedValue = Math.max(newValue, priceRange.min + 100);
+                              // Calculate position as percentage of slider width
+                              const percent = Math.max(0, Math.min(100, ((e.clientX - rect.left) / rect.width) * 100));
+                              const newValue = minPrice + (percent / 100) * range;
+                              const clampedValue = Math.max(priceRange.min + 100, Math.min(maxPrice, Math.round(newValue)));
                               
+                              // Check if values are back to original range - if so, remove filter
                               if (priceRange.min === minPrice && clampedValue === maxPrice) {
                                 const originalRange = calculateCurrentPriceRange();
                                 setPriceRange(originalRange);
@@ -1467,6 +1497,46 @@ export default function ShopPage({ searchParams }: { searchParams: Promise<{ cat
                             
                             document.addEventListener('mousemove', handleMouseMove);
                             document.addEventListener('mouseup', handleMouseUp);
+                          }}
+                          onTouchStart={(e) => {
+                            e.preventDefault();
+                            const currentRange = calculateCurrentPriceRange();
+                            const minPrice = currentRange.min;
+                            const maxPrice = currentRange.max;
+                            const range = maxPrice - minPrice;
+                            const sliderElement = (e.target as Element).closest('.relative');
+                            if (!sliderElement) return;
+                            
+                            const handleTouchMove = (e: TouchEvent) => {
+                              if (e.touches.length === 0) return;
+                              const rect = sliderElement.getBoundingClientRect();
+                              
+                              // Calculate position as percentage of slider width
+                              const percent = Math.max(0, Math.min(100, ((e.touches[0].clientX - rect.left) / rect.width) * 100));
+                              const newValue = minPrice + (percent / 100) * range;
+                              const clampedValue = Math.max(priceRange.min + 100, Math.min(maxPrice, Math.round(newValue)));
+                              
+                              // Check if values are back to original range - if so, remove filter
+                              if (priceRange.min === minPrice && clampedValue === maxPrice) {
+                                const originalRange = calculateCurrentPriceRange();
+                                setPriceRange(originalRange);
+                                setIsPriceFilterModified(false);
+                              } else {
+                                setPriceRange(prev => ({
+                                  ...prev,
+                                  max: clampedValue
+                                }));
+                                setIsPriceFilterModified(true);
+                              }
+                            };
+                            
+                            const handleTouchEnd = () => {
+                              document.removeEventListener('touchmove', handleTouchMove);
+                              document.removeEventListener('touchend', handleTouchEnd);
+                            };
+                            
+                            document.addEventListener('touchmove', handleTouchMove);
+                            document.addEventListener('touchend', handleTouchEnd);
                           }}
                         />
                       </div>
@@ -1658,33 +1728,27 @@ export default function ShopPage({ searchParams }: { searchParams: Promise<{ cat
                         className="absolute w-4 h-4 bg-blue-500 rounded-full cursor-pointer transform -translate-y-1 -translate-x-2 hover:scale-110 transition-transform"
                         style={{
                           left: `${toPercent(priceRange.min, calculateCurrentPriceRange().min, calculateCurrentPriceRange().max)}%`,
-                          zIndex: 10
+                          zIndex: 10,
+                          touchAction: 'none'
                         }}
                         onMouseDown={(e) => {
                           e.preventDefault();
-                          const startX = e.clientX;
-                          const startValue = priceRange.min;
                           const currentRange = calculateCurrentPriceRange();
                           const minPrice = currentRange.min;
                           const maxPrice = currentRange.max;
                           const range = maxPrice - minPrice;
-                          const trackContainer = (e.currentTarget as HTMLElement).closest('.relative') as HTMLElement | null;
-                          let trackEl = trackContainer ? (trackContainer.querySelector('.h-2.bg-gray-200.rounded-lg') as HTMLElement | null) : null;
-                          if (!trackEl && trackContainer && trackContainer.classList.contains('h-2') && trackContainer.classList.contains('bg-gray-200')) {
-                            trackEl = trackContainer;
-                          }
+                          const sliderElement = (e.target as Element).closest('.relative');
+                          if (!sliderElement) return;
                           
                           const handleMouseMove = (e: MouseEvent) => {
-                            const rect = trackEl ? trackEl.getBoundingClientRect() : null;
-                            if (!rect) return;
+                            const rect = sliderElement.getBoundingClientRect();
                             
-                            const deltaX = e.clientX - startX;
-                            const deltaPercent = (deltaX / rect.width) * 100;
-                            const deltaValue = (deltaPercent / 100) * range;
-                            const newValue = Math.max(minPrice, Math.min(maxPrice, startValue + deltaValue));
-                            const clampedValue = Math.min(newValue, priceRange.max - 100);
+                            // Calculate position as percentage of slider width
+                            const percent = Math.max(0, Math.min(100, ((e.clientX - rect.left) / rect.width) * 100));
+                            const newValue = minPrice + (percent / 100) * range;
+                            const clampedValue = Math.max(minPrice, Math.min(priceRange.max - 100, Math.round(newValue)));
                             
-                            // Check if values are back to original range - if so, reset filter
+                            // Check if values are back to original range - if so, remove filter
                             if (clampedValue === minPrice && priceRange.max === maxPrice) {
                               const originalRange = calculateCurrentPriceRange();
                               setPriceRange(originalRange);
@@ -1706,6 +1770,46 @@ export default function ShopPage({ searchParams }: { searchParams: Promise<{ cat
                           document.addEventListener('mousemove', handleMouseMove);
                           document.addEventListener('mouseup', handleMouseUp);
                         }}
+                        onTouchStart={(e) => {
+                          e.preventDefault();
+                          const currentRange = calculateCurrentPriceRange();
+                          const minPrice = currentRange.min;
+                          const maxPrice = currentRange.max;
+                          const range = maxPrice - minPrice;
+                          const sliderElement = (e.target as Element).closest('.relative');
+                          if (!sliderElement) return;
+                          
+                          const handleTouchMove = (e: TouchEvent) => {
+                            if (e.touches.length === 0) return;
+                            const rect = sliderElement.getBoundingClientRect();
+                            
+                            // Calculate position as percentage of slider width
+                            const percent = Math.max(0, Math.min(100, ((e.touches[0].clientX - rect.left) / rect.width) * 100));
+                            const newValue = minPrice + (percent / 100) * range;
+                            const clampedValue = Math.max(minPrice, Math.min(priceRange.max - 100, Math.round(newValue)));
+                            
+                            // Check if values are back to original range - if so, remove filter
+                            if (clampedValue === minPrice && priceRange.max === maxPrice) {
+                              const originalRange = calculateCurrentPriceRange();
+                              setPriceRange(originalRange);
+                              setIsPriceFilterModified(false);
+                            } else {
+                              setPriceRange(prev => ({
+                                ...prev,
+                                min: clampedValue
+                              }));
+                              setIsPriceFilterModified(true);
+                            }
+                          };
+                          
+                          const handleTouchEnd = () => {
+                            document.removeEventListener('touchmove', handleTouchMove);
+                            document.removeEventListener('touchend', handleTouchEnd);
+                          };
+                          
+                          document.addEventListener('touchmove', handleTouchMove);
+                          document.addEventListener('touchend', handleTouchEnd);
+                        }}
                       />
                       
                       {/* Max thumb */}
@@ -1713,33 +1817,27 @@ export default function ShopPage({ searchParams }: { searchParams: Promise<{ cat
                         className="absolute w-4 h-4 bg-blue-500 rounded-full cursor-pointer transform -translate-y-1 -translate-x-2 hover:scale-110 transition-transform"
                         style={{
                           left: `${toPercent(priceRange.max, calculateCurrentPriceRange().min, calculateCurrentPriceRange().max)}%`,
-                          zIndex: 10
+                          zIndex: 10,
+                          touchAction: 'none'
                         }}
                         onMouseDown={(e) => {
                           e.preventDefault();
-                          const startX = e.clientX;
-                          const startValue = priceRange.max;
                           const currentRange = calculateCurrentPriceRange();
                           const minPrice = currentRange.min;
                           const maxPrice = currentRange.max;
                           const range = maxPrice - minPrice;
-                          const trackContainer = (e.currentTarget as HTMLElement).closest('.relative') as HTMLElement | null;
-                          let trackEl = trackContainer ? (trackContainer.querySelector('.h-2.bg-gray-200.rounded-lg') as HTMLElement | null) : null;
-                          if (!trackEl && trackContainer && trackContainer.classList.contains('h-2') && trackContainer.classList.contains('bg-gray-200')) {
-                            trackEl = trackContainer;
-                          }
+                          const sliderElement = (e.target as Element).closest('.relative');
+                          if (!sliderElement) return;
                           
                           const handleMouseMove = (e: MouseEvent) => {
-                            const rect = trackEl ? trackEl.getBoundingClientRect() : null;
-                            if (!rect) return;
+                            const rect = sliderElement.getBoundingClientRect();
                             
-                            const deltaX = e.clientX - startX;
-                            const deltaPercent = (deltaX / rect.width) * 100;
-                            const deltaValue = (deltaPercent / 100) * range;
-                            const newValue = Math.max(minPrice, Math.min(maxPrice, startValue + deltaValue));
-                            const clampedValue = Math.max(newValue, priceRange.min + 100);
+                            // Calculate position as percentage of slider width
+                            const percent = Math.max(0, Math.min(100, ((e.clientX - rect.left) / rect.width) * 100));
+                            const newValue = minPrice + (percent / 100) * range;
+                            const clampedValue = Math.max(priceRange.min + 100, Math.min(maxPrice, Math.round(newValue)));
                             
-                            // Check if values are back to original range - if so, reset filter
+                            // Check if values are back to original range - if so, remove filter
                             if (priceRange.min === minPrice && clampedValue === maxPrice) {
                               const originalRange = calculateCurrentPriceRange();
                               setPriceRange(originalRange);
@@ -1760,6 +1858,46 @@ export default function ShopPage({ searchParams }: { searchParams: Promise<{ cat
                           
                           document.addEventListener('mousemove', handleMouseMove);
                           document.addEventListener('mouseup', handleMouseUp);
+                        }}
+                        onTouchStart={(e) => {
+                          e.preventDefault();
+                          const currentRange = calculateCurrentPriceRange();
+                          const minPrice = currentRange.min;
+                          const maxPrice = currentRange.max;
+                          const range = maxPrice - minPrice;
+                          const sliderElement = (e.target as Element).closest('.relative');
+                          if (!sliderElement) return;
+                          
+                          const handleTouchMove = (e: TouchEvent) => {
+                            if (e.touches.length === 0) return;
+                            const rect = sliderElement.getBoundingClientRect();
+                            
+                            // Calculate position as percentage of slider width
+                            const percent = Math.max(0, Math.min(100, ((e.touches[0].clientX - rect.left) / rect.width) * 100));
+                            const newValue = minPrice + (percent / 100) * range;
+                            const clampedValue = Math.max(priceRange.min + 100, Math.min(maxPrice, Math.round(newValue)));
+                            
+                            // Check if values are back to original range - if so, remove filter
+                            if (priceRange.min === minPrice && clampedValue === maxPrice) {
+                              const originalRange = calculateCurrentPriceRange();
+                              setPriceRange(originalRange);
+                              setIsPriceFilterModified(false);
+                            } else {
+                              setPriceRange(prev => ({
+                                ...prev,
+                                max: clampedValue
+                              }));
+                              setIsPriceFilterModified(true);
+                            }
+                          };
+                          
+                          const handleTouchEnd = () => {
+                            document.removeEventListener('touchmove', handleTouchMove);
+                            document.removeEventListener('touchend', handleTouchEnd);
+                          };
+                          
+                          document.addEventListener('touchmove', handleTouchMove);
+                          document.addEventListener('touchend', handleTouchEnd);
                         }}
                       />
                     </div>
@@ -2102,21 +2240,21 @@ export default function ShopPage({ searchParams }: { searchParams: Promise<{ cat
             </div>
             
             {/* Products Count and Dropdowns - always on same row */}
-            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+            <div className="flex flex-row items-center justify-between gap-2">
               {/* Products Count */}
-              <div className="flex items-center">
+              <div className="flex flex-col items-start sm:ml-0 ml-4">
                 <p className="text-sm text-gray-600">
                   <span className="font-semibold text-lg">{totalProducts}</span> Artikel
-                  {resolvedSearchParams.category && (
-                    <span className="ml-2 text-blue-600">
-                      in Kategorie "{categories.find(c => c.slug === resolvedSearchParams.category)?.name || resolvedSearchParams.category}"
-                    </span>
-                  )}
                 </p>
+                {resolvedSearchParams.category && (
+                  <p className="text-sm text-blue-600 mt-1">
+                    in Kategorie "{categories.find(c => c.slug === resolvedSearchParams.category)?.name || resolvedSearchParams.category}"
+                  </p>
+                )}
               </div>
               
               {/* Sort Dropdown and Products Per Page */}
-              <div className="flex flex-col sm:flex-row gap-2">
+              <div className="flex flex-row items-center gap-2 sm:mr-0 mr-4">
               {/* Products Per Page Dropdown */}
               <div className="flex items-center gap-2">
                 <label htmlFor="products-per-page" className="text-sm text-gray-600">
@@ -2298,7 +2436,7 @@ export default function ShopPage({ searchParams }: { searchParams: Promise<{ cat
     )}
 
     {/* Mobile Filter Button - Fixed Bottom */}
-    <div className="md:hidden fixed bottom-4 right-4 z-40">
+    <div className="md:hidden fixed bottom-4 left-4 z-40">
       <button
         className="inline-flex items-center gap-2 px-4 py-3 rounded-full bg-blue-600 text-white font-semibold shadow-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all transform hover:scale-105"
         onClick={() => setShowMobileFilters(true)}

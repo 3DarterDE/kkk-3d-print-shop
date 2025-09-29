@@ -6,14 +6,36 @@ import mongoose from "mongoose";
 
 export const revalidate = 0; // No cache - always fetch fresh data
 
-export async function GET() {
+export async function GET(request: Request) {
   try {
     await connectToDatabase();
     
-    // Get only active products for shop
-    const products = await Product.find({ isActive: true })
-      .sort({ sortOrder: 1, createdAt: -1 })
-      .lean();
+    const { searchParams } = new URL(request.url);
+    const limit = parseInt(searchParams.get('limit') || '0');
+    const random = searchParams.get('random') === 'true';
+    const inStock = searchParams.get('inStock') === 'true';
+    
+    let products;
+    
+    // Build match criteria
+    const matchCriteria: any = { isActive: true };
+    if (inStock) {
+      matchCriteria.inStock = true;
+      matchCriteria.stockQuantity = { $gt: 0 };
+    }
+    
+    if (random) {
+      // Get random products
+      products = await Product.aggregate([
+        { $match: matchCriteria },
+        { $sample: { size: limit || 20 } }
+      ]);
+    } else {
+      // Get only active products for shop (default behavior)
+      products = await Product.find(matchCriteria)
+        .sort({ sortOrder: 1, createdAt: -1 })
+        .lean();
+    }
     
     // Get review statistics for all products using product slugs
     const productSlugs = products.map(p => (p as any).slug).filter(slug => slug);
@@ -61,7 +83,7 @@ export async function GET() {
     console.log('First product reviews:', productsWithReviews[0]?.reviews);
     console.log('Product slugs we searched for:', productSlugs.slice(0, 3));
     
-    return NextResponse.json(productsWithReviews);
+    return NextResponse.json({ products: productsWithReviews });
   } catch (error) {
     console.error("GET shop products error:", error);
     return NextResponse.json({ error: "Failed to fetch products" }, { status: 500 });

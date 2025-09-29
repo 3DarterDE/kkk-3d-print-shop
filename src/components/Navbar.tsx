@@ -19,6 +19,18 @@ interface Category {
   subcategories?: Category[];
 }
 
+interface Brand {
+  _id: string;
+  name: string;
+  slug: string;
+  image?: string;
+  imageSizes?: {
+    main: string;
+    thumb: string;
+    small: string;
+  };
+}
+
 export default function Navbar() {
   const { isAdmin } = useAuth();
   const count = useCartStore((s) => s.items.reduce((n, i) => n + i.quantity, 0));
@@ -28,7 +40,11 @@ export default function Navbar() {
   const [isCartOpen, setIsCartOpen] = useState(false);
   const [isMounted, setIsMounted] = useState(false);
   const [categories, setCategories] = useState<Category[]>([]);
+  const [brands, setBrands] = useState<Brand[]>([]);
   const [isLoadingCategories, setIsLoadingCategories] = useState(true);
+  const [isLoadingBrands, setIsLoadingBrands] = useState(true);
+  const [currentView, setCurrentView] = useState<'main' | 'categories' | 'brands'>('main');
+  const [selectedCategory, setSelectedCategory] = useState<Category | null>(null);
   const router = useRouter();
 
   // Memoized Logo component to prevent re-renders
@@ -47,6 +63,8 @@ export default function Navbar() {
 
   const closeMobileMenu = useCallback(() => {
     setIsMobileMenuOpen(false);
+    setCurrentView('main');
+    setSelectedCategory(null);
   }, []);
 
   const closeAdminMenu = useCallback(() => {
@@ -85,24 +103,33 @@ export default function Navbar() {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, [isAdminMenuOpen]);
 
-  // Load categories for mobile menu
+  // Load categories and brands for mobile menu
   useEffect(() => {
-    const fetchCategories = async () => {
+    const fetchData = async () => {
       try {
-        const response = await fetch('/api/shop/categories');
-        if (response.ok) {
-          const data = await response.json();
-          const categoriesArray = Array.isArray(data.categories) ? data.categories : [];
+        // Fetch categories
+        const categoriesResponse = await fetch('/api/shop/categories');
+        if (categoriesResponse.ok) {
+          const categoriesData = await categoriesResponse.json();
+          const categoriesArray = Array.isArray(categoriesData.categories) ? categoriesData.categories : [];
           setCategories(categoriesArray);
         }
+
+        // Fetch brands
+        const brandsResponse = await fetch('/api/shop/brands');
+        if (brandsResponse.ok) {
+          const brandsArray = await brandsResponse.json();
+          setBrands(Array.isArray(brandsArray) ? brandsArray : []);
+        }
       } catch (error) {
-        console.error('Error fetching categories:', error);
+        console.error('Error fetching data:', error);
       } finally {
         setIsLoadingCategories(false);
+        setIsLoadingBrands(false);
       }
     };
 
-    fetchCategories();
+    fetchData();
   }, []);
 
 
@@ -309,7 +336,7 @@ export default function Navbar() {
           </div>
           </div>
 
-          {/* Mobile Menu - Slide-in Kategorien */}
+          {/* Mobile Menu - Slide-in Kategorien & Marken */}
           {isMobileMenuOpen && (
             <div className="md:hidden fixed inset-0 z-50 flex">
               {/* Overlay */}
@@ -321,7 +348,31 @@ export default function Navbar() {
               {/* Slide-in Panel */}
               <div className="relative bg-white w-80 h-full shadow-xl transform transition-transform duration-300 ease-in-out">
                 <div className="flex items-center justify-between p-4 border-b border-gray-200">
-                  <h3 className="text-lg font-semibold text-gray-900">Kategorien</h3>
+                  <div className="flex items-center gap-3">
+                    {currentView !== 'main' && (
+                      <button
+                        onClick={() => {
+                          if (selectedCategory) {
+                            setSelectedCategory(null);
+                          } else {
+                            setCurrentView('main');
+                          }
+                        }}
+                        className="p-2 text-gray-400 hover:text-gray-600 transition-colors"
+                        title="Zurück"
+                      >
+                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+                        </svg>
+                      </button>
+                    )}
+                    <h3 className="text-lg font-semibold text-gray-900">
+                      {currentView === 'main' && 'Navigation'}
+                      {currentView === 'categories' && !selectedCategory && 'Kategorien'}
+                      {currentView === 'categories' && selectedCategory && selectedCategory.name}
+                      {currentView === 'brands' && 'Marken'}
+                    </h3>
+                  </div>
                   <button
                     onClick={closeMobileMenu}
                     className="p-2 text-gray-400 hover:text-gray-600 transition-colors"
@@ -333,40 +384,142 @@ export default function Navbar() {
                 </div>
                 
                 <div className="p-4">
-                  {/* Mobile Auth Button */}
-                  <div className="mb-4 pb-4 border-b border-gray-200">
-                    <CustomerButton />
-                  </div>
-                  
                   <nav className="space-y-1">
-                    <Link
-                      href="/shop"
-                      onClick={closeMobileMenu}
-                      className="block px-4 py-3 text-gray-700 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-all duration-300 font-medium"
-                    >
-                      Alle Produkte
-                    </Link>
-                    
-                    {/* Kategorien */}
-                    {isLoadingCategories ? (
-                      <div className="text-gray-500 px-4 py-2 text-sm">
-                        Kategorien werden geladen...
-                      </div>
-                    ) : (
-                      categories.map((category) => (
+                    {/* Hauptnavigation */}
+                    {currentView === 'main' && (
+                      <>
+                        <Link
+                          href="/shop"
+                          onClick={closeMobileMenu}
+                          className="block px-4 py-3 text-blue-600 hover:text-blue-700 hover:bg-blue-50 rounded-lg transition-all duration-300 font-medium"
+                        >
+                          Alle Produkte
+                        </Link>
+                        
+                        {/* Trennstrich */}
+                        <div className="my-3 border-t border-gray-200"></div>
+                        
                         <button
-                          key={category._id}
-                          onClick={() => {
-                            router.push(`/shop/${category.slug}`);
-                            closeMobileMenu();
-                          }}
+                          onClick={() => setCurrentView('categories')}
                           className="w-full text-left px-4 py-3 text-gray-700 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-all duration-300 font-medium"
                         >
-                          <div className="flex items-center gap-3">
-                            <span>{category.name}</span>
+                          <div className="flex items-center justify-between">
+                            <span>Kategorien</span>
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                            </svg>
                           </div>
                         </button>
-                      ))
+                        
+                        <button
+                          onClick={() => setCurrentView('brands')}
+                          className="w-full text-left px-4 py-3 text-gray-700 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-all duration-300 font-medium"
+                        >
+                          <div className="flex items-center justify-between">
+                            <span>Marken</span>
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                            </svg>
+                          </div>
+                        </button>
+                        
+                        {/* Mobile Auth Button - nach der Navigation */}
+                        <div className="mt-4 pt-4 border-t border-gray-200">
+                          <CustomerButton />
+                        </div>
+                      </>
+                    )}
+                    
+                    {/* Kategorien-Ansicht */}
+                    {currentView === 'categories' && !selectedCategory && (
+                      <>
+                        {isLoadingCategories ? (
+                          <div className="text-gray-500 px-4 py-2 text-sm">
+                            Kategorien werden geladen...
+                          </div>
+                        ) : (
+                          categories.map((category) => (
+                            <div
+                              key={category._id}
+                              className="w-full px-4 py-3 text-gray-700 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-all duration-300 font-medium"
+                            >
+                              <div className="flex items-center justify-between">
+                                <button
+                                  onClick={() => {
+                                    router.push(`/shop/${category.slug}`);
+                                    closeMobileMenu();
+                                  }}
+                                  className="flex-1 text-left"
+                                >
+                                  {category.name}
+                                </button>
+                                {category.subcategories && category.subcategories.length > 0 && (
+                                  <button
+                                    onClick={() => setSelectedCategory(category)}
+                                    className="p-1 hover:bg-blue-100 rounded transition-colors"
+                                    title="Unterkategorien anzeigen"
+                                  >
+                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                                    </svg>
+                                  </button>
+                                )}
+                              </div>
+                            </div>
+                          ))
+                        )}
+                      </>
+                    )}
+                    
+                    {/* Unterkategorien-Ansicht */}
+                    {currentView === 'categories' && selectedCategory && (
+                      <>
+                        {selectedCategory.subcategories?.map((subcategory) => (
+                          <button
+                            key={subcategory._id}
+                            onClick={() => {
+                              router.push(`/shop/${subcategory.slug}`);
+                              closeMobileMenu();
+                            }}
+                            className="w-full text-left px-4 py-3 text-gray-700 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-all duration-300 font-medium"
+                          >
+                            {subcategory.name}
+                          </button>
+                        ))}
+                      </>
+                    )}
+                    
+                    {/* Marken-Ansicht */}
+                    {currentView === 'brands' && (
+                      <>
+                        {isLoadingBrands ? (
+                          <div className="text-gray-500 px-4 py-2 text-sm">
+                            Marken werden geladen...
+                          </div>
+                        ) : (
+                          brands.map((brand) => (
+                            <button
+                              key={brand._id}
+                              onClick={() => {
+                                router.push(`/shop?brand=${brand.slug}`);
+                                closeMobileMenu();
+                              }}
+                              className="w-full text-left px-4 py-3 text-gray-700 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-all duration-300 font-medium"
+                            >
+                              <div className="flex items-center gap-3">
+                                {brand.imageSizes?.thumb && (
+                                  <img
+                                    src={brand.imageSizes.thumb}
+                                    alt={brand.name}
+                                    className="w-6 h-6 object-contain"
+                                  />
+                                )}
+                                <span>{brand.name}</span>
+                              </div>
+                            </button>
+                          ))
+                        )}
+                      </>
                     )}
                   </nav>
                 </div>

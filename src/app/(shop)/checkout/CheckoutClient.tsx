@@ -353,75 +353,88 @@ export default function CheckoutClient({ initialIsLoggedIn, initialFormData, ini
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-blue-50">
+    <div className="min-h-screen bg-white">
       <div className="max-w-7xl mx-auto px-4 py-8">
         <div className="mb-8">
-        <div className="flex items-center justify-between">
-                  <button
-                    onClick={() => { if (currentStep >= 1) { setCurrentStep(1); } }}
-                    disabled={currentStep < 1}
-                    className={`flex items-center transition-colors ${currentStep >= 1 ? 'text-blue-600' : 'text-gray-400'} ${currentStep < 1 ? 'cursor-not-allowed' : 'cursor-pointer'}`}
-                  >
-                    <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium ${currentStep >= 1 ? 'bg-blue-600 text-white' : 'bg-gray-200 text-gray-600'}`}>
-                      1
-                    </div>
-                    <span className="ml-2 text-base font-medium">Kontaktdaten</span>
-                  </button>
-                  <div className={`flex-1 h-0.5 mx-2 ${currentStep >= 2 ? 'bg-blue-600' : 'bg-gray-200'}`}></div>
-                  <button
-                    onClick={() => { if (currentStep >= 2) { setCurrentStep(2); } }}
-                    disabled={currentStep < 2}
-                    className={`flex items-center transition-colors ${currentStep >= 2 ? 'text-blue-600' : 'text-gray-400'} ${currentStep < 2 ? 'cursor-not-allowed' : 'cursor-pointer'}`}
-                  >
-                    <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium ${currentStep >= 2 ? 'bg-blue-600 text-white' : 'bg-gray-200 text-gray-600'}`}>
-                      2
-                    </div>
-                    <span className="ml-2 text-base font-medium">Lieferadresse</span>
-                  </button>
-                  <div className={`flex-1 h-0.5 mx-2 ${currentStep >= 3 ? 'bg-blue-600' : 'bg-gray-200'}`}></div>
-                  <button
-                    onClick={() => { if (currentStep >= 3) { setCurrentStep(3); } }}
-                    disabled={currentStep < 3}
-                    className={`flex items-center transition-colors ${currentStep >= 3 ? 'text-blue-600' : 'text-gray-400'} ${currentStep < 3 ? 'cursor-not-allowed' : 'cursor-pointer'}`}
-                  >
-                    <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium ${currentStep >= 3 ? 'bg-blue-600 text-white' : 'bg-gray-200 text-gray-600'}`}>
-                      3
-                    </div>
-                    <span className="ml-2 text-base font-medium">Rechnungsadresse</span>
-                  </button>
-                  <div className={`flex-1 h-0.5 mx-2 ${currentStep >= 4 ? 'bg-blue-600' : 'bg-gray-200'}`}></div>
-                  <button
-                    onClick={() => { if (currentStep >= 4) { setCurrentStep(4); } }}
-                    disabled={currentStep < 4}
-                    className={`flex items-center transition-colors ${currentStep >= 4 ? 'text-blue-600' : 'text-gray-400'} ${currentStep < 4 ? 'cursor-not-allowed' : 'cursor-pointer'}`}
-                  >
-                    <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium ${currentStep >= 4 ? 'bg-blue-600 text-white' : 'bg-gray-200 text-gray-600'}`}>
-                      4
-                    </div>
-                    <span className="ml-2 text-base font-medium">Zahlungsart</span>
-                  </button>
-                  <div className={`flex-1 h-0.5 mx-2 ${currentStep >= 5 ? 'bg-blue-600' : 'bg-gray-200'}`}></div>
-                  <button
-                    onClick={() => { if (currentStep >= 5) { setCurrentStep(5); } }}
-                    disabled={currentStep < 5}
-                    className={`flex items-center transition-colors ${currentStep >= 5 ? 'text-blue-600' : 'text-gray-400'} ${currentStep < 5 ? 'cursor-not-allowed' : 'cursor-pointer'}`}
-                  >
-                    <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium ${currentStep >= 5 ? 'bg-blue-600 text-white' : 'bg-gray-200 text-gray-600'}`}>
-                      5
-                    </div>
-                    <span className="ml-2 text-base font-medium">Zusammenfassung</span>
-                  </button>
-                </div>
+          {/* Desktop: Full Progress Steps */}
+          <div className="hidden md:flex items-center justify-between">
+            <button
+              onClick={() => { if (currentStep >= 1) { setCurrentStep(1); } }}
+              disabled={currentStep < 1}
+              className={`flex items-center transition-colors ${currentStep >= 1 ? 'text-blue-600' : 'text-gray-400'} ${currentStep < 1 ? 'cursor-not-allowed' : 'cursor-pointer'}`}
+            >
+              <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium ${currentStep >= 1 ? 'bg-blue-600 text-white' : 'bg-gray-200 text-gray-600'}`}>
+                1
+              </div>
+              <span className="ml-2 text-base font-medium">Kontaktdaten</span>
+            </button>
+            <div className={`flex-1 h-0.5 mx-2 ${currentStep >= 2 ? 'bg-blue-600' : 'bg-gray-200'}`}></div>
+            <button
+              onClick={() => { if (currentStep >= 2) { setCurrentStep(2); } }}
+              disabled={currentStep < 2}
+              className={`flex items-center transition-colors ${currentStep >= 2 ? 'text-blue-600' : 'text-gray-400'} ${currentStep < 2 ? 'cursor-not-allowed' : 'cursor-pointer'}`}
+            >
+              <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium ${currentStep >= 2 ? 'bg-blue-600 text-white' : 'bg-gray-200 text-gray-600'}`}>
+                2
+              </div>
+              <span className="ml-2 text-base font-medium">Lieferadresse</span>
+            </button>
+            <div className={`flex-1 h-0.5 mx-2 ${currentStep >= 3 ? 'bg-blue-600' : 'bg-gray-200'}`}></div>
+            <button
+              onClick={() => { if (currentStep >= 3) { setCurrentStep(3); } }}
+              disabled={currentStep < 3}
+              className={`flex items-center transition-colors ${currentStep >= 3 ? 'text-blue-600' : 'text-gray-400'} ${currentStep < 3 ? 'cursor-not-allowed' : 'cursor-pointer'}`}
+            >
+              <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium ${currentStep >= 3 ? 'bg-blue-600 text-white' : 'bg-gray-200 text-gray-600'}`}>
+                3
+              </div>
+              <span className="ml-2 text-base font-medium">Rechnungsadresse</span>
+            </button>
+            <div className={`flex-1 h-0.5 mx-2 ${currentStep >= 4 ? 'bg-blue-600' : 'bg-gray-200'}`}></div>
+            <button
+              onClick={() => { if (currentStep >= 4) { setCurrentStep(4); } }}
+              disabled={currentStep < 4}
+              className={`flex items-center transition-colors ${currentStep >= 4 ? 'text-blue-600' : 'text-gray-400'} ${currentStep < 4 ? 'cursor-not-allowed' : 'cursor-pointer'}`}
+            >
+              <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium ${currentStep >= 4 ? 'bg-blue-600 text-white' : 'bg-gray-200 text-gray-600'}`}>
+                4
+              </div>
+              <span className="ml-2 text-base font-medium">Zahlungsart</span>
+            </button>
+            <div className={`flex-1 h-0.5 mx-2 ${currentStep >= 5 ? 'bg-blue-600' : 'bg-gray-200'}`}></div>
+            <button
+              onClick={() => { if (currentStep >= 5) { setCurrentStep(5); } }}
+              disabled={currentStep < 5}
+              className={`flex items-center transition-colors ${currentStep >= 5 ? 'text-blue-600' : 'text-gray-400'} ${currentStep < 5 ? 'cursor-not-allowed' : 'cursor-pointer'}`}
+            >
+              <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium ${currentStep >= 5 ? 'bg-blue-600 text-white' : 'bg-gray-200 text-gray-600'}`}>
+                5
+              </div>
+              <span className="ml-2 text-base font-medium">Zusammenfassung</span>
+            </button>
+          </div>
+
+          {/* Mobile: Current Step Only */}
+          <div className="md:hidden flex items-center justify-center">
+            <div className="flex items-center">
+              <div className="w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium bg-blue-600 text-white">
+                {currentStep}
+              </div>
+              <span className="ml-2 text-base font-medium text-blue-600">
+                {currentStep === 1 && 'Kontaktdaten'}
+                {currentStep === 2 && 'Lieferadresse'}
+                {currentStep === 3 && 'Rechnungsadresse'}
+                {currentStep === 4 && 'Zahlungsart'}
+                {currentStep === 5 && 'Zusammenfassung'}
+              </span>
+            </div>
+          </div>
           </div>
 
           <div className="border-b border-gray-200 my-6"></div>
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-          <div className="lg:col-span-2">
-            <div className="bg-white/70 backdrop-blur-sm border border-white/30 rounded-2xl p-6 shadow-lg">
-              <div className="mb-2">
-                
-              </div>
+          <div className="lg:col-span-2 lg:border-r lg:border-gray-200 lg:pr-8">
 
               {currentStep === 1 && (
                 <div className="space-y-6">
@@ -437,7 +450,7 @@ export default function CheckoutClient({ initialIsLoggedIn, initialFormData, ini
                     <select 
                       value={formData.salutation} 
                       onChange={(e) => handleInputChange('salutation', e.target.value as 'Herr' | 'Frau' | 'Divers')} 
-                      className={`w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${fieldErrors.salutation ? 'border-red-500 bg-red-50' : 'border-gray-300'}`}
+                      className={`w-full px-4 py-3 border rounded-lg shadow-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${fieldErrors.salutation ? 'border-red-500 bg-red-50' : 'border-gray-300'}`}
                       required
                     >
                       <option value="">Bitte wählen</option>
@@ -451,25 +464,25 @@ export default function CheckoutClient({ initialIsLoggedIn, initialFormData, ini
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-2">Vorname *</label>
-                      <input type="text" value={formData.firstName} onChange={(e) => handleInputChange('firstName', e.target.value)} className={`w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${fieldErrors.firstName ? 'border-red-500 bg-red-50' : 'border-gray-300'}`} required />
+                      <input type="text" value={formData.firstName} onChange={(e) => handleInputChange('firstName', e.target.value)} className={`w-full px-4 py-3 border rounded-lg shadow-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${fieldErrors.firstName ? 'border-red-500 bg-red-50' : 'border-gray-300'}`} required />
                       {fieldErrors.firstName && (<p className="mt-1 text-sm text-red-600">Dieses Feld ist erforderlich</p>)}
                     </div>
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-2">Nachname *</label>
-                      <input type="text" value={formData.lastName} onChange={(e) => handleInputChange('lastName', e.target.value)} className={`w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${fieldErrors.lastName ? 'border-red-500 bg-red-50' : 'border-gray-300'}`} required />
+                      <input type="text" value={formData.lastName} onChange={(e) => handleInputChange('lastName', e.target.value)} className={`w-full px-4 py-3 border rounded-lg shadow-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${fieldErrors.lastName ? 'border-red-500 bg-red-50' : 'border-gray-300'}`} required />
                       {fieldErrors.lastName && (<p className="mt-1 text-sm text-red-600">Dieses Feld ist erforderlich</p>)}
                     </div>
                   </div>
 
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">E-Mail *</label>
-                    <input type="email" value={formData.email} onChange={(e) => handleInputChange('email', e.target.value)} className={`w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-gray-100 cursor-not-allowed ${fieldErrors.email ? 'border-red-500 bg-red-50' : 'border-gray-300'}`} readOnly required />
+                    <input type="email" value={formData.email} onChange={(e) => handleInputChange('email', e.target.value)} className={`w-full px-4 py-3 border rounded-lg shadow-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-gray-100 cursor-not-allowed ${fieldErrors.email ? 'border-red-500 bg-red-50' : 'border-gray-300'}`} readOnly required />
                     {fieldErrors.email && (<p className="mt-1 text-sm text-red-600">Dieses Feld ist erforderlich</p>)}
                   </div>
 
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">Telefon</label>
-                    <input type="tel" value={formData.phone} onChange={(e) => handleInputChange('phone', e.target.value)} className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500" />
+                    <input type="tel" value={formData.phone} onChange={(e) => handleInputChange('phone', e.target.value)} className="w-full px-4 py-3 border border-gray-300 rounded-lg shadow-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500" />
                   </div>
 
                   <div className="flex justify-end">
@@ -493,7 +506,7 @@ export default function CheckoutClient({ initialIsLoggedIn, initialFormData, ini
                       type="text" 
                       value={formData.shippingAddress.company ?? ''} 
                       onChange={(e) => handleInputChange('shippingAddress.company', e.target.value)} 
-                      className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                      className="w-full px-4 py-3 border border-gray-300 rounded-lg shadow-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                       placeholder="Firmenname (optional)"
                     />
                   </div>
@@ -505,7 +518,7 @@ export default function CheckoutClient({ initialIsLoggedIn, initialFormData, ini
                         type="text" 
                         value={formData.shippingAddress.firstName} 
                         onChange={(e) => handleInputChange('shippingAddress.firstName', e.target.value)} 
-                        className={`w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${fieldErrors['shippingAddress.firstName'] ? 'border-red-500 bg-red-50' : 'border-gray-300'}`}
+                        className={`w-full px-4 py-3 border rounded-lg shadow-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${fieldErrors['shippingAddress.firstName'] ? 'border-red-500 bg-red-50' : 'border-gray-300'}`}
                         required 
                       />
                       {fieldErrors['shippingAddress.firstName'] && (<p className="mt-1 text-sm text-red-600">Dieses Feld ist erforderlich</p>)}
@@ -516,7 +529,7 @@ export default function CheckoutClient({ initialIsLoggedIn, initialFormData, ini
                         type="text" 
                         value={formData.shippingAddress.lastName} 
                         onChange={(e) => handleInputChange('shippingAddress.lastName', e.target.value)} 
-                        className={`w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${fieldErrors['shippingAddress.lastName'] ? 'border-red-500 bg-red-50' : 'border-gray-300'}`}
+                        className={`w-full px-4 py-3 border rounded-lg shadow-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${fieldErrors['shippingAddress.lastName'] ? 'border-red-500 bg-red-50' : 'border-gray-300'}`}
                         required 
                       />
                       {fieldErrors['shippingAddress.lastName'] && (<p className="mt-1 text-sm text-red-600">Dieses Feld ist erforderlich</p>)}
@@ -526,35 +539,35 @@ export default function CheckoutClient({ initialIsLoggedIn, initialFormData, ini
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                     <div className="md:col-span-2">
                       <label className="block text-sm font-medium text-gray-700 mb-2">Straße *</label>
-                      <input type="text" value={formData.shippingAddress.street} onChange={(e) => handleInputChange('shippingAddress.street', e.target.value)} className={`w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${fieldErrors['shippingAddress.street'] ? 'border-red-500 bg-red-50' : 'border-gray-300'}`} required />
+                      <input type="text" value={formData.shippingAddress.street} onChange={(e) => handleInputChange('shippingAddress.street', e.target.value)} className={`w-full px-4 py-3 border rounded-lg shadow-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${fieldErrors['shippingAddress.street'] ? 'border-red-500 bg-red-50' : 'border-gray-300'}`} required />
                       {fieldErrors['shippingAddress.street'] && (<p className="mt-1 text-sm text-red-600">Dieses Feld ist erforderlich</p>)}
                     </div>
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-2">Hausnummer *</label>
-                      <input type="text" value={formData.shippingAddress.houseNumber} onChange={(e) => handleInputChange('shippingAddress.houseNumber', e.target.value)} className={`w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${fieldErrors['shippingAddress.houseNumber'] ? 'border-red-500 bg-red-50' : 'border-gray-300'}`} required />
+                      <input type="text" value={formData.shippingAddress.houseNumber} onChange={(e) => handleInputChange('shippingAddress.houseNumber', e.target.value)} className={`w-full px-4 py-3 border rounded-lg shadow-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${fieldErrors['shippingAddress.houseNumber'] ? 'border-red-500 bg-red-50' : 'border-gray-300'}`} required />
                       {fieldErrors['shippingAddress.houseNumber'] && (<p className="mt-1 text-sm text-red-600">Dieses Feld ist erforderlich</p>)}
                     </div>
                   </div>
 
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">Adresszusatz</label>
-                    <input type="text" value={formData.shippingAddress.addressLine2} onChange={(e) => handleInputChange('shippingAddress.addressLine2', e.target.value)} className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500" placeholder="Wohnung, Etage, etc." />
+                    <input type="text" value={formData.shippingAddress.addressLine2} onChange={(e) => handleInputChange('shippingAddress.addressLine2', e.target.value)} className="w-full px-4 py-3 border border-gray-300 rounded-lg shadow-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500" placeholder="Wohnung, Etage, etc." />
                   </div>
 
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-2">PLZ *</label>
-                      <input type="text" value={formData.shippingAddress.postalCode} onChange={(e) => handleInputChange('shippingAddress.postalCode', e.target.value)} className={`w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${fieldErrors['shippingAddress.postalCode'] ? 'border-red-500 bg-red-50' : 'border-gray-300'}`} required />
+                      <input type="text" value={formData.shippingAddress.postalCode} onChange={(e) => handleInputChange('shippingAddress.postalCode', e.target.value)} className={`w-full px-4 py-3 border rounded-lg shadow-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${fieldErrors['shippingAddress.postalCode'] ? 'border-red-500 bg-red-50' : 'border-gray-300'}`} required />
                       {fieldErrors['shippingAddress.postalCode'] && (<p className="mt-1 text-sm text-red-600">Dieses Feld ist erforderlich</p>)}
                     </div>
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-2">Stadt *</label>
-                      <input type="text" value={formData.shippingAddress.city} onChange={(e) => handleInputChange('shippingAddress.city', e.target.value)} className={`w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${fieldErrors['shippingAddress.city'] ? 'border-red-500 bg-red-50' : 'border-gray-300'}`} required />
+                      <input type="text" value={formData.shippingAddress.city} onChange={(e) => handleInputChange('shippingAddress.city', e.target.value)} className={`w-full px-4 py-3 border rounded-lg shadow-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${fieldErrors['shippingAddress.city'] ? 'border-red-500 bg-red-50' : 'border-gray-300'}`} required />
                       {fieldErrors['shippingAddress.city'] && (<p className="mt-1 text-sm text-red-600">Dieses Feld ist erforderlich</p>)}
                     </div>
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-2">Land *</label>
-                      <select value={formData.shippingAddress.country} onChange={(e) => handleInputChange('shippingAddress.country', e.target.value)} className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                      <select value={formData.shippingAddress.country} onChange={(e) => handleInputChange('shippingAddress.country', e.target.value)} className="w-full px-4 py-3 border border-gray-300 rounded-lg shadow-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
                         <option value="Deutschland">Deutschland</option>
                         <option value="Österreich">Österreich</option>
                         <option value="Schweiz">Schweiz</option>
@@ -610,7 +623,7 @@ export default function CheckoutClient({ initialIsLoggedIn, initialFormData, ini
                           type="text"
                           value={formData.billingAddress.company ?? ''}
                           onChange={(e) => handleInputChange('billingAddress.company', e.target.value)}
-                          className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                          className="w-full px-4 py-3 border border-gray-300 rounded-lg shadow-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                           placeholder="Firmenname (optional)"
                         />
                       </div>
@@ -622,7 +635,7 @@ export default function CheckoutClient({ initialIsLoggedIn, initialFormData, ini
                             type="text"
                             value={formData.billingAddress.firstName}
                             onChange={(e) => handleInputChange('billingAddress.firstName', e.target.value)}
-                            className={`w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${fieldErrors['billingAddress.firstName'] ? 'border-red-500 bg-red-50' : 'border-gray-300'}`}
+                            className={`w-full px-4 py-3 border rounded-lg shadow-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${fieldErrors['billingAddress.firstName'] ? 'border-red-500 bg-red-50' : 'border-gray-300'}`}
                             required
                           />
                           {fieldErrors['billingAddress.firstName'] && (<p className="mt-1 text-sm text-red-600">Dieses Feld ist erforderlich</p>)}
@@ -633,7 +646,7 @@ export default function CheckoutClient({ initialIsLoggedIn, initialFormData, ini
                             type="text"
                             value={formData.billingAddress.lastName}
                             onChange={(e) => handleInputChange('billingAddress.lastName', e.target.value)}
-                            className={`w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${fieldErrors['billingAddress.lastName'] ? 'border-red-500 bg-red-50' : 'border-gray-300'}`}
+                            className={`w-full px-4 py-3 border rounded-lg shadow-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${fieldErrors['billingAddress.lastName'] ? 'border-red-500 bg-red-50' : 'border-gray-300'}`}
                             required
                           />
                           {fieldErrors['billingAddress.lastName'] && (<p className="mt-1 text-sm text-red-600">Dieses Feld ist erforderlich</p>)}
@@ -646,7 +659,7 @@ export default function CheckoutClient({ initialIsLoggedIn, initialFormData, ini
                             type="text"
                             value={formData.billingAddress.street}
                             onChange={(e) => handleInputChange('billingAddress.street', e.target.value)}
-                            className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                            className="w-full px-4 py-3 border border-gray-300 rounded-lg shadow-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                           />
                         </div>
                         <div className="md:col-span-4">
@@ -655,7 +668,7 @@ export default function CheckoutClient({ initialIsLoggedIn, initialFormData, ini
                             type="text"
                             value={formData.billingAddress.houseNumber}
                             onChange={(e) => handleInputChange('billingAddress.houseNumber', e.target.value)}
-                            className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                            className="w-full px-4 py-3 border border-gray-300 rounded-lg shadow-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                           />
                         </div>
                       </div>
@@ -666,7 +679,7 @@ export default function CheckoutClient({ initialIsLoggedIn, initialFormData, ini
                           type="text"
                           value={formData.billingAddress.addressLine2}
                           onChange={(e) => handleInputChange('billingAddress.addressLine2', e.target.value)}
-                          className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                          className="w-full px-4 py-3 border border-gray-300 rounded-lg shadow-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                           placeholder="Wohnung, Etage, etc."
                         />
                       </div>
@@ -678,7 +691,7 @@ export default function CheckoutClient({ initialIsLoggedIn, initialFormData, ini
                             type="text"
                             value={formData.billingAddress.postalCode}
                             onChange={(e) => handleInputChange('billingAddress.postalCode', e.target.value)}
-                            className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                            className="w-full px-4 py-3 border border-gray-300 rounded-lg shadow-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                           />
                         </div>
                         <div>
@@ -687,7 +700,7 @@ export default function CheckoutClient({ initialIsLoggedIn, initialFormData, ini
                             type="text"
                             value={formData.billingAddress.city}
                             onChange={(e) => handleInputChange('billingAddress.city', e.target.value)}
-                            className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                            className="w-full px-4 py-3 border border-gray-300 rounded-lg shadow-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                           />
                         </div>
                         <div>
@@ -695,7 +708,7 @@ export default function CheckoutClient({ initialIsLoggedIn, initialFormData, ini
                           <select
                             value={formData.billingAddress.country}
                             onChange={(e) => handleInputChange('billingAddress.country', e.target.value)}
-                            className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                            className="w-full px-4 py-3 border border-gray-300 rounded-lg shadow-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                           >
                             <option value="Deutschland">Deutschland</option>
                             <option value="Österreich">Österreich</option>
@@ -866,11 +879,13 @@ export default function CheckoutClient({ initialIsLoggedIn, initialFormData, ini
                   </div>
                 </div>
               )}
-            </div>
           </div>
 
+          {/* Mobile Trennstrich */}
+          <div className="lg:hidden border-t border-gray-200"></div>
+
           <div className="lg:col-span-1">
-            <div className="bg-white/70 backdrop-blur-sm border border-white/30 rounded-2xl p-6 shadow-lg sticky top-8">
+            <div className="sticky top-8">
               <h3 className="text-lg font-semibold text-slate-800 mb-4">Bestellübersicht</h3>
               <div className="space-y-4 mb-6">
                 {items.map((item, index) => (

@@ -37,9 +37,10 @@ interface ProductCardProps {
     };
   };
   variant?: 'default' | 'carousel';
+  onProductAdded?: (productSlug: string) => void;
 }
 
-export default function ProductCard({ product, variant = 'default' }: ProductCardProps) {
+export default function ProductCard({ product, variant = 'default', onProductAdded }: ProductCardProps) {
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
   const [isHovered, setIsHovered] = useState(false);
   const [intervalId, setIntervalId] = useState<NodeJS.Timeout | null>(null);
@@ -48,6 +49,9 @@ export default function ProductCard({ product, variant = 'default' }: ProductCar
   const [selectedVariations, setSelectedVariations] = useState<Record<string, string>>({});
   const [quantity, setQuantity] = useState(1);
   const addItem = useCartStore((s) => s.addItem);
+  const [isAnimating, setIsAnimating] = useState(false);
+  const [showFlyingItem, setShowFlyingItem] = useState(false);
+  const [flyAnimationStyle, setFlyAnimationStyle] = useState<React.CSSProperties>({});
 
   // Initialize variations with first available option when modal opens
   useEffect(() => {
@@ -159,6 +163,10 @@ export default function ProductCard({ product, variant = 'default' }: ProductCar
     }
     
     if (!isOutOfStock()) {
+      // Start button animation
+      setIsAnimating(true);
+      
+      // Add item to cart
       addItem({
         slug: product.slug,
         title: product.title,
@@ -169,6 +177,55 @@ export default function ProductCard({ product, variant = 'default' }: ProductCar
         imageSizes: product.imageSizes,
         stockQuantity: product.stockQuantity
       });
+      
+      // Notify parent component that product was added
+      onProductAdded?.(product.slug);
+      
+      // Get button position for flying animation
+      const buttonRect = e.currentTarget.getBoundingClientRect();
+      const buttonCenterX = buttonRect.left + buttonRect.width / 2;
+      const buttonCenterY = buttonRect.top + buttonRect.height / 2;
+      
+      // Find the actual cart icon position in the navbar
+      const cartIcon = document.querySelector('[data-cart-icon]') || 
+                       document.querySelector('svg[class*="shopping"]') || 
+                       document.querySelector('button[class*="cart"]') ||
+                       document.querySelector('a[href*="cart"]') ||
+                       document.querySelector('[aria-label*="cart" i]') ||
+                       document.querySelector('[aria-label*="warenkorb" i]');
+      
+      let targetX, targetY;
+      
+      if (cartIcon) {
+        const cartRect = cartIcon.getBoundingClientRect();
+        targetX = cartRect.left + cartRect.width / 2;
+        targetY = cartRect.top + cartRect.height / 2;
+      } else {
+        // Fallback to approximate position if cart icon not found
+        const isMobile = window.innerWidth < 768;
+        targetX = window.innerWidth - (window.innerWidth * (isMobile ? 0.08 : 0.18));
+        targetY = 20;
+      }
+      
+      // Set animation style with calculated positions
+      setFlyAnimationStyle({
+        '--start-x': `${buttonCenterX}px`,
+        '--start-y': `${buttonCenterY}px`,
+        '--end-x': `${targetX}px`,
+        '--end-y': `${targetY}px`,
+      } as React.CSSProperties);
+      
+      // Start flying animation with calculated positions
+      setShowFlyingItem(true);
+      
+      // Reset animations after duration
+      setTimeout(() => {
+        setIsAnimating(false);
+      }, 300);
+      
+      setTimeout(() => {
+        setShowFlyingItem(false);
+      }, 1000);
     }
   };
 
@@ -181,6 +238,9 @@ export default function ProductCard({ product, variant = 'default' }: ProductCar
 
   const handleAddToCartFromModal = () => {
     if (!isOutOfStock()) {
+      // Start button animation
+      setIsAnimating(true);
+      
       const currentStock = getCurrentStockQuantity();
       addItem({
         slug: product.slug,
@@ -192,9 +252,63 @@ export default function ProductCard({ product, variant = 'default' }: ProductCar
         imageSizes: product.imageSizes,
         stockQuantity: currentStock
       });
-      setIsModalOpen(false);
-      setSelectedVariations({});
-      setQuantity(1);
+      
+      // Notify parent component that product was added
+      onProductAdded?.(product.slug);
+      
+      // Get modal button position for flying animation
+      const modalButton = document.querySelector('[data-modal-add-to-cart]');
+      if (modalButton) {
+        const buttonRect = modalButton.getBoundingClientRect();
+        const buttonCenterX = buttonRect.left + buttonRect.width / 2;
+        const buttonCenterY = buttonRect.top + buttonRect.height / 2;
+        
+        // Find the actual cart icon position in the navbar
+        const cartIcon = document.querySelector('[data-cart-icon]') || 
+                         document.querySelector('svg[class*="shopping"]') || 
+                         document.querySelector('button[class*="cart"]') ||
+                         document.querySelector('a[href*="cart"]') ||
+                         document.querySelector('[aria-label*="cart" i]') ||
+                         document.querySelector('[aria-label*="warenkorb" i]');
+        
+        let targetX, targetY;
+        
+        if (cartIcon) {
+          const cartRect = cartIcon.getBoundingClientRect();
+          targetX = cartRect.left + cartRect.width / 2;
+          targetY = cartRect.top + cartRect.height / 2;
+        } else {
+          // Fallback to approximate position if cart icon not found
+          const isMobile = window.innerWidth < 768;
+          targetX = window.innerWidth - (window.innerWidth * (isMobile ? 0.08 : 0.18));
+          targetY = 20;
+        }
+        
+        // Set animation style with calculated positions
+        setFlyAnimationStyle({
+          '--start-x': `${buttonCenterX}px`,
+          '--start-y': `${buttonCenterY}px`,
+          '--end-x': `${targetX}px`,
+          '--end-y': `${targetY}px`,
+        } as React.CSSProperties);
+        
+        // Start flying animation with calculated positions
+        setShowFlyingItem(true);
+      }
+      
+      // Don't close modal, keep it open for more additions
+      // setIsModalOpen(false);
+      // setSelectedVariations({});
+      // setQuantity(1);
+      
+      // Reset animations after duration
+      setTimeout(() => {
+        setIsAnimating(false);
+      }, 300);
+      
+      setTimeout(() => {
+        setShowFlyingItem(false);
+      }, 1000);
     }
   };
 
@@ -376,11 +490,7 @@ export default function ProductCard({ product, variant = 'default' }: ProductCar
                 <span className="text-base text-gray-500">
                   {product.reviews.averageRating.toFixed(1)} ({product.reviews.totalReviews})
                 </span>
-              ) : (
-                <span className="text-sm text-gray-500">
-                  Noch keine Bewertungen
-                </span>
-              )}
+              ) : null}
             </div>
 
             {/* Price and Cart Button Row */}
@@ -421,6 +531,8 @@ export default function ProductCard({ product, variant = 'default' }: ProductCar
                 className={`p-2 rounded-lg transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 flex-shrink-0 ${
                   isOutOfStock()
                     ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                    : isAnimating
+                    ? 'bg-green-600 text-white scale-95'
                     : product.variations && product.variations.length > 0
                     ? 'bg-blue-600 text-white hover:bg-blue-700 shadow-lg hover:shadow-xl cursor-pointer'
                     : 'bg-blue-600 text-white hover:bg-blue-700 shadow-lg hover:shadow-xl cursor-pointer'
@@ -589,6 +701,8 @@ export default function ProductCard({ product, variant = 'default' }: ProductCar
                   className={`p-3 sm:p-2 rounded-full transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 ${
                     isOutOfStock()
                       ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                      : isAnimating
+                      ? 'bg-green-600 text-white scale-95'
                       : product.variations && product.variations.length > 0
                       ? 'bg-blue-600 text-white hover:bg-blue-700 shadow-lg hover:shadow-xl cursor-pointer'
                       : 'bg-blue-600 text-white hover:bg-blue-700 shadow-lg hover:shadow-xl cursor-pointer'
@@ -648,7 +762,7 @@ export default function ProductCard({ product, variant = 'default' }: ProductCar
               </div>
               <button
                 onClick={() => setIsModalOpen(false)}
-                className="text-gray-400 hover:text-gray-600"
+                className="text-gray-400 hover:text-gray-600 cursor-pointer"
               >
                 <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
@@ -714,7 +828,7 @@ export default function ProductCard({ product, variant = 'default' }: ProductCar
                 <div className="flex items-center gap-2">
                   <button
                     onClick={() => setQuantity(Math.max(1, quantity - 1))}
-                    className="w-10 h-10 border border-gray-300 rounded-lg flex items-center justify-center hover:bg-gray-100 transition-colors"
+                    className="w-10 h-10 border border-gray-300 rounded-lg flex items-center justify-center hover:bg-gray-100 transition-colors cursor-pointer"
                   >
                     -
                   </button>
@@ -727,7 +841,7 @@ export default function ProductCard({ product, variant = 'default' }: ProductCar
                     className={`w-10 h-10 border border-gray-300 rounded-lg flex items-center justify-center transition-colors ${
                       quantity >= getCurrentStockQuantity() || getCurrentStockQuantity() <= 0
                         ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
-                        : 'hover:bg-gray-100'
+                        : 'hover:bg-gray-100 cursor-pointer'
                     }`}
                   >
                     +
@@ -754,17 +868,20 @@ export default function ProductCard({ product, variant = 'default' }: ProductCar
             <div className="flex gap-3 mt-6">
               <button
                 onClick={() => setIsModalOpen(false)}
-                className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
+                className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors cursor-pointer"
               >
                 Abbrechen
               </button>
               <button
                 onClick={handleAddToCartFromModal}
                 disabled={!isAllVariationsSelected() || isOutOfStock()}
+                data-modal-add-to-cart
                 className={`flex-1 px-4 py-2 rounded-lg font-medium transition-colors flex items-center justify-center gap-2 ${
                   !isAllVariationsSelected() || isOutOfStock()
                     ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
-                    : 'bg-blue-600 text-white hover:bg-blue-700'
+                    : isAnimating
+                    ? 'bg-green-600 text-white scale-95 cursor-pointer'
+                    : 'bg-blue-600 text-white hover:bg-blue-700 cursor-pointer'
                 }`}
               >
                 <TiShoppingCart className="w-4 h-4" />
@@ -772,6 +889,18 @@ export default function ProductCard({ product, variant = 'default' }: ProductCar
               </button>
             </div>
           </div>
+        </div>
+      </div>
+    )}
+
+    {/* Flying item animation */}
+    {showFlyingItem && (
+      <div className="fixed inset-0 pointer-events-none z-50">
+        <div 
+          className="animate-fly-to-cart"
+          style={flyAnimationStyle}
+        >
+          <TiShoppingCart className="w-8 h-8 text-blue-600" />
         </div>
       </div>
     )}

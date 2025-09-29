@@ -17,6 +17,21 @@ export default function CartSidebar({ isOpen, onClose }: CartSidebarProps) {
   const clear = useCartStore((state) => state.clear);
   const validateItems = useCartStore((state) => state.validateItems);
   const [isValidating, setIsValidating] = useState(false);
+  const [sidebarWidth, setSidebarWidth] = useState('100%');
+
+  useEffect(() => {
+    const updateWidth = () => {
+      if (window.innerWidth >= 768) {
+        setSidebarWidth('434px');
+      } else {
+        setSidebarWidth('100%');
+      }
+    };
+
+    updateWidth();
+    window.addEventListener('resize', updateWidth);
+    return () => window.removeEventListener('resize', updateWidth);
+  }, []);
 
   const total = items.reduce((sum, i) => sum + i.price * i.quantity, 0);
   const totalQuantity = items.reduce((sum, i) => sum + i.quantity, 0);
@@ -77,16 +92,29 @@ export default function CartSidebar({ isOpen, onClose }: CartSidebarProps) {
 
       {/* Sidebar */}
       <div 
-        className={`fixed top-0 right-0 h-full w-[434px] bg-white shadow-2xl z-50 transform transition-transform duration-300 ease-in-out ${
+        className={`fixed top-0 right-0 h-full bg-white shadow-2xl z-50 transform transition-transform duration-300 ease-in-out ${
           isOpen ? 'translate-x-0' : 'translate-x-full'
         }`}
+        style={{ width: sidebarWidth }}
       >
+        {/* Einfahren Button - links von der Sidebar (nur auf Desktop) */}
+        {isOpen && (
+          <button
+            onClick={onClose}
+            className="hidden md:flex absolute left-[-60px] top-1/2 transform -translate-y-1/2 w-12 h-12 bg-blue-600 hover:bg-blue-700 text-white rounded-l-lg shadow-lg transition-colors duration-200 items-center justify-center cursor-pointer"
+            aria-label="Warenkorb einfahren"
+          >
+            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+            </svg>
+          </button>
+        )}
         {/* Header */}
         <div className="bg-blue-600 text-white px-4 py-4 flex items-center justify-between">
           <h2 className="text-lg font-bold uppercase">Warenkorb</h2>
           <button
             onClick={onClose}
-            className="text-white hover:text-gray-200 transition-colors"
+            className="text-white hover:text-gray-200 transition-colors cursor-pointer"
             aria-label="Warenkorb schließen"
           >
             <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -110,7 +138,7 @@ export default function CartSidebar({ isOpen, onClose }: CartSidebarProps) {
               <Link 
                 href="/shop" 
                 onClick={onClose}
-                className="inline-flex items-center px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 transition-colors"
+                className="inline-flex items-center px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 transition-colors cursor-pointer"
               >
                 Jetzt einkaufen
               </Link>
@@ -164,7 +192,7 @@ export default function CartSidebar({ isOpen, onClose }: CartSidebarProps) {
                                className={`w-6 h-6 flex items-center justify-center rounded transition-colors ${
                                  item.quantity <= 1
                                    ? 'text-gray-400 cursor-not-allowed bg-gray-100'
-                                   : 'text-gray-600 hover:text-gray-800 hover:bg-gray-200'
+                                   : 'text-gray-600 hover:text-gray-800 hover:bg-gray-200 cursor-pointer'
                                }`}
                              >
                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -184,7 +212,7 @@ export default function CartSidebar({ isOpen, onClose }: CartSidebarProps) {
                                className={`w-6 h-6 flex items-center justify-center rounded transition-colors ${
                                  (item.stockQuantity || 0) > 0 && item.quantity >= (item.stockQuantity || 0)
                                    ? 'text-gray-400 cursor-not-allowed bg-gray-100'
-                                   : 'text-gray-600 hover:text-gray-800 hover:bg-gray-200'
+                                   : 'text-gray-600 hover:text-gray-800 hover:bg-gray-200 cursor-pointer'
                                }`}
                              >
                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -213,9 +241,12 @@ export default function CartSidebar({ isOpen, onClose }: CartSidebarProps) {
                         </div>
                         <button
                           onClick={() => removeItem(item.slug, item.variations)}
-                          className="text-blue-600 hover:text-blue-800 text-sm font-medium transition-colors"
+                          className="text-blue-600 hover:text-red-800 transition-colors cursor-pointer p-1"
+                          title="Entfernen"
                         >
-                          Löschen
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                          </svg>
                         </button>
                       </div>
                     </div>
@@ -275,7 +306,7 @@ export default function CartSidebar({ isOpen, onClose }: CartSidebarProps) {
                     onClose();
                     window.location.href = '/cart';
                   }}
-                  className="w-full bg-blue-600 text-white font-bold py-3 px-4 rounded-lg hover:bg-blue-700 transition-colors uppercase text-base"
+                  className="w-full bg-blue-600 text-white font-bold py-3 px-4 rounded-lg hover:bg-blue-700 transition-colors uppercase text-base cursor-pointer"
                 >
                   Zum Warenkorb
                 </button>
@@ -284,7 +315,7 @@ export default function CartSidebar({ isOpen, onClose }: CartSidebarProps) {
                     onClose();
                     window.location.href = '/checkout';
                   }}
-                  className="w-full bg-green-600 text-white font-bold py-3 px-4 rounded-lg hover:bg-green-700 transition-colors uppercase text-base"
+                  className="w-full bg-green-600 text-white font-bold py-3 px-4 rounded-lg hover:bg-green-700 transition-colors uppercase text-base cursor-pointer"
                 >
                   Bestellung
                 </button>

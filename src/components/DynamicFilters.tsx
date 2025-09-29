@@ -597,7 +597,8 @@ export default function DynamicFilters({
                       className="absolute w-4 h-4 bg-blue-500 rounded-full cursor-pointer transform -translate-y-1 -translate-x-2 hover:scale-110 transition-transform"
                       style={{
                         left: `${((minValue - rangeValues.min) / (rangeValues.max - rangeValues.min)) * 100}%`,
-                        zIndex: 10
+                        zIndex: 10,
+                        touchAction: 'none'
                       }}
                       onMouseDown={(e) => {
                         e.preventDefault();
@@ -631,6 +632,37 @@ export default function DynamicFilters({
                         document.addEventListener('mousemove', handleMouseMove);
                         document.addEventListener('mouseup', handleMouseUp);
                       }}
+                      onTouchStart={(e) => {
+                        e.preventDefault();
+                        const range = rangeValues.max - rangeValues.min;
+                        const sliderElement = (e.target as Element).closest('.relative');
+                        if (!sliderElement) return;
+                        
+                        const handleTouchMove = (e: TouchEvent) => {
+                          if (e.touches.length === 0) return;
+                          const rect = sliderElement.getBoundingClientRect();
+                          
+                          // Calculate position as percentage of slider width
+                          const percent = Math.max(0, Math.min(100, ((e.touches[0].clientX - rect.left) / rect.width) * 100));
+                          const newValue = rangeValues.min + (percent / 100) * range;
+                          const clampedValue = Math.max(rangeValues.min, Math.min(maxValue - 1, Math.round(newValue)));
+                          
+                          // Check if values are back to original range - if so, remove filter
+                          if (clampedValue === rangeValues.min && maxValue === rangeValues.max) {
+                            onFilterChange(String(filter._id!), []);
+                          } else {
+                            onFilterChange(String(filter._id!), [clampedValue.toString(), maxValue.toString()]);
+                          }
+                        };
+                        
+                        const handleTouchEnd = () => {
+                          document.removeEventListener('touchmove', handleTouchMove);
+                          document.removeEventListener('touchend', handleTouchEnd);
+                        };
+                        
+                        document.addEventListener('touchmove', handleTouchMove);
+                        document.addEventListener('touchend', handleTouchEnd);
+                      }}
                     />
                     
                     {/* Max thumb */}
@@ -638,7 +670,8 @@ export default function DynamicFilters({
                       className="absolute w-4 h-4 bg-blue-500 rounded-full cursor-pointer transform -translate-y-1 -translate-x-2 hover:scale-110 transition-transform"
                       style={{
                         left: `${((maxValue - rangeValues.min) / (rangeValues.max - rangeValues.min)) * 100}%`,
-                        zIndex: 10
+                        zIndex: 10,
+                        touchAction: 'none'
                       }}
                       onMouseDown={(e) => {
                         e.preventDefault();
@@ -671,6 +704,37 @@ export default function DynamicFilters({
                         
                         document.addEventListener('mousemove', handleMouseMove);
                         document.addEventListener('mouseup', handleMouseUp);
+                      }}
+                      onTouchStart={(e) => {
+                        e.preventDefault();
+                        const range = rangeValues.max - rangeValues.min;
+                        const sliderElement = (e.target as Element).closest('.relative');
+                        if (!sliderElement) return;
+                        
+                        const handleTouchMove = (e: TouchEvent) => {
+                          if (e.touches.length === 0) return;
+                          const rect = sliderElement.getBoundingClientRect();
+                          
+                          // Calculate position as percentage of slider width
+                          const percent = Math.max(0, Math.min(100, ((e.touches[0].clientX - rect.left) / rect.width) * 100));
+                          const newValue = rangeValues.min + (percent / 100) * range;
+                          const clampedValue = Math.max(minValue + 1, Math.min(rangeValues.max, Math.round(newValue)));
+                          
+                          // Check if values are back to original range - if so, remove filter
+                          if (minValue === rangeValues.min && clampedValue === rangeValues.max) {
+                            onFilterChange(String(filter._id!), []);
+                          } else {
+                            onFilterChange(String(filter._id!), [minValue.toString(), clampedValue.toString()]);
+                          }
+                        };
+                        
+                        const handleTouchEnd = () => {
+                          document.removeEventListener('touchmove', handleTouchMove);
+                          document.removeEventListener('touchend', handleTouchEnd);
+                        };
+                        
+                        document.addEventListener('touchmove', handleTouchMove);
+                        document.addEventListener('touchend', handleTouchEnd);
                       }}
                     />
                   </div>

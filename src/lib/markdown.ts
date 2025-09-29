@@ -3,7 +3,7 @@ import { marked } from 'marked';
 // Cache für konvertiertes HTML (Server-side)
 const serverHtmlCache = new Map<string, string>();
 
-export function renderMarkdownToHtml(content: string): string {
+export async function renderMarkdownToHtml(content: string): Promise<string> {
   if (!content) return '';
 
   // Check cache first
@@ -15,11 +15,10 @@ export function renderMarkdownToHtml(content: string): string {
   marked.setOptions({
     breaks: true,
     gfm: true, // GitHub Flavored Markdown
-    sanitize: false, // We'll use DOMPurify on client-side
   });
 
   // Convert markdown to HTML
-  const rawHtml = marked(content);
+  const rawHtml = await marked(content);
   
   // For server-side, we'll do basic sanitization
   // The client-side will handle full DOMPurify sanitization
@@ -36,18 +35,17 @@ export function renderMarkdownToHtml(content: string): string {
 }
 
 // Client-side version (for useMemo)
-export function renderMarkdownToHtmlClient(content: string): string {
+export async function renderMarkdownToHtmlClient(content: string): Promise<string> {
   if (!content) return '';
 
   // Configure marked options
   marked.setOptions({
     breaks: true,
     gfm: true,
-    sanitize: false,
   });
 
   // Convert markdown to HTML
-  const rawHtml = marked(content);
+  const rawHtml = await marked(content);
   
   // For client-side, we'll do basic sanitization
   // DOMPurify can be added later if needed
