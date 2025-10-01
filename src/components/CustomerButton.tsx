@@ -74,6 +74,10 @@ export default function CustomerButton() {
           await refresh();
         } catch {}
         setIsModalOpen(false);
+        // If backend signaled a post-login destination (e.g., /activate), go there immediately
+        if (event.data && typeof event.data.next === 'string' && event.data.next.length > 0) {
+          try { window.location.assign(event.data.next); } catch {}
+        }
       };
       window.addEventListener('message', onMessage);
     }
@@ -100,6 +104,9 @@ export default function CustomerButton() {
         window.removeEventListener('message', onMessage);
         try { await fetch('/api/auth/me', { cache: 'no-store' }); await refresh(); } catch {}
         setIsModalOpen(false);
+        if (event.data && typeof event.data.next === 'string' && event.data.next.length > 0) {
+          try { window.location.assign(event.data.next); } catch {}
+        }
       };
       window.addEventListener('message', onMessage);
     }
