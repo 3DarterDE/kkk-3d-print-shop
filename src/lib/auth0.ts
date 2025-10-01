@@ -15,6 +15,12 @@ export const auth0 = new Auth0Client({
 		redirect_uri: `${appBaseUrl}/api/auth/callback`,
 		// Request only minimal scopes to avoid consent; exclude offline_access
 		scope: 'openid profile email',
+		// Add custom parameters for branding
+		ui_locales: 'de',
+		// Add custom state to include return URL
+		state: 'return_to_3darter',
+		// Force re-auth when requested via popup (frontend uses prompt/max_age)
+		prompt: undefined,
 	},
 	routes: {
 		login: '/api/auth/login',
@@ -64,9 +70,15 @@ export const auth0 = new Auth0Client({
 		}
 		
 		if (!isVerified) {
-			let url = '/activate?send=1';
-			if (user.email) url += `&email=${encodeURIComponent(user.email)}`;
-			return NextResponse.redirect(new URL(url, appBaseUrl));
+			let nextUrl = '/activate?send=1';
+			if (user.email) nextUrl += `&email=${encodeURIComponent(user.email)}`;
+			// If this auth flow originated from popup (/auth/popup-complete as returnTo),
+			// send the popup to popup-complete so it can notify and close, passing next.
+			if (typeof ctx.returnTo === 'string' && ctx.returnTo.includes('/auth/popup-complete')) {
+				const popupComplete = `/auth/popup-complete?next=${encodeURIComponent(nextUrl)}`;
+				return NextResponse.redirect(new URL(popupComplete, appBaseUrl));
+			}
+			return NextResponse.redirect(new URL(nextUrl, appBaseUrl));
 		}
 
 

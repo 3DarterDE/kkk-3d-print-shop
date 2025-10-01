@@ -15,6 +15,11 @@ export type AuthUser = {
   name?: string;
 };
 
+export function invalidateAuthCache() {
+  cachedAuthResult = null;
+  cachedAt = 0;
+}
+
 export function useAuth() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -23,14 +28,14 @@ export function useAuth() {
   const [needsVerification, setNeedsVerification] = useState(false);
   const [user, setUser] = useState<AuthUser | null>(null);
 
-  const load = useCallback(async () => {
+  const load = useCallback(async (force: boolean = false) => {
     try {
       setLoading(true);
       setError(null);
       const now = Date.now();
 
       // Serve from short-lived cache if fresh
-      if (cachedAuthResult && now - cachedAt < AUTH_CACHE_TTL_MS) {
+      if (!force && cachedAuthResult && now - cachedAt < AUTH_CACHE_TTL_MS) {
         const data = cachedAuthResult;
         const authenticated = Boolean(data.authenticated);
         setIsAuthenticated(authenticated);
@@ -66,10 +71,15 @@ export function useAuth() {
   }, []);
 
   useEffect(() => {
-    load();
+    load(false);
   }, [load]);
 
-  return { loading, error, isAuthenticated, isAdmin, needsVerification, user, refresh: load };
+  const refresh = useCallback(async () => {
+    invalidateAuthCache();
+    await load(true);
+  }, [load]);
+
+  return { loading, error, isAuthenticated, isAdmin, needsVerification, user, refresh };
 }
 
 export default useAuth;

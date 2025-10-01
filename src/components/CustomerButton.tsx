@@ -6,7 +6,7 @@ import useAuth from '@/lib/hooks/useAuth';
 import { useUserData } from '@/lib/contexts/UserDataContext';
 
 export default function CustomerButton() {
-  const { user: authUser, loading, error } = useAuth();
+  const { user: authUser, loading, error, refresh } = useAuth();
   const { user: userData } = useUserData();
   const [isOpen, setIsOpen] = useState(false);
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -38,13 +38,71 @@ export default function CustomerButton() {
 
 
   const handleLogin = () => {
-    // Redirect to Auth0 login and send back to activation page
-  window.location.assign('/api/auth/login?returnTo=%2Factivate%3Fsend%3D1');
+    // Open Auth0 login in a centered popup and return to popup-complete page
+    const w = 500;
+    const h = 650;
+    const dualScreenLeft = window.screenLeft !== undefined ? window.screenLeft : (window as any).screenX;
+    const dualScreenTop = window.screenTop !== undefined ? window.screenTop : (window as any).screenY;
+    const width = window.innerWidth ? window.innerWidth : document.documentElement.clientWidth ? document.documentElement.clientWidth : screen.width;
+    const height = window.innerHeight ? window.innerHeight : document.documentElement.clientHeight ? document.documentElement.clientHeight : screen.height;
+    const systemZoom = width / window.screen.availWidth;
+    const left = (width - w) / 2 / systemZoom + dualScreenLeft;
+    const top = (height - h) / 2 / systemZoom + dualScreenTop;
+
+    const popup = window.open(
+      '/api/auth/login?prompt=login&max_age=0&returnTo=%2Fauth%2Fpopup-complete',
+      'auth0Popup',
+      `scrollbars=yes, width=${w}, height=${h}, top=${top}, left=${left}`
+    );
+
+    // Fallback if popup was blocked
+    if (!popup || popup.closed) {
+      window.location.assign('/api/auth/login?prompt=login&max_age=0&returnTo=%2Fauth%2Fpopup-complete');
+      return;
+    }
+
+    if (popup) {
+      // Listen for completion message
+      const onMessage = async (event: MessageEvent) => {
+        if (event.origin !== window.location.origin) return;
+        if (!event.data || event.data.type !== 'auth:popup-complete') return;
+        window.removeEventListener('message', onMessage);
+        try {
+          // Refresh auth state
+          const res = await fetch('/api/auth/me', { cache: 'no-store' });
+          await res.json();
+          await refresh();
+        } catch {}
+        setIsModalOpen(false);
+      };
+      window.addEventListener('message', onMessage);
+    }
   };
 
   const handleSignup = () => {
-    // Redirect to Auth0 signup and send back to activation page
-  window.location.assign('/api/auth/login?screen_hint=signup&returnTo=%2Factivate%3Fsend%3D1');
+    const w = 500;
+    const h = 650;
+    const left = window.screenX + Math.max(0, (window.innerWidth - w) / 2);
+    const top = window.screenY + Math.max(0, (window.innerHeight - h) / 2);
+    const popup = window.open(
+      '/api/auth/login?screen_hint=signup&prompt=login&max_age=0&returnTo=%2Fauth%2Fpopup-complete',
+      'auth0Popup',
+      `scrollbars=yes, width=${w}, height=${h}, top=${top}, left=${left}`
+    );
+    if (!popup || popup.closed) {
+      window.location.assign('/api/auth/login?screen_hint=signup&prompt=login&max_age=0&returnTo=%2Fauth%2Fpopup-complete');
+      return;
+    }
+    if (popup) {
+      const onMessage = async (event: MessageEvent) => {
+        if (event.origin !== window.location.origin) return;
+        if (!event.data || event.data.type !== 'auth:popup-complete') return;
+        window.removeEventListener('message', onMessage);
+        try { await fetch('/api/auth/me', { cache: 'no-store' }); await refresh(); } catch {}
+        setIsModalOpen(false);
+      };
+      window.addEventListener('message', onMessage);
+    }
   };
 
   const handleCloseModal = () => {

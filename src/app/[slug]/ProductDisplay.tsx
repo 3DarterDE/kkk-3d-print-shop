@@ -299,8 +299,8 @@ export default function ProductDisplay({ product, descriptionHtml, recommendedPr
     
     setIsDragging(false);
     setDragOffset(0);
-    // Open lightbox only on tap (no movement/swipe)
-    if (!isLeftSwipe && !isRightSwipe && !hasMoved && !isVideo) {
+    // Open lightbox only on tap (no movement/swipe) - disabled on mobile
+    if (!isLeftSwipe && !isRightSwipe && !hasMoved && !isVideo && window.innerWidth >= 768) {
       setIsLightboxOpen(true);
     }
   };
@@ -1071,18 +1071,7 @@ export default function ProductDisplay({ product, descriptionHtml, recommendedPr
                   </div>
                 </>
               ) : (
-                <div className="text-center py-12">
-                  <div className="text-6xl mb-4">⭐</div>
-                  <h3 className="text-lg font-semibold text-gray-900 mb-2">
-                    Noch keine Bewertungen
-                  </h3>
-                  <p className="text-gray-600 mb-4">
-                    Sei der Erste, der dieses Produkt bewertet!
-                  </p>
-                  <button className="bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700 transition-colors">
-                    Bewertung schreiben
-                  </button>
-                </div>
+                <p className="text-gray-500 italic">Noch keine Bewertungen.</p>
               )}
               
               {/* Mobile Page Counter */}
@@ -1111,7 +1100,7 @@ export default function ProductDisplay({ product, descriptionHtml, recommendedPr
                   ))}
                 </div>
               ) : (
-                <p className="text-gray-500">Keine Eigenschaften verfügbar.</p>
+                <p className="text-gray-500 italic">Keine Eigenschaften verfügbar.</p>
               )}
             </div>
 
@@ -1121,10 +1110,14 @@ export default function ProductDisplay({ product, descriptionHtml, recommendedPr
                 Beschreibung
               </h2>
               
-              <div
-                className="prose max-w-none"
-                dangerouslySetInnerHTML={{ __html: descriptionHtml }}
-              />
+              {descriptionHtml && descriptionHtml.trim() ? (
+                <div
+                  className="prose max-w-none"
+                  dangerouslySetInnerHTML={{ __html: descriptionHtml }}
+                />
+              ) : (
+                <p className="text-gray-500">Beschreibung kommt bald.</p>
+              )}
             </div>
           </div>
         </div>

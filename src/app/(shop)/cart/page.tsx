@@ -193,7 +193,10 @@ export default function CartPage() {
 
   // Remove specific product from random products when added to cart
   const removeProductFromSuggestions = useCallback((productSlug: string) => {
-    setRandomProducts(prev => prev.filter(product => product.slug !== productSlug));
+    // Wait 2 seconds before removing the product so the animation is visible
+    setTimeout(() => {
+      setRandomProducts(prev => prev.filter(product => product.slug !== productSlug));
+    }, 800);
   }, []);
 
   // Only reload random products on initial load, not when cart changes

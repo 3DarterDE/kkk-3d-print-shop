@@ -4,10 +4,21 @@ import { Product } from "@/lib/models/Product";
 
 export async function POST(request: NextRequest) {
   try {
-    const { slugs } = await request.json();
-    
-    if (!slugs || !Array.isArray(slugs)) {
-      return NextResponse.json({ error: "Invalid request" }, { status: 400 });
+    // Be resilient to empty bodies or invalid JSON
+    let slugs: string[] = [];
+    try {
+      const raw = await request.text();
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (parsed && Array.isArray(parsed.slugs)) slugs = parsed.slugs as string[];
+      }
+    } catch {
+      // ignore parse errors and treat as empty
+    }
+
+    // If no slugs provided, respond with empty result gracefully (avoid 500/log noise)
+    if (!slugs.length) {
+      return NextResponse.json({ results: [] });
     }
 
     await connectToDatabase();
