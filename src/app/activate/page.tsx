@@ -31,6 +31,25 @@ function ActivatePageContent() {
     }
   }, [user, needsVerification, loading, router]);
 
+  // Robust redirect once success is true (use replace + hard fallback)
+  useEffect(() => {
+    if (!success) return;
+    let cancelled = false;
+    const go = async () => {
+      try {
+        router.replace('/');
+      } catch {}
+      // Hard fallback after small delay in case SPA nav is blocked
+      setTimeout(() => {
+        if (!cancelled) {
+          try { window.location.assign('/'); } catch {}
+        }
+      }, 800);
+    };
+    go();
+    return () => { cancelled = true; };
+  }, [success, router]);
+
   // Optional: simple cooldown timer UI state
   useEffect(() => {
     if (cooldown <= 0) return;
@@ -68,8 +87,7 @@ function ActivatePageContent() {
 
       if (data.success) {
         setSuccess(true);
-        // Navigate immediately once session is updated
-        router.push('/');
+        // Navigation is handled by the success-effect above
       } else {
         setError(data.error || 'Ungültiger Code');
       }
