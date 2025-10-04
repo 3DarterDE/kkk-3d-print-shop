@@ -75,14 +75,6 @@ export async function GET(request: Request) {
       }
     }));
     
-    // Debug logging
-    console.log('Review stats found:', reviewStats.length);
-    console.log('First few review stats:', reviewStats.slice(0, 3));
-    console.log('Review map size:', reviewMap.size);
-    console.log('First product slug:', (products[0] as any)?.slug);
-    console.log('First product reviews:', productsWithReviews[0]?.reviews);
-    console.log('Product slugs we searched for:', productSlugs.slice(0, 3));
-    
     return NextResponse.json({ products: productsWithReviews });
   } catch (error) {
     console.error("GET shop products error:", error);

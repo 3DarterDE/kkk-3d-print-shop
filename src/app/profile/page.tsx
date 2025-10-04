@@ -11,7 +11,6 @@ type UserProfile = {
   lastName?: string;
   email?: string;
   phone?: string;
-  dateOfBirth?: string;
   salutation?: 'Herr' | 'Frau' | 'Divers';
   address?: {
     firstName?: string;
@@ -35,10 +34,12 @@ type UserProfile = {
     postalCode?: string;
     country?: string;
   };
+  useSameAddress?: boolean;
   paymentMethod?: 'card' | 'paypal' | 'bank';
   isAdmin?: boolean;
   isVerified?: boolean;
   bonusPoints?: number;
+  newsletterSubscribed?: boolean;
   createdAt?: string;
 };
 
@@ -80,6 +81,10 @@ export default function ProfilePage() {
   const [saving, setSaving] = useState(false);
   const [saveMessage, setSaveMessage] = useState<{ type: 'success' | 'error', text: string } | null>(null);
   const [useSameAddress, setUseSameAddress] = useState(false);
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [newsletterLoading, setNewsletterLoading] = useState(false);
+  const [bonusSchedule, setBonusSchedule] = useState<any[]>([]);
 
   // Form state
   const [formData, setFormData] = useState({
@@ -87,7 +92,6 @@ export default function ProfilePage() {
     firstName: '',
     lastName: '',
     phone: '',
-    dateOfBirth: '',
     address: {
       firstName: '',
       lastName: '',
@@ -120,7 +124,6 @@ export default function ProfilePage() {
         firstName: user.firstName || '',
         lastName: user.lastName || '',
         phone: user.phone || '',
-        dateOfBirth: user.dateOfBirth ? new Date(user.dateOfBirth).toISOString().split('T')[0] : '',
         address: {
           firstName: user.address?.firstName || user.firstName || '',
           lastName: user.address?.lastName || user.lastName || '',
@@ -146,13 +149,111 @@ export default function ProfilePage() {
         paymentMethod: user.paymentMethod || 'card'
       });
       
-      // Check if addresses are the same
-      if (user.address && user.billingAddress) {
+      // Use the user's useSameAddress preference or check if addresses are the same
+      if (user.useSameAddress !== undefined) {
+        setUseSameAddress(user.useSameAddress);
+      } else if (user.address && user.billingAddress) {
         const addressesMatch = JSON.stringify(user.address) === JSON.stringify(user.billingAddress);
         setUseSameAddress(addressesMatch);
       }
     }
   }, [user]);
+
+  // Load bonus schedule (orders + reviews) for display
+  useEffect(() => {
+    const loadBonusSchedule = async () => {
+      try {
+        const entries: any[] = [];
+
+        // Map orders: planned/credited points from orders
+        (orders || []).forEach((o: any) => {
+          const orderNumber = o.orderNumber;
+          const points = o.bonusPointsEarned || 0;
+          if (points > 0) {
+            if (o.bonusPointsScheduledAt && !o.bonusPointsCredited) {
+              entries.push({
+                kind: 'order',
+                orderId: o._id,
+                orderNumber,
+                points,
+                scheduledAt: o.bonusPointsScheduledAt,
+                credited: false,
+              });
+            }
+            if (o.bonusPointsCredited && o.bonusPointsCreditedAt) {
+              entries.push({
+                kind: 'order',
+                orderId: o._id,
+                orderNumber,
+                points,
+                credited: true,
+                creditedAt: o.bonusPointsCreditedAt,
+              });
+            }
+          }
+        });
+
+        // Map reviews: planned/credited points from reviews per order
+        if (orders && orders.length > 0) {
+          const orderIds = orders.map((o: any) => o._id);
+          const res = await fetch(`/api/reviews?orderId=${orderIds.join(',')}`);
+          if (res.ok) {
+            const data = await res.json();
+            const reviews: any[] = data.reviews || [];
+            // Create a map for orderId -> orderNumber
+            const idToNumber: Record<string, string> = {};
+            for (const o of orders as any[]) {
+              idToNumber[o._id] = o.orderNumber;
+            }
+            reviews.forEach((r) => {
+              const points = r.bonusPointsAwarded || 0;
+              if (points <= 0) return;
+              const orderNumber = idToNumber[r.orderId] || r.orderId;
+              if (r.bonusPointsScheduledAt && !r.bonusPointsCredited) {
+                entries.push({
+                  kind: 'review',
+                  orderId: r.orderId,
+                  reviewId: r._id,
+                  orderNumber,
+                  points,
+                  scheduledAt: r.bonusPointsScheduledAt,
+                  credited: false,
+                });
+              }
+              if (r.bonusPointsCredited && r.bonusPointsCreditedAt) {
+                entries.push({
+                  kind: 'review',
+                  orderId: r.orderId,
+                  reviewId: r._id,
+                  orderNumber,
+                  points,
+                  credited: true,
+                  creditedAt: r.bonusPointsCreditedAt,
+                });
+              }
+            });
+          }
+        }
+
+        // Sort: upcoming first by scheduled date, then credited by creditedAt desc
+        const upcoming = entries
+          .filter(e => !e.credited && e.scheduledAt)
+          .sort((a, b) => new Date(a.scheduledAt).getTime() - new Date(b.scheduledAt).getTime());
+        const credited = entries
+          .filter(e => e.credited && e.creditedAt)
+          .sort((a, b) => new Date(b.creditedAt).getTime() - new Date(a.creditedAt).getTime());
+
+        setBonusSchedule([...upcoming, ...credited]);
+      } catch (e) {
+        // Silent fail for schedule widget
+        setBonusSchedule([]);
+      }
+    };
+
+    if (orders) {
+      loadBonusSchedule();
+    }
+  }, [orders]);
 
   const getStatusInfo = (status: string) => {
     switch (status) {
@@ -231,9 +332,9 @@ export default function ProfilePage() {
         firstName: formData.firstName,
         lastName: formData.lastName,
         phone: formData.phone,
-        dateOfBirth: formData.dateOfBirth || null,
         address: formData.address,
         billingAddress: useSameAddress ? formData.address : formData.billingAddress,
+        useSameAddress: useSameAddress,
         paymentMethod: formData.paymentMethod
       };
 
@@ -271,7 +372,6 @@ export default function ProfilePage() {
         firstName: user.firstName || '',
         lastName: user.lastName || '',
         phone: user.phone || '',
-        dateOfBirth: user.dateOfBirth ? new Date(user.dateOfBirth).toISOString().split('T')[0] : '',
         address: {
           firstName: user.address?.firstName || user.firstName || '',
           lastName: user.address?.lastName || user.lastName || '',
@@ -296,6 +396,88 @@ export default function ProfilePage() {
         },
         paymentMethod: user.paymentMethod || 'card'
       });
+    }
+  };
+
+  const handleNewsletterToggle = async () => {
+    if (!user) return;
+    
+    setNewsletterLoading(true);
+    
+    try {
+      const action = user.newsletterSubscribed ? 'unsubscribe' : 'subscribe';
+      const response = await fetch('/api/newsletter/toggle', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action }),
+      });
+
+      if (!response.ok) {
+        throw new Error('Fehler beim Ändern der Newsletter-Einstellung');
+      }
+
+      // Refresh user data to get updated newsletter status
+      await refetchUser();
+      
+      setSaveMessage({
+        type: 'success',
+        text: user.newsletterSubscribed 
+          ? 'Sie haben sich erfolgreich vom Newsletter abgemeldet.'
+          : 'Sie haben sich erfolgreich für den Newsletter angemeldet.'
+      });
+    } catch (error) {
+      console.error('Newsletter toggle error:', error);
+      setSaveMessage({
+        type: 'error',
+        text: 'Fehler beim Ändern der Newsletter-Einstellung. Bitte versuchen Sie es erneut.'
+      });
+    } finally {
+      setNewsletterLoading(false);
+    }
+  };
+
+  const handleDeleteAccount = async () => {
+    setDeleting(true);
+    
+    try {
+      const response = await fetch('/api/profile/delete', {
+        method: 'DELETE',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
+
+      const result = await response.json();
+
+      if (result.success) {
+        // Clear local session and redirect to home page
+        // Don't use Auth0 logout since user is already deleted
+        try {
+          // Clear any local storage/session data
+          localStorage.clear();
+          sessionStorage.clear();
+          
+          // Clear Auth0 session cookies manually
+          document.cookie.split(";").forEach(function(c) { 
+            document.cookie = c.replace(/^ +/, "").replace(/=.*/, "=;expires=" + new Date().toUTCString() + ";path=/"); 
+          });
+          
+        } catch (e) {
+          // Ignore errors if storage is not available
+        }
+        
+        // Force a hard reload to clear all cached auth state
+        // Don't use Auth0 logout since user is already deleted
+        window.location.replace('/');
+      } else {
+        setSaveMessage({ type: 'error', text: result.error || 'Fehler beim Löschen des Accounts' });
+        setShowDeleteModal(false);
+      }
+    } catch (err) {
+      setSaveMessage({ type: 'error', text: 'Fehler beim Löschen des Accounts' });
+      setShowDeleteModal(false);
+    } finally {
+      setDeleting(false);
     }
   };
 
@@ -410,10 +592,6 @@ export default function ProfilePage() {
                   <div className="w-2 h-2 bg-slate-300 rounded-full mr-3 group-hover:bg-blue-500 transition-colors"></div>
                   Mein Wunschzettel
                 </a>
-                <a href="#" className="flex items-center px-4 py-3 text-sm font-medium text-slate-600 hover:text-blue-600 hover:bg-blue-50 rounded-xl transition-all duration-200 group">
-                  <div className="w-2 h-2 bg-slate-300 rounded-full mr-3 group-hover:bg-blue-500 transition-colors"></div>
-                  Newsletter
-                </a>
               </nav>
             </div>
           </div>
@@ -474,23 +652,56 @@ export default function ProfilePage() {
                 </div>
                 <div className="space-y-3">
                   <div className="flex items-center">
-                    <div className="w-2 h-2 bg-blue-500 rounded-full mr-3"></div>
-                    <p className="text-slate-700 font-medium">{user.firstName} {user.lastName}</p>
+                    <div className="w-2 h-2 bg-blue-500 rounded-full mr-3 flex-shrink-0"></div>
+                    <p className="text-slate-700 font-medium truncate" title={`${user.firstName} ${user.lastName}`}>{user.firstName} {user.lastName}</p>
                   </div>
                   <div className="flex items-center">
-                    <div className="w-2 h-2 bg-blue-500 rounded-full mr-3"></div>
-                    <p className="text-slate-700">{user.email}</p>
+                    <div className="w-2 h-2 bg-blue-500 rounded-full mr-3 flex-shrink-0"></div>
+                    <p className="text-slate-700 truncate" title={user.email}>{user.email}</p>
                   </div>
                   <div className="flex items-center">
-                    <div className="w-2 h-2 bg-blue-500 rounded-full mr-3"></div>
-                    <p className="text-slate-700">{user.phone || '-'}</p>
+                    <div className="w-2 h-2 bg-blue-500 rounded-full mr-3 flex-shrink-0"></div>
+                    <p className="text-slate-700 truncate" title={user.phone || '-'}>{user.phone || '-'}</p>
                   </div>
-                  <a href="#" className="text-blue-600 text-sm hover:text-blue-700 font-medium inline-flex items-center group-hover:underline">
-                    Passwort ändern
-                    <svg className="w-4 h-4 ml-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                </div>
+              </div>
+
+              {/* Newsletter Card */}
+              <div className="bg-white/70 backdrop-blur-sm border border-white/30 rounded-2xl p-4 sm:p-6 relative shadow-lg hover:shadow-xl transition-all duration-300 group">
+                <div className="flex items-center mb-4">
+                  <div className="w-10 h-10 bg-gradient-to-r from-green-500 to-green-300 rounded-xl flex items-center justify-center mr-3">
+                    <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 4.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
                     </svg>
-                  </a>
+                  </div>
+                  <h3 className="text-lg font-semibold text-slate-800">Newsletter</h3>
+                </div>
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center">
+                      <div className={`w-2 h-2 rounded-full mr-3 ${user.newsletterSubscribed ? 'bg-green-500' : 'bg-gray-400'}`}></div>
+                      <p className="text-slate-700">
+                        {user.newsletterSubscribed ? 'Angemeldet' : 'Nicht angemeldet'}
+                      </p>
+                    </div>
+                    <button
+                      onClick={() => handleNewsletterToggle()}
+                      disabled={newsletterLoading}
+                      className={`px-3 py-1 text-sm font-medium rounded-lg transition-colors ${
+                        user.newsletterSubscribed
+                          ? 'text-red-600 bg-red-50 hover:bg-red-100'
+                          : 'text-green-600 bg-green-50 hover:bg-green-100'
+                      } disabled:opacity-50 disabled:cursor-not-allowed`}
+                    >
+                      {newsletterLoading ? 'Wird verarbeitet...' : user.newsletterSubscribed ? 'Abmelden' : 'Anmelden'}
+                    </button>
+                  </div>
+                  <p className="text-sm text-slate-500">
+                    {user.newsletterSubscribed 
+                      ? 'Sie erhalten regelmäßig Informationen über neue Produkte und Rabatte.'
+                      : 'Melden Sie sich für unseren Newsletter an und verpassen Sie keine Angebote.'
+                    }
+                  </p>
                 </div>
               </div>
 
@@ -515,17 +726,17 @@ export default function ProfilePage() {
                   <h3 className="text-lg font-semibold text-slate-800">Versandadresse</h3>
                 </div>
                 <div className="space-y-2">
-                  <p className="text-slate-700 font-medium">
+                  <p className="text-slate-700 font-medium truncate" title={`${user.address?.firstName || user.firstName} ${user.address?.lastName || user.lastName}`}>
                     {user.address?.firstName || user.firstName} {user.address?.lastName || user.lastName}
                   </p>
-                  <p className="text-slate-600">
+                  <p className="text-slate-600 truncate" title={`${user.address?.street} ${user.address?.houseNumber}${user.address?.addressLine2 ? `, ${user.address.addressLine2}` : ''}`}>
                     {user.address?.street} {user.address?.houseNumber}
                     {user.address?.addressLine2 && `, ${user.address.addressLine2}`}
                   </p>
-                  <p className="text-slate-600">
+                  <p className="text-slate-600 truncate" title={`${user.address?.postalCode} ${user.address?.city}`}>
                     {user.address?.postalCode} {user.address?.city}
                   </p>
-                  <p className="text-slate-600">{user.address?.country || 'Deutschland'}</p>
+                  <p className="text-slate-600 truncate" title={user.address?.country || 'Deutschland'}>{user.address?.country || 'Deutschland'}</p>
                 </div>
               </div>
 
@@ -549,17 +760,38 @@ export default function ProfilePage() {
                   <h3 className="text-lg font-semibold text-slate-800">Rechnungsadresse</h3>
                 </div>
                 <div className="space-y-2">
-                  <p className="text-slate-700 font-medium">
-                    {user.billingAddress?.firstName || user.address?.firstName || user.firstName} {user.billingAddress?.lastName || user.address?.lastName || user.lastName}
-                  </p>
-                  <p className="text-slate-600">
-                    {user.billingAddress?.street} {user.billingAddress?.houseNumber}
-                    {user.billingAddress?.addressLine2 && `, ${user.billingAddress.addressLine2}`}
-                  </p>
-                  <p className="text-slate-600">
-                    {user.billingAddress?.postalCode} {user.billingAddress?.city}
-                  </p>
-                  <p className="text-slate-600">{user.billingAddress?.country || 'Deutschland'}</p>
+                  {useSameAddress ? (
+                    <>
+                      <p className="text-blue-600 font-medium mb-2">✓ Identisch mit Versandadresse</p>
+                      <div className="text-slate-500 italic">
+                        <p className="text-slate-700 font-medium truncate" title={`${user.address?.firstName || user.firstName} ${user.address?.lastName || user.lastName}`}>
+                          {user.address?.firstName || user.firstName} {user.address?.lastName || user.lastName}
+                        </p>
+                        <p className="truncate" title={`${user.address?.street} ${user.address?.houseNumber}${user.address?.addressLine2 ? `, ${user.address.addressLine2}` : ''}`}>
+                          {user.address?.street} {user.address?.houseNumber}
+                          {user.address?.addressLine2 && `, ${user.address.addressLine2}`}
+                        </p>
+                        <p className="truncate" title={`${user.address?.postalCode} ${user.address?.city}`}>
+                          {user.address?.postalCode} {user.address?.city}
+                        </p>
+                        <p className="truncate" title={user.address?.country || 'Deutschland'}>{user.address?.country || 'Deutschland'}</p>
+                      </div>
+                    </>
+                  ) : (
+                    <>
+                      <p className="text-slate-700 font-medium truncate" title={`${user.billingAddress?.firstName || user.address?.firstName || user.firstName} ${user.billingAddress?.lastName || user.address?.lastName || user.lastName}`}>
+                        {user.billingAddress?.firstName || user.address?.firstName || user.firstName} {user.billingAddress?.lastName || user.address?.lastName || user.lastName}
+                      </p>
+                      <p className="text-slate-600 truncate" title={`${user.billingAddress?.street} ${user.billingAddress?.houseNumber}${user.billingAddress?.addressLine2 ? `, ${user.billingAddress.addressLine2}` : ''}`}>
+                        {user.billingAddress?.street} {user.billingAddress?.houseNumber}
+                        {user.billingAddress?.addressLine2 && `, ${user.billingAddress.addressLine2}`}
+                      </p>
+                      <p className="text-slate-600 truncate" title={`${user.billingAddress?.postalCode} ${user.billingAddress?.city}`}>
+                        {user.billingAddress?.postalCode} {user.billingAddress?.city}
+                      </p>
+                      <p className="text-slate-600 truncate" title={user.billingAddress?.country || 'Deutschland'}>{user.billingAddress?.country || 'Deutschland'}</p>
+                    </>
+                  )}
                 </div>
               </div>
 
@@ -647,14 +879,14 @@ export default function ProfilePage() {
             </div>
             <div className="bg-white/70 backdrop-blur-sm border border-white/30 rounded-2xl overflow-hidden shadow-lg">
               <div className="overflow-x-auto">
-                <table className="min-w-full divide-y divide-slate-200">
+                <table className="w-full table-fixed divide-y divide-slate-200">
                   <thead className="bg-gradient-to-r from-slate-50 to-blue-50">
                     <tr>
-                      <th className="px-3 sm:px-6 py-4 text-left text-xs font-semibold text-slate-600 uppercase tracking-wider">Bestellung #</th>
-                      <th className="px-3 sm:px-6 py-4 text-left text-xs font-semibold text-slate-600 uppercase tracking-wider hidden sm:table-cell">Datum</th>
-                      <th className="px-3 sm:px-6 py-4 text-left text-xs font-semibold text-slate-600 uppercase tracking-wider hidden md:table-cell">Senden an</th>
-                      <th className="px-3 sm:px-6 py-4 text-left text-xs font-semibold text-slate-600 uppercase tracking-wider">Bestellwert</th>
-                      <th className="px-3 sm:px-6 py-4 text-left text-xs font-semibold text-slate-600 uppercase tracking-wider">Status</th>
+                      <th className="w-24 px-3 sm:px-6 py-4 text-left text-xs font-semibold text-slate-600 uppercase tracking-wider">Bestellung #</th>
+                      <th className="w-20 px-3 sm:px-6 py-4 text-left text-xs font-semibold text-slate-600 uppercase tracking-wider hidden sm:table-cell">Datum</th>
+                      <th className="w-32 px-3 sm:px-6 py-4 text-left text-xs font-semibold text-slate-600 uppercase tracking-wider hidden md:table-cell">Senden an</th>
+                      <th className="w-20 px-3 sm:px-6 py-4 text-left text-xs font-semibold text-slate-600 uppercase tracking-wider">Bestellwert</th>
+                      <th className="w-32 px-3 sm:px-6 py-4 text-left text-xs font-semibold text-slate-600 uppercase tracking-wider">Status</th>
                     </tr>
                   </thead>
                   <tbody className="bg-white/50 divide-y divide-slate-200">
@@ -677,25 +909,29 @@ export default function ProfilePage() {
                         const statusInfo = getStatusInfo(order.status);
                         return (
                           <tr key={order._id} className="hover:bg-blue-50/50 transition-colors">
-                            <td className="px-3 sm:px-6 py-4 whitespace-nowrap">
+                            <td className="px-3 sm:px-6 py-4">
                               <span className="text-xs sm:text-sm font-semibold text-slate-800 bg-slate-100 px-2 sm:px-3 py-1 rounded-full">
                                 {order.orderNumber}
                               </span>
                             </td>
-                            <td className="px-3 sm:px-6 py-4 whitespace-nowrap text-xs sm:text-sm text-slate-600 hidden sm:table-cell">
+                            <td className="px-3 sm:px-6 py-4 text-xs sm:text-sm text-slate-600 hidden sm:table-cell">
                               {formatDate(order.createdAt)}
                             </td>
-                                <td className="px-3 sm:px-6 py-4 whitespace-nowrap text-xs sm:text-sm text-slate-600 hidden md:table-cell">
-                                  {order.shippingAddress.street} {order.shippingAddress.houseNumber}
-                                </td>
-                            <td className="px-3 sm:px-6 py-4 whitespace-nowrap text-xs sm:text-sm font-semibold text-slate-800">
+                            <td className="px-3 sm:px-6 py-4 text-xs sm:text-sm text-slate-600 hidden md:table-cell">
+                              <div className="truncate" title={`${order.shippingAddress.street} ${order.shippingAddress.houseNumber}`}>
+                                {order.shippingAddress.street} {order.shippingAddress.houseNumber}
+                              </div>
+                            </td>
+                            <td className="px-3 sm:px-6 py-4 text-xs sm:text-sm font-semibold text-slate-800">
                               €{order.total.toFixed(2)}
                             </td>
-                            <td className="px-3 sm:px-6 py-4 whitespace-nowrap">
+                            <td className="px-3 sm:px-6 py-4">
                               <div className="flex flex-col sm:flex-row sm:items-center gap-2">
-                                <span className={`inline-flex items-center px-2 sm:px-3 py-1 rounded-full text-xs font-medium ${statusInfo.bg} ${statusInfo.color}`}>
-                                  {statusInfo.text}
-                                </span>
+                                <div className="truncate">
+                                  <span className={`inline-flex items-center px-2 sm:px-3 py-1 rounded-full text-xs font-medium ${statusInfo.bg} ${statusInfo.color}`} title={statusInfo.text}>
+                                    {statusInfo.text}
+                                  </span>
+                                </div>
                                 <Link href={`/orders#${order._id}`} prefetch className="text-blue-600 hover:text-blue-700 text-xs sm:text-sm font-medium hover:underline">
                                   Ansehen
                                 </Link>
@@ -757,6 +993,7 @@ export default function ProfilePage() {
                         type="text"
                         value={formData.firstName}
                         onChange={(e) => handleInputChange('firstName', e.target.value)}
+                        maxLength={50}
                         className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm"
                       />
                     </div>
@@ -766,6 +1003,7 @@ export default function ProfilePage() {
                         type="text"
                         value={formData.lastName}
                         onChange={(e) => handleInputChange('lastName', e.target.value)}
+                        maxLength={50}
                         className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm"
                       />
                     </div>
@@ -783,19 +1021,13 @@ export default function ProfilePage() {
                         type="tel"
                         value={formData.phone}
                         onChange={(e) => handleInputChange('phone', e.target.value)}
+                        maxLength={20}
                         className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm"
                       />
                     </div>
                   </div>
 
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Geburtsdatum</label>
-                    <input
-                      type="date"
-                      value={formData.dateOfBirth}
-                      onChange={(e) => handleInputChange('dateOfBirth', e.target.value)}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm"
-                    />
                   </div>
                 </>
               )}
@@ -811,6 +1043,7 @@ export default function ProfilePage() {
                         type="text"
                         value={formData.address.company ?? ''}
                         onChange={(e) => handleInputChange('address.company', e.target.value)}
+                        maxLength={100}
                         className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm"
                         placeholder="Firmenname (optional)"
                       />
@@ -823,6 +1056,7 @@ export default function ProfilePage() {
                           type="text"
                           value={formData.address.firstName}
                           onChange={(e) => handleInputChange('address.firstName', e.target.value)}
+                          maxLength={50}
                           className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm"
                         />
                       </div>
@@ -832,6 +1066,7 @@ export default function ProfilePage() {
                           type="text"
                           value={formData.address.lastName}
                           onChange={(e) => handleInputChange('address.lastName', e.target.value)}
+                          maxLength={50}
                           className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm"
                         />
                       </div>
@@ -843,6 +1078,7 @@ export default function ProfilePage() {
                         type="text"
                         value={formData.address.street}
                         onChange={(e) => handleInputChange('address.street', e.target.value)}
+                        maxLength={100}
                         className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm"
                       />
                     </div>
@@ -852,6 +1088,7 @@ export default function ProfilePage() {
                         type="text"
                         value={formData.address.houseNumber}
                         onChange={(e) => handleInputChange('address.houseNumber', e.target.value)}
+                        maxLength={10}
                         className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm"
                       />
                     </div>
@@ -861,6 +1098,7 @@ export default function ProfilePage() {
                         type="text"
                         value={formData.address.addressLine2}
                         onChange={(e) => handleInputChange('address.addressLine2', e.target.value)}
+                        maxLength={100}
                         className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm"
                         placeholder="Wohnung, Etage, etc. (optional)"
                       />
@@ -871,6 +1109,7 @@ export default function ProfilePage() {
                         type="text"
                         value={formData.address.postalCode}
                         onChange={(e) => handleInputChange('address.postalCode', e.target.value)}
+                        maxLength={10}
                         className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm"
                       />
                     </div>
@@ -880,6 +1119,7 @@ export default function ProfilePage() {
                         type="text"
                         value={formData.address.city}
                         onChange={(e) => handleInputChange('address.city', e.target.value)}
+                        maxLength={50}
                         className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm"
                       />
                     </div>
@@ -936,6 +1176,7 @@ export default function ProfilePage() {
                           type="text"
                           value={formData.billingAddress.company ?? ''}
                           onChange={(e) => handleInputChange('billingAddress.company', e.target.value)}
+                          maxLength={100}
                           className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm"
                           placeholder="Firmenname (optional)"
                         />
@@ -948,6 +1189,7 @@ export default function ProfilePage() {
                             type="text"
                             value={formData.billingAddress.firstName}
                             onChange={(e) => handleInputChange('billingAddress.firstName', e.target.value)}
+                            maxLength={50}
                             className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm"
                           />
                         </div>
@@ -957,6 +1199,7 @@ export default function ProfilePage() {
                             type="text"
                             value={formData.billingAddress.lastName}
                             onChange={(e) => handleInputChange('billingAddress.lastName', e.target.value)}
+                            maxLength={50}
                             className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm"
                           />
                         </div>
@@ -968,6 +1211,7 @@ export default function ProfilePage() {
                           type="text"
                           value={formData.billingAddress.street}
                           onChange={(e) => handleInputChange('billingAddress.street', e.target.value)}
+                          maxLength={100}
                           className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm"
                         />
                       </div>
@@ -977,6 +1221,7 @@ export default function ProfilePage() {
                           type="text"
                           value={formData.billingAddress.houseNumber}
                           onChange={(e) => handleInputChange('billingAddress.houseNumber', e.target.value)}
+                          maxLength={10}
                           className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm"
                         />
                       </div>
@@ -986,6 +1231,7 @@ export default function ProfilePage() {
                           type="text"
                           value={formData.billingAddress.addressLine2}
                           onChange={(e) => handleInputChange('billingAddress.addressLine2', e.target.value)}
+                          maxLength={100}
                           className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm"
                           placeholder="Wohnung, Etage, etc. (optional)"
                         />
@@ -996,6 +1242,7 @@ export default function ProfilePage() {
                           type="text"
                           value={formData.billingAddress.postalCode}
                           onChange={(e) => handleInputChange('billingAddress.postalCode', e.target.value)}
+                          maxLength={10}
                           className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm"
                         />
                       </div>
@@ -1005,6 +1252,7 @@ export default function ProfilePage() {
                           type="text"
                           value={formData.billingAddress.city}
                           onChange={(e) => handleInputChange('billingAddress.city', e.target.value)}
+                          maxLength={50}
                           className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm"
                         />
                       </div>
@@ -1087,19 +1335,79 @@ export default function ProfilePage() {
               )}
             </div>
 
-            <div className="flex justify-end space-x-3 mt-6 pt-4 border-t">
+            <div className="flex justify-between items-center mt-6 pt-4 border-t">
               <button
-                onClick={handleCancel}
-                className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 rounded-md hover:bg-gray-200"
+                onClick={() => setShowDeleteModal(true)}
+                className="px-4 py-2 text-sm font-medium text-red-600 bg-red-50 rounded-md hover:bg-red-100 transition-colors"
+              >
+                Account löschen
+              </button>
+              <div className="flex space-x-3">
+                <button
+                  onClick={handleCancel}
+                  className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 rounded-md hover:bg-gray-200"
+                >
+                  Abbrechen
+                </button>
+                <button
+                  onClick={handleSave}
+                  disabled={saving}
+                  className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700 disabled:opacity-50"
+                >
+                  {saving ? 'Speichern...' : 'Speichern'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Account Deletion Confirmation Modal */}
+      {showDeleteModal && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-6 w-full max-w-md mx-4">
+            <div className="flex items-center mb-4">
+              <div className="w-10 h-10 bg-red-100 rounded-full flex items-center justify-center mr-3">
+                <svg className="w-5 h-5 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.732 16.5c-.77.833.192 2.5 1.732 2.5z" />
+                </svg>
+              </div>
+              <h3 className="text-lg font-semibold text-gray-900">Account löschen</h3>
+            </div>
+            
+            <div className="mb-6">
+              <p className="text-gray-700 mb-4">
+                <strong>Warnung:</strong> Diese Aktion kann nicht rückgängig gemacht werden!
+              </p>
+              <p className="text-gray-600 text-sm mb-4">
+                Beim Löschen deines Accounts werden folgende Daten entfernt:
+              </p>
+              <ul className="text-gray-600 text-sm list-disc list-inside space-y-1 mb-4">
+                <li>Alle deine persönlichen Daten</li>
+                <li>Deine Bestellungen (werden anonymisiert)</li>
+                <li>Deine Bewertungen</li>
+                <li>Deine Bonuspunkte</li>
+                <li>Deine Adressdaten</li>
+              </ul>
+              <p className="text-gray-600 text-sm">
+                Nach der Löschung wirst du automatisch ausgeloggt und zur Startseite weitergeleitet.
+              </p>
+            </div>
+
+            <div className="flex justify-end space-x-3">
+              <button
+                onClick={() => setShowDeleteModal(false)}
+                disabled={deleting}
+                className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 rounded-md hover:bg-gray-200 disabled:opacity-50"
               >
                 Abbrechen
               </button>
               <button
-                onClick={handleSave}
-                disabled={saving}
-                className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700 disabled:opacity-50"
+                onClick={handleDeleteAccount}
+                disabled={deleting}
+                className="px-4 py-2 text-sm font-medium text-white bg-red-600 rounded-md hover:bg-red-700 disabled:opacity-50"
               >
-                {saving ? 'Speichern...' : 'Speichern'}
+                {deleting ? 'Lösche...' : 'Account löschen'}
               </button>
             </div>
           </div>

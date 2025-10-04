@@ -10,6 +10,9 @@ export default function CustomerButton() {
   const { user: userData } = useUserData();
   const [isOpen, setIsOpen] = useState(false);
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => { setMounted(true); }, []);
 
   // Close dropdown when clicking outside
   useEffect(() => {
@@ -26,12 +29,14 @@ export default function CustomerButton() {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, [isOpen]);
 
+  const isInteractive = mounted && !loading;
+
   const handleButtonClick = () => {
+    // Avoid race & hydration mismatch: ignore clicks until mounted and not loading
+    if (!isInteractive) return;
     if (authUser) {
-      // User is logged in, toggle dropdown
       setIsOpen(!isOpen);
     } else {
-      // User is not logged in, open modal
       setIsModalOpen(true);
     }
   };
@@ -49,15 +54,19 @@ export default function CustomerButton() {
     const left = (width - w) / 2 / systemZoom + dualScreenLeft;
     const top = (height - h) / 2 / systemZoom + dualScreenTop;
 
+    // Get current page path for returnTo
+    const currentPath = encodeURIComponent(window.location.pathname + window.location.search);
+    const returnTo = encodeURIComponent('/auth/popup-complete?next=' + currentPath);
+
     const popup = window.open(
-      '/api/auth/login?prompt=login&max_age=0&returnTo=%2Fauth%2Fpopup-complete',
-      'auth0Popup',
+      `/api/auth/login?prompt=login&max_age=0&returnTo=${returnTo}`,
+      '_blank',
       `scrollbars=yes, width=${w}, height=${h}, top=${top}, left=${left}`
     );
 
     // Fallback if popup was blocked
     if (!popup || popup.closed) {
-      window.location.assign('/api/auth/login?prompt=login&max_age=0&returnTo=%2Fauth%2Fpopup-complete');
+      window.location.assign(`/api/auth/login?prompt=login&max_age=0&returnTo=${returnTo}`);
       return;
     }
 
@@ -68,9 +77,14 @@ export default function CustomerButton() {
         if (!event.data || event.data.type !== 'auth:popup-complete') return;
         window.removeEventListener('message', onMessage);
         try {
-          // Refresh auth state
-          const res = await fetch('/api/auth/me', { cache: 'no-store' });
-          await res.json();
+          // Try to confirm authenticated session (handle potential race)
+          let ok = false;
+          for (let i = 0; i < 6; i++) {
+            const r = await fetch('/api/auth/me?login=1', { cache: 'no-store' });
+            const j = await r.json().catch(() => null);
+            if (j && j.authenticated) { ok = true; break; }
+            await new Promise(res => setTimeout(res, 250));
+          }
           await refresh();
         } catch {}
         setIsModalOpen(false);
@@ -88,13 +102,18 @@ export default function CustomerButton() {
     const h = 650;
     const left = window.screenX + Math.max(0, (window.innerWidth - w) / 2);
     const top = window.screenY + Math.max(0, (window.innerHeight - h) / 2);
+    
+    // Get current page path for returnTo
+    const currentPath = encodeURIComponent(window.location.pathname + window.location.search);
+    const returnTo = encodeURIComponent('/auth/popup-complete?next=' + currentPath);
+    
     const popup = window.open(
-      '/api/auth/login?screen_hint=signup&prompt=login&max_age=0&returnTo=%2Fauth%2Fpopup-complete',
-      'auth0Popup',
+      `/api/auth/login?screen_hint=signup&prompt=login&max_age=0&returnTo=${returnTo}`,
+      '_blank',
       `scrollbars=yes, width=${w}, height=${h}, top=${top}, left=${left}`
     );
     if (!popup || popup.closed) {
-      window.location.assign('/api/auth/login?screen_hint=signup&prompt=login&max_age=0&returnTo=%2Fauth%2Fpopup-complete');
+      window.location.assign(`/api/auth/login?screen_hint=signup&prompt=login&max_age=0&returnTo=${returnTo}`);
       return;
     }
     if (popup) {
@@ -102,7 +121,16 @@ export default function CustomerButton() {
         if (event.origin !== window.location.origin) return;
         if (!event.data || event.data.type !== 'auth:popup-complete') return;
         window.removeEventListener('message', onMessage);
-        try { await fetch('/api/auth/me', { cache: 'no-store' }); await refresh(); } catch {}
+        try {
+          let ok = false;
+          for (let i = 0; i < 6; i++) {
+            const r = await fetch('/api/auth/me?login=1', { cache: 'no-store' });
+            const j = await r.json().catch(() => null);
+            if (j && j.authenticated) { ok = true; break; }
+            await new Promise(res => setTimeout(res, 250));
+          }
+          await refresh();
+        } catch {}
         setIsModalOpen(false);
         if (event.data && typeof event.data.next === 'string' && event.data.next.length > 0) {
           try { window.location.assign(event.data.next); } catch {}
@@ -121,8 +149,9 @@ export default function CustomerButton() {
       <div className="relative" data-customer-dropdown>
         <button
           onClick={handleButtonClick}
-          className="flex items-center text-sm text-white hover:text-blue-200 transition-all duration-300 group"
+          className={`flex items-center text-sm ${isInteractive ? 'text-white hover:text-blue-200' : 'text-white/60 cursor-wait'} transition-all duration-300 group`}
           aria-label="Kundenbereich"
+          disabled={!isInteractive}
         >
           <div className="w-8 h-8 flex items-center justify-center group-hover:drop-shadow-[0_0_6px_rgba(173,216,230,0.6)] transition-all duration-300">
             <CgProfile className="w-7 h-7 transition-transform duration-300 group-hover:scale-110" />

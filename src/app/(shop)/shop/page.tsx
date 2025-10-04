@@ -61,12 +61,54 @@ async function fetchCategories(): Promise<Category[]> {
   }
 }
 
+async function fetchBrands(): Promise<any[]> {
+  try {
+    const url = `/api/shop/brands`;
+    const response = await fetch(url, {
+      cache: 'no-store', // Always fetch fresh brands to reflect changes immediately
+      next: { revalidate: 0 } // No cache for brands
+    });
+
+    if (!response.ok) {
+      return [];
+    }
+    
+    const data = await response.json();
+    return Array.isArray(data) ? data : [];
+  } catch (error) {
+    console.error('Failed to fetch brands:', error);
+    return [];
+  }
+}
+
+async function fetchBrand(slug: string): Promise<any | null> {
+  try {
+    const url = `/api/brands/${slug}`;
+    const response = await fetch(url, {
+      cache: 'no-store',
+      next: { revalidate: 0 }
+    });
+    
+    if (!response.ok) {
+      return null;
+    }
+    
+    const brand = await response.json();
+    return brand || null;
+  } catch (error) {
+    console.error('Failed to fetch brand:', error);
+    return null;
+  }
+}
+
 
 
 export default function ShopPage({ searchParams }: { searchParams: Promise<{ category?: string; subcategory?: string; brand?: string; search?: string; filter?: string }> }) {
   const router = useRouter();
   const [allProducts, setAllProducts] = useState<any[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
+  const [brands, setBrands] = useState<any[]>([]);
+  const [currentBrand, setCurrentBrand] = useState<any | null>(null);
   const [resolvedSearchParams, setResolvedSearchParams] = useState<{ category?: string; subcategory?: string; brand?: string; search?: string; filter?: string }>({});
   const [loading, setLoading] = useState(true);
   const [sortBy, setSortBy] = useState<'default' | 'newest' | 'oldest' | 'price-low' | 'price-high' | 'name-asc' | 'name-desc'>('default');
@@ -175,6 +217,20 @@ export default function ShopPage({ searchParams }: { searchParams: Promise<{ cat
 
     getSearchParams();
   }, [searchParams]);
+
+  // Load current brand data when brand parameter changes
+  useEffect(() => {
+    const loadCurrentBrand = async () => {
+      if (resolvedSearchParams.brand) {
+        const brandData = await fetchBrand(resolvedSearchParams.brand);
+        setCurrentBrand(brandData);
+      } else {
+        setCurrentBrand(null);
+      }
+    };
+
+    loadCurrentBrand();
+  }, [resolvedSearchParams.brand]);
 
   // Listen for URL changes (for client-side navigation)
   useEffect(() => {
@@ -433,6 +489,7 @@ export default function ShopPage({ searchParams }: { searchParams: Promise<{ cat
         const descriptionMatch = p.description && flexibleSearchMatch(p.description, query);
         const categoryMatch = p.category && flexibleSearchMatch(p.category, query);
         const subcategoryMatch = p.subcategory && flexibleSearchMatch(p.subcategory, query);
+        const brandMatch = p.brand && flexibleSearchMatch(p.brand, query);
         const tagsMatch = p.tags && p.tags.some((tag: string) => flexibleSearchMatch(tag, query));
 
         // Consider category/subcategory relation via IDs as match as well (like in filteredProducts)
@@ -465,7 +522,7 @@ export default function ShopPage({ searchParams }: { searchParams: Promise<{ cat
           }
         } catch {}
 
-        if (!titleMatch && !descriptionMatch && !categoryMatch && !subcategoryMatch && !tagsMatch && !categoryRelationMatch) {
+        if (!titleMatch && !descriptionMatch && !categoryMatch && !subcategoryMatch && !brandMatch && !tagsMatch && !categoryRelationMatch) {
           return false;
         }
       }
@@ -1269,9 +1326,10 @@ export default function ShopPage({ searchParams }: { searchParams: Promise<{ cat
       const descriptionMatch = p.description && flexibleSearchMatch(p.description, query);
       const categoryMatch = p.category && flexibleSearchMatch(p.category, query);
       const subcategoryMatch = p.subcategory && flexibleSearchMatch(p.subcategory, query);
+      const brandMatch = p.brand && flexibleSearchMatch(p.brand, query);
       const tagsMatch = p.tags && p.tags.some((tag: string) => flexibleSearchMatch(tag, query));
       
-      if (!titleMatch && !descriptionMatch && !categoryMatch && !subcategoryMatch && !tagsMatch) {
+      if (!titleMatch && !descriptionMatch && !categoryMatch && !subcategoryMatch && !brandMatch && !tagsMatch) {
         return false;
       }
     }
@@ -2432,6 +2490,14 @@ export default function ShopPage({ searchParams }: { searchParams: Promise<{ cat
           return mainCategory || null;
         })()}
         currentBrand={null}
+      />
+    )}
+
+    {/* Brand Description Section */}
+    {resolvedSearchParams.brand && (
+      <CategoryDescriptionSection 
+        currentCategory={null}
+        currentBrand={currentBrand}
       />
     )}
 

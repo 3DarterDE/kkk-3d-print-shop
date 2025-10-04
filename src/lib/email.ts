@@ -29,6 +29,40 @@ export interface WelcomeEmailData {
   verificationUrl?: string;
 }
 
+export interface GenericEmailData {
+  to: string;
+  subject: string;
+  text: string;
+  html?: string;
+}
+
+// Generic email function
+export async function sendEmail({ to, subject, text, html }: GenericEmailData) {
+  const mailOptions: SendMailOptions = {
+    from: `"3DarterDE" <${process.env.SMTP_FROM || process.env.SMTP_USER}>`,
+    to,
+    subject,
+    text,
+    html,
+    headers: {
+      'X-Mailer': '3DarterDE System',
+      'X-Priority': '3',
+      'X-MSMail-Priority': 'Normal',
+      'Importance': 'Normal',
+      'X-Report-Abuse': 'Please report abuse to service@3darter.de',
+      'Return-Path': process.env.SMTP_FROM || process.env.SMTP_USER,
+    } as any,
+  };
+
+  try {
+    await transporter.sendMail(mailOptions);
+    return { success: true };
+  } catch (error) {
+    console.error('Error sending email:', error);
+    return { success: false, error: error instanceof Error ? error.message : 'Unknown error' };
+  }
+}
+
 
 export async function sendWelcomeEmail({ name, email, verificationUrl }: WelcomeEmailData) {
   const mailOptions: SendMailOptions = {
@@ -294,6 +328,147 @@ export async function sendTrackingEmail({ name, email, orderNumber, trackingInfo
   } catch (error) {
     console.error('Error sending tracking email:', error);
     return { success: false, error };
+  }
+}
+
+export async function sendGuestOrderConfirmationEmail({ name, email, orderNumber, items, subtotal, shippingCosts, total, shippingAddress, billingAddress, paymentMethod }: Omit<OrderConfirmationEmailData, 'bonusPointsEarned' | 'pointsRedeemed' | 'pointsDiscount'>) {
+  const mailOptions: SendMailOptions = {
+    from: `"3DarterDE" <${process.env.SMTP_FROM || process.env.SMTP_USER}>`,
+    to: email,
+    subject: `Bestellbestätigung ${orderNumber} - 3DarterDE`,
+    headers: {
+      'X-Mailer': '3DarterDE System',
+      'X-Priority': '3',
+      'X-MSMail-Priority': 'Normal',
+      'Importance': 'Normal',
+      'X-Report-Abuse': 'Please report abuse to service@3darter.de',
+      'Return-Path': process.env.SMTP_FROM || process.env.SMTP_USER,
+    } as any,
+    text: `Hallo ${name}!\n\nVielen Dank für deine Gastbestellung bei 3DarterDE! 🎯\n\nBestellnummer: ${orderNumber}\n\nBestellte Artikel:\n${items.map((item, index) => {
+      const variations = item.variations ? ` (${Object.entries(item.variations).map(([key, value]) => `${key}: ${value}`).join(', ')})` : '';
+      return `${index + 1}. ${item.name}${variations}\n   Menge: ${item.quantity}\n   Preis: ${((item.price * item.quantity) / 100).toFixed(2)} €`;
+    }).join('\n\n')}\n\nZwischensumme: ${subtotal.toFixed(2)} €\nVersandkosten: ${shippingCosts > 0 ? `${(shippingCosts / 100).toFixed(2)} €` : 'Kostenlos'}\nGesamtbetrag: ${total.toFixed(2)} €\n\nLieferadresse:\n${shippingAddress.firstName || ''} ${shippingAddress.lastName || ''}\n${shippingAddress.street} ${shippingAddress.houseNumber}\n${shippingAddress.addressLine2 ? shippingAddress.addressLine2 + '\n' : ''}${shippingAddress.postalCode} ${shippingAddress.city}\n${shippingAddress.country}\n\n${billingAddress && billingAddress !== shippingAddress ? `Rechnungsadresse:\n${billingAddress.firstName || ''} ${billingAddress.lastName || ''}\n${billingAddress.street} ${billingAddress.houseNumber}\n${billingAddress.addressLine2 ? billingAddress.addressLine2 + '\n' : ''}${billingAddress.postalCode} ${billingAddress.city}\n${billingAddress.country}\n\n` : ''}Zahlungsmethode: ${paymentMethod === 'card' ? 'Kreditkarte/Debitkarte' : paymentMethod === 'paypal' ? 'PayPal' : paymentMethod === 'bank' ? 'Banküberweisung' : 'Nicht angegeben'}\n\nWir bearbeiten deine Bestellung so schnell wie möglich und informieren dich über den Versand.\n\nDSGVO-Hinweis: Falls du deine Bestelldaten löschen lassen möchtest, kannst du einen Löschungsantrag stellen: ${process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000'}/guest-data-deletion\nWir werden deine Daten innerhalb von 30 Tagen löschen.\n\nMit freundlichen Grüßen\nDein 3DarterDE Team\n\nBei Fragen erreichst du uns unter: service@3darter.de`,
+    html: `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <meta charset="utf-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Bestellbestätigung - 3DarterDE</title>
+        <style>
+          body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
+          .container { max-width: 600px; margin: 0 auto; padding: 20px; }
+          .header { background: linear-gradient(135deg, #1E40AF 0%, #3B82F6 100%); color: white; padding: 30px; text-align: center; border-radius: 10px 10px 0 0; }
+          .content { background: #f8fafc; padding: 30px; border-radius: 10px; color: #333; }
+          .order-item { background: white; padding: 20px; margin: 15px 0; border-radius: 8px; border-left: 4px solid #3B82F6; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+          .order-number { font-family: 'Courier New', monospace; font-size: 24px; font-weight: bold; color: #1d4ed8; }
+          .address { background: #f1f5f9; padding: 15px; border-radius: 8px; margin: 20px 0; }
+          .total { background: #e0f2fe; padding: 20px; border-radius: 8px; margin: 20px 0; text-align: center; }
+          .dsgvo-notice { background: #fef3c7; padding: 15px; border-radius: 8px; border-left: 4px solid #f59e0b; margin: 20px 0; }
+          .footer { text-align: center; margin-top: 30px; color: #666; font-size: 14px; }
+        </style>
+      </head>
+      <body>
+        <div class="container">
+          <div class="content">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+              <h2 style="margin: 0;">Hallo ${name}!</h2>
+              <img src="${LOGO_BASE64}" alt="3DarterDE Logo" style="max-width: 80px; height: auto;" />
+            </div>
+            <p>Vielen Dank für deine Gastbestellung bei 3DarterDE! Wir haben deine Bestellung erhalten und bearbeiten sie so schnell wie möglich.</p>
+            
+            <div style="text-align: center; margin: 30px 0;">
+              <div class="order-number">Bestellnummer: ${orderNumber}</div>
+            </div>
+            
+            <h3>Bestellte Artikel:</h3>
+            ${items.map((item, index) => {
+              const variations = item.variations ? `<br><small style="color: #6b7280;">${Object.entries(item.variations).map(([key, value]) => `${key}: ${value}`).join(', ')}</small>` : '';
+              return `
+              <div class="order-item">
+                <div style="display: flex; justify-content: space-between; align-items: center;">
+                  <div>
+                    <strong>${item.name}</strong>${variations}
+                    <br><small>Menge: ${item.quantity}</small>
+                  </div>
+                  <div style="font-weight: bold; color: #1d4ed8;">
+                    ${((item.price * item.quantity) / 100).toFixed(2)} €
+                  </div>
+                </div>
+              </div>
+              `;
+            }).join('')}
+            
+            <div class="total">
+              <div style="display: flex; justify-content: space-between; margin-bottom: 10px;">
+                <span>Zwischensumme:</span>
+                <span>${subtotal.toFixed(2)} €</span>
+              </div>
+              <div style="display: flex; justify-content: space-between; margin-bottom: 10px;">
+                <span>Versandkosten:</span>
+                <span>${shippingCosts > 0 ? `${(shippingCosts / 100).toFixed(2)} €` : 'Kostenlos'}</span>
+              </div>
+              <hr style="margin: 15px 0; border: none; border-top: 2px solid #3B82F6;">
+              <div style="display: flex; justify-content: space-between; font-size: 18px; font-weight: bold;">
+                <span>Gesamtbetrag:</span>
+                <span style="color: #1d4ed8;">${total.toFixed(2)} €</span>
+              </div>
+            </div>
+            
+            <div class="address">
+              <h3 style="margin-top: 0;">Lieferadresse:</h3>
+              <p style="margin: 0;">
+                ${shippingAddress.firstName || ''} ${shippingAddress.lastName || ''}<br>
+                ${shippingAddress.street} ${shippingAddress.houseNumber}<br>
+                ${shippingAddress.addressLine2 ? shippingAddress.addressLine2 + '<br>' : ''}
+                ${shippingAddress.postalCode} ${shippingAddress.city}<br>
+                ${shippingAddress.country}
+              </p>
+            </div>
+            
+            ${billingAddress && billingAddress !== shippingAddress ? `
+            <div class="address">
+              <h3 style="margin-top: 0;">Rechnungsadresse:</h3>
+              <p style="margin: 0;">
+                ${billingAddress.firstName || ''} ${billingAddress.lastName || ''}<br>
+                ${billingAddress.street} ${billingAddress.houseNumber}<br>
+                ${billingAddress.addressLine2 ? billingAddress.addressLine2 + '<br>' : ''}
+                ${billingAddress.postalCode} ${billingAddress.city}<br>
+                ${billingAddress.country}
+              </p>
+            </div>
+            ` : ''}
+            
+            <p><strong>Zahlungsmethode:</strong> ${paymentMethod === 'card' ? 'Kreditkarte/Debitkarte' : paymentMethod === 'paypal' ? 'PayPal' : paymentMethod === 'bank' ? 'Banküberweisung' : 'Nicht angegeben'}</p>
+            
+            <div class="dsgvo-notice" style="background: #f8fafc; padding: 10px; border-radius: 6px; border-left: 3px solid #6b7280; margin: 20px 0;">
+              <p style="margin: 0; color: #6b7280; font-size: 12px;">
+                <strong>DSGVO-Hinweis:</strong> Falls du deine Bestelldaten löschen lassen möchtest, kannst du einen 
+                <a href="${process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000'}/guest-data-deletion" style="color: #1d4ed8; text-decoration: underline;">Löschungsantrag stellen</a>. 
+                Wir werden deine Daten innerhalb von 30 Tagen löschen.
+              </p>
+            </div>
+            
+            <p>Wir bearbeiten deine Bestellung so schnell wie möglich und informieren dich über den Versand.</p>
+            
+            <div class="footer">
+              <p>Mit freundlichen Grüßen</p>
+              <p>Dein 3DarterDE Team</p>
+              <p>Bei Fragen erreichst du uns unter: <a href="mailto:service@3darter.de">service@3darter.de</a></p>
+            </div>
+          </div>
+        </div>
+      </body>
+      </html>
+    `,
+  };
+
+  try {
+    await transporter.sendMail(mailOptions);
+    return { success: true };
+  } catch (error) {
+    console.error('Error sending guest order confirmation email:', error);
+    return { success: false, error: error instanceof Error ? error.message : 'Unknown error' };
   }
 }
 

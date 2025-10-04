@@ -1,4 +1,5 @@
 "use client";
+import React from "react";
 import { useUserData } from "@/lib/contexts/UserDataContext";
 import { useAuth } from '@/lib/hooks/useAuth';
 import Link from "next/link";
@@ -50,8 +51,68 @@ const bonusGoals: BonusGoal[] = [
 ];
 
 export default function BonusPointsPage() {
-  const { user, loading, error } = useUserData();
+  const { user, loading, error, orders, refetchOrders } = useUserData();
+  const [showHistory, setShowHistory] = React.useState(false);
+  const [entries, setEntries] = React.useState<any[]>([]);
+  const [currentPage, setCurrentPage] = React.useState(1);
   const { loading: authLoading, isAuthenticated } = useAuth();
+  
+  const ITEMS_PER_PAGE = 25;
+
+  // Build unified bonus entries from orders and reviews (same logic as profile)
+  React.useEffect(() => {
+    const buildEntries = async () => {
+      try {
+        const list: any[] = [];
+        (orders || []).forEach((o: any) => {
+          const orderNumber = o.orderNumber;
+          const points = o.bonusPointsEarned || 0;
+          if (points > 0) {
+            if (o.bonusPointsScheduledAt && !o.bonusPointsCredited) {
+              list.push({ kind: 'order', orderId: o._id, orderNumber, points, scheduledAt: o.bonusPointsScheduledAt, credited: false });
+            }
+            if (o.bonusPointsCredited && o.bonusPointsCreditedAt) {
+              list.push({ kind: 'order', orderId: o._id, orderNumber, points, credited: true, creditedAt: o.bonusPointsCreditedAt });
+            }
+          }
+        });
+
+        if (orders && orders.length > 0) {
+          const orderIds = orders.map((o: any) => o._id);
+          const res = await fetch(`/api/reviews?orderId=${orderIds.join(',')}`);
+          if (res.ok) {
+            const data = await res.json();
+            const reviews: any[] = data.reviews || [];
+            const idToNumber: Record<string, string> = {};
+            for (const o of orders as any[]) idToNumber[o._id] = o.orderNumber;
+            reviews.forEach((r) => {
+              const pts = r.bonusPointsAwarded || 0;
+              if (pts <= 0) return;
+              const orderNumber = idToNumber[r.orderId] || r.orderId;
+              if (r.bonusPointsScheduledAt && !r.bonusPointsCredited) {
+                list.push({ kind: 'review', orderId: r.orderId, reviewId: r._id, orderNumber, points: pts, scheduledAt: r.bonusPointsScheduledAt, credited: false });
+              }
+              if (r.bonusPointsCredited && r.bonusPointsCreditedAt) {
+                list.push({ kind: 'review', orderId: r.orderId, reviewId: r._id, orderNumber, points: pts, credited: true, creditedAt: r.bonusPointsCreditedAt });
+              }
+            });
+          }
+        }
+
+        // Sort all entries by date (newest first)
+        const allEntries = list.sort((a, b) => {
+          const dateA = a.credited ? new Date(a.creditedAt).getTime() : new Date(a.scheduledAt).getTime();
+          const dateB = b.credited ? new Date(b.creditedAt).getTime() : new Date(b.scheduledAt).getTime();
+          return dateB - dateA; // Newest first
+        });
+        setEntries(allEntries);
+      } catch {
+        setEntries([]);
+      }
+    };
+
+    buildEntries();
+  }, [orders]);
 
   if ((authLoading || loading) && !user) {
     return (
@@ -132,6 +193,20 @@ export default function BonusPointsPage() {
   const nextGoal = getNextGoal();
   const completedGoals = getCompletedGoals();
 
+  // Pagination logic
+  const totalPages = Math.ceil(entries.length / ITEMS_PER_PAGE);
+  const startIndex = (currentPage - 1) * ITEMS_PER_PAGE;
+  const endIndex = startIndex + ITEMS_PER_PAGE;
+  const paginatedEntries = entries.slice(startIndex, endIndex);
+
+  const handlePageChange = (page: number) => {
+    setCurrentPage(page);
+  };
+
+  const resetPagination = () => {
+    setCurrentPage(1);
+  };
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 to-blue-50">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-4">
@@ -160,10 +235,6 @@ export default function BonusPointsPage() {
                   <div className="w-2 h-2 bg-slate-300 rounded-full mr-3 group-hover:bg-blue-500 transition-colors"></div>
                   Mein Wunschzettel
                 </a>
-                <a href="#" className="flex items-center px-4 py-3 text-sm font-medium text-slate-600 hover:text-blue-600 hover:bg-blue-50 rounded-xl transition-all duration-200 group">
-                  <div className="w-2 h-2 bg-slate-300 rounded-full mr-3 group-hover:bg-blue-500 transition-colors"></div>
-                  Newsletter
-                </a>
               </nav>
             </div>
           </div>
@@ -172,22 +243,22 @@ export default function BonusPointsPage() {
           <div className="flex-1 py-4 lg:py-8">
             {/* Header */}
             <div className="mb-8">
-              <div className="mb-6">
-                <h1 className="text-3xl font-bold text-slate-800 mb-2">Meine Bonuspunkte</h1>
-                <p className="text-slate-600">Sammle Punkte und erreiche deine Ziele!</p>
-              </div>
-
           {/* Current Points Card */}
-          <div className="bg-gradient-to-r from-yellow-500 to-yellow-600 rounded-2xl p-6 text-white shadow-xl mb-8">
+          <div className="bg-gradient-to-r from-blue-800 to-blue-600 rounded-2xl p-4 sm:p-6 lg:p-8 text-white shadow-xl mb-8">
             <div className="flex items-center justify-between">
               <div>
-                <h2 className="text-2xl font-bold mb-2">Aktuelles Guthaben</h2>
-                <p className="text-yellow-100">Deine gesammelten Bonuspunkte</p>
+                <h2 className="text-2xl sm:text-3xl lg:text-4xl font-bold mb-2 lg:mb-3">Aktuelles Guthaben</h2>
+                <p className="text-blue-100 text-sm sm:text-base lg:text-lg">Deine gesammelten Bonuspunkte</p>
               </div>
               <div className="text-right">
-                <div className="text-5xl font-bold">{currentPoints.toLocaleString()}</div>
-                <div className="text-yellow-100 text-sm">Punkte</div>
+                <div className="text-3xl sm:text-4xl lg:text-5xl font-bold">{currentPoints.toLocaleString()}</div>
+                <div className="text-blue-100 text-sm sm:text-base lg:text-lg">Punkte</div>
               </div>
+            </div>
+            <div className="mt-4">
+              <button onClick={() => { setShowHistory(true); resetPagination(); refetchOrders?.(); }} className="px-4 py-2 bg-white/10 hover:bg-white/20 rounded-lg text-white text-sm font-medium transition-colors">
+                Verlauf ansehen
+              </button>
             </div>
           </div>
         </div>
@@ -224,6 +295,110 @@ export default function BonusPointsPage() {
               </div>
             </div>
           </div>
+        )}
+
+        {/* History Modal */}
+        {showHistory && (
+    <div 
+      className="fixed inset-0 bg-black/30 backdrop-blur-sm flex items-center justify-center z-50"
+      onClick={() => setShowHistory(false)}
+    >
+      <div 
+        className="bg-white rounded-2xl p-4 sm:p-6 w-full max-w-2xl mx-4 max-h-[85vh] overflow-y-auto border border-slate-100 shadow-xl"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="text-lg font-semibold text-slate-900">Bonuspunkte-Verlauf</h3>
+          <button onClick={() => setShowHistory(false)} className="text-slate-400 hover:text-slate-600">✕</button>
+        </div>
+
+        {entries.length === 0 ? (
+          <div className="p-4 bg-slate-50 rounded-xl text-slate-600 text-sm">
+            Keine Einträge vorhanden.
+          </div>
+        ) : (
+          <>
+            <div className="space-y-3">
+              {paginatedEntries.map((entry, idx) => (
+                <div key={startIndex + idx} className="flex items-start justify-between p-3 rounded-lg border border-slate-100">
+                  <div>
+                    <div className="text-sm text-slate-700">
+                      {entry.kind === 'order' ? 'Bestellung' : 'Bewertung'}
+                      {entry.orderNumber && (
+                        <span className="ml-2 text-slate-500">#{entry.orderNumber}</span>
+                      )}
+                    </div>
+                    <div className="text-xs text-slate-500 mt-1">
+                      {entry.credited ? (
+                        <span className="text-green-700">Gutgeschrieben am {new Date(entry.creditedAt).toLocaleDateString('de-DE', { year: '2-digit', month: '2-digit', day: '2-digit' })}</span>
+                      ) : (
+                        <span className="text-blue-700">Geplante Gutschrift am {new Date(entry.scheduledAt).toLocaleDateString('de-DE', { year: '2-digit', month: '2-digit', day: '2-digit' })}</span>
+                      )}
+                    </div>
+                  </div>
+                  <div className={`text-sm font-semibold ${entry.credited ? 'text-green-700' : 'text-yellow-700'}`}>+{entry.points} Punkte</div>
+                </div>
+              ))}
+            </div>
+            
+            {/* Pagination */}
+            {totalPages > 1 && (
+              <div className="mt-6 flex items-center justify-between">
+                <div className="text-sm text-slate-600">
+                  Zeige {startIndex + 1}-{Math.min(endIndex, entries.length)} von {entries.length} Einträgen
+                </div>
+                <div className="flex items-center space-x-2">
+                  <button
+                    onClick={() => handlePageChange(currentPage - 1)}
+                    disabled={currentPage === 1}
+                    className="px-3 py-1 text-sm border border-slate-300 rounded-lg hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    Zurück
+                  </button>
+                  
+                  <div className="flex items-center space-x-1">
+                    {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+                      let pageNum;
+                      if (totalPages <= 5) {
+                        pageNum = i + 1;
+                      } else if (currentPage <= 3) {
+                        pageNum = i + 1;
+                      } else if (currentPage >= totalPages - 2) {
+                        pageNum = totalPages - 4 + i;
+                      } else {
+                        pageNum = currentPage - 2 + i;
+                      }
+                      
+                      return (
+                        <button
+                          key={pageNum}
+                          onClick={() => handlePageChange(pageNum)}
+                          className={`px-3 py-1 text-sm rounded-lg ${
+                            currentPage === pageNum
+                              ? 'bg-blue-600 text-white'
+                              : 'border border-slate-300 hover:bg-slate-50'
+                          }`}
+                        >
+                          {pageNum}
+                        </button>
+                      );
+                    })}
+                  </div>
+                  
+                  <button
+                    onClick={() => handlePageChange(currentPage + 1)}
+                    disabled={currentPage === totalPages}
+                    className="px-3 py-1 text-sm border border-slate-300 rounded-lg hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    Weiter
+                  </button>
+                </div>
+              </div>
+            )}
+          </>
+        )}
+      </div>
+    </div>
         )}
 
         {/* All Goals */}
@@ -285,40 +460,6 @@ export default function BonusPointsPage() {
           </div>
         </div>
 
-        {/* Completed Goals Summary */}
-        {completedGoals.length > 0 && (
-          <div className="mt-8">
-            <div className="bg-green-50 border border-green-200 rounded-2xl p-6">
-              <div className="flex items-center mb-4">
-                <div className="w-8 h-8 bg-green-500 rounded-full flex items-center justify-center mr-3">
-                  <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                  </svg>
-                </div>
-                <h3 className="text-lg font-semibold text-green-800">Erreichte Ziele</h3>
-              </div>
-              <p className="text-green-700 mb-4">
-                Glückwunsch! Du hast bereits {completedGoals.length} von {bonusGoals.length} Zielen erreicht.
-              </p>
-              <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
-                <p className="text-sm text-blue-800">
-                  <strong>Hinweis:</strong> Du kannst deine {currentPoints} Bonuspunkte als Rabatt bei der nächsten Bestellung einlösen. 
-                  Je mehr Punkte du hast, desto höher ist der maximale Rabatt, den du erhalten kannst.
-                </p>
-              </div>
-              <div className="flex flex-wrap gap-2">
-                {completedGoals.map((goal) => (
-                  <span 
-                    key={goal.id}
-                    className="bg-green-100 text-green-800 px-3 py-1 rounded-full text-sm font-medium"
-                  >
-                    {goal.reward}
-                  </span>
-                ))}
-              </div>
-            </div>
-          </div>
-        )}
           </div>
         </div>
       </div>

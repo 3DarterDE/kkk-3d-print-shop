@@ -31,11 +31,12 @@ function WelcomePageContent() {
 
         if (response.ok) {
           const result = await response.json();
-          
-          if (result.message === 'User already exists, no welcome email sent') {
+          const next = searchParams.get('next');
+
+          if (result.message === 'User already exists, welcome already sent' || result.message === 'User already exists, no welcome email sent') {
             // User already exists, just redirect without showing any message
             setTimeout(() => {
-              window.location.href = '/';
+              window.location.href = next || '/';
             }, 100);
             return;
           } else {
@@ -45,7 +46,7 @@ function WelcomePageContent() {
             
             // Redirect to home page after 3 seconds
             setTimeout(() => {
-              window.location.href = '/';
+              window.location.href = next || '/';
             }, 3000);
           }
         } else {

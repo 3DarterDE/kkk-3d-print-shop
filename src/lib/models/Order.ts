@@ -12,6 +12,7 @@ export interface IOrderItem {
 export interface IShippingAddress {
   firstName?: string;
   lastName?: string;
+  company?: string;
   street: string;
   houseNumber: string;
   addressLine2?: string;
@@ -31,7 +32,9 @@ export interface ITrackingInfo {
 
 export interface IOrder extends Document {
   orderNumber: string;
-  userId: string;
+  userId: string | null; // null for guest orders
+  guestEmail?: string; // For guest orders
+  guestName?: string; // For guest orders
   status: 'pending' | 'processing' | 'shipped' | 'delivered' | 'cancelled' | 'return_requested' | 'return_completed';
   subtotal: number; // Bestellwert vor Versandkosten und Rabatten
   shippingCosts: number; // Versandkosten in Cent
@@ -68,6 +71,7 @@ const OrderItemSchema = new Schema<IOrderItem>({
 const ShippingAddressSchema = new Schema<IShippingAddress>({
   firstName: { type: String },
   lastName: { type: String },
+  company: { type: String },
   street: { type: String, required: true },
   houseNumber: { type: String, required: true },
   addressLine2: { type: String },
@@ -97,7 +101,16 @@ const OrderSchema = new Schema<IOrder>({
   },
   userId: { 
     type: String, 
-    required: true 
+    required: false, // Allow null for guest orders
+    default: null
+  },
+  guestEmail: { 
+    type: String, 
+    required: false 
+  },
+  guestName: { 
+    type: String, 
+    required: false 
   },
   status: { 
     type: String, 

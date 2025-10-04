@@ -453,12 +453,20 @@ export default function CartPage() {
                     {/* Bonuspunkte Hinweis */}
                     <div className="bg-blue-50 rounded-lg p-3 mb-4">
                       <div className="flex items-center">
-                        <svg className="w-5 h-5 text-blue-600 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1" />
-                        </svg>
                         <span className="text-sm text-blue-800 font-medium">
                           Du erhältst {Math.floor(total / 100 * 3.5)} Bonuspunkte für diese Bestellung
                         </span>
+                        <div className="relative group ml-2">
+                    <svg className="w-4 h-4 text-blue-600 cursor-help" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                    {/* Tooltip */}
+                    <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-3 py-2 bg-gray-900 text-white text-xs rounded-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 whitespace-nowrap z-10">
+                      Du erhältst weitere Bonuspunkte für das Bewerten der Produkte nach der Lieferung
+                      {/* Tooltip arrow */}
+                      <div className="absolute top-full left-1/2 transform -translate-x-1/2 border-4 border-transparent border-t-gray-900"></div>
+                    </div>
+                  </div>
                       </div>
                     </div>
 
@@ -467,9 +475,6 @@ export default function CartPage() {
                       <div className="bg-yellow-50 rounded-lg p-3 mb-4">
                         <div className="flex items-center justify-between">
                           <div className="flex items-center">
-                            <svg className="w-5 h-5 text-yellow-600 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1" />
-                            </svg>
                             <span className="text-sm text-yellow-800 font-medium">
                               Verfügbare Bonuspunkte: {availablePoints}
                             </span>

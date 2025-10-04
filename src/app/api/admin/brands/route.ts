@@ -5,8 +5,10 @@ import { requireAdmin } from '@/lib/auth';
 
 export async function GET() {
   try {
+    await requireAdmin();
     await connectToDatabase();
-    const brands = await Brand.find({ isActive: true }).sort({ sortOrder: 1, name: 1 }).lean();
+    // Return ALL brands for admin (both active and inactive)
+    const brands = await Brand.find({}).sort({ sortOrder: 1, name: 1 }).lean();
     
     return NextResponse.json(brands);
   } catch (error) {

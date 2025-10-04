@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { connectToDatabase } from '@/lib/mongodb';
 import { Product } from '@/lib/models/Product';
 import Category from '@/lib/models/Category';
+import Brand from '@/lib/models/Brand';
 
 export async function GET(request: NextRequest) {
   try {
@@ -59,7 +60,7 @@ export async function GET(request: NextRequest) {
     // Combine all matching category IDs
     const allMatchingCategoryIds = [...matchingCategoryIds, ...matchingSubcategoryIds];
     
-    // Get all products that match in title, tags, category, subcategory, description, or belong to matching categories
+    // Get all products that match in title, tags, category, subcategory, brand, description, or belong to matching categories
     // Use flexible search only for categories/subcategories, exact search for product fields
     const allMatchingProducts = await Product.find({
       $or: [
@@ -67,6 +68,7 @@ export async function GET(request: NextRequest) {
         { tags: { $in: [searchRegex] } },
         { category: { $regex: searchRegex } },
         { subcategory: { $regex: searchRegex } },
+        { brand: { $regex: searchRegex } },
         { description: { $regex: searchRegex } },
         { categoryId: { $in: allMatchingCategoryIds } },
         { subcategoryId: { $in: allMatchingCategoryIds } },
@@ -74,7 +76,7 @@ export async function GET(request: NextRequest) {
       ]
       // Show all products, including out of stock ones
     })
-    .select('_id slug title price offerPrice isOnSale isTopSeller inStock stockQuantity images imageSizes tags categoryId subcategoryId subcategoryIds variations createdAt updatedAt description')
+    .select('_id slug title price offerPrice isOnSale isTopSeller inStock stockQuantity images imageSizes tags brand categoryId subcategoryId subcategoryIds variations createdAt updatedAt description')
     .lean();
 
     // Helper function to check if product or any of its variations are available

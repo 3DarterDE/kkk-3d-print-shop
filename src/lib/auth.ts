@@ -3,6 +3,7 @@ import { cookies } from 'next/headers';
 import { auth0 } from '@/lib/auth0';
 import { connectToDatabase } from '@/lib/mongodb';
 import User from '@/lib/models/User';
+import DeletedIdentity from '@/lib/models/DeletedIdentity';
 
 // Upsert user in DB on every session check
 async function upsertUser(sessionUser: any) {
@@ -44,7 +45,25 @@ export async function requireUser() {
   if (!session?.user) {
     return { user: null, response: NextResponse.json({ error: 'Unauthorized' }, { status: 401 }) };
   }
-  const dbUser = await upsertUser(session.user);
+  // Suppress accidental recreation shortly after deletion
+  try {
+    const suppressed = await (async () => {
+      await connectToDatabase();
+      return await DeletedIdentity.findOne({
+        auth0Id: (session.user as any).sub,
+        expiresAt: { $gt: new Date() }
+      }).lean();
+    })();
+    if (suppressed) {
+      return { user: null, response: NextResponse.json({ error: 'Unauthorized' }, { status: 401 }) };
+    }
+  } catch {}
+  // Read-only: do not create user records during guarded endpoints
+  await connectToDatabase();
+  const dbUser = await User.findOne({ auth0Id: (session.user as any).sub }).lean();
+  if (!dbUser) {
+    return { user: null, response: NextResponse.json({ error: 'Unauthorized' }, { status: 401 }) };
+  }
   return { user: dbUser, response: null };
 }
 

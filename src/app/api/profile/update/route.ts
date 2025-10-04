@@ -13,7 +13,7 @@ export async function PUT(request: NextRequest) {
     }
 
     const body = await request.json();
-    const { salutation, firstName, lastName, phone, dateOfBirth, address, billingAddress, paymentMethod } = body;
+    const { salutation, firstName, lastName, phone, address, billingAddress, useSameAddress, paymentMethod } = body;
     
 
     await connectToDatabase();
@@ -24,7 +24,6 @@ export async function PUT(request: NextRequest) {
     if (firstName !== undefined) updateData.firstName = firstName || null;
     if (lastName !== undefined) updateData.lastName = lastName || null;
     if (phone !== undefined) updateData.phone = phone || null;
-    if (dateOfBirth !== undefined) updateData.dateOfBirth = dateOfBirth ? new Date(dateOfBirth) : null;
     if (address !== undefined) {
       updateData.address = {
         firstName: address.firstName || null,
@@ -51,6 +50,7 @@ export async function PUT(request: NextRequest) {
         country: billingAddress.country || 'Deutschland'
       };
     }
+    if (useSameAddress !== undefined) updateData.useSameAddress = useSameAddress;
     if (paymentMethod !== undefined) updateData.paymentMethod = paymentMethod;
 
     // Update name field if firstName or lastName changed
@@ -77,9 +77,9 @@ export async function PUT(request: NextRequest) {
         lastName: user.lastName,
         email: user.email,
         phone: user.phone,
-        dateOfBirth: user.dateOfBirth,
         address: user.address,
         billingAddress: user.billingAddress,
+        useSameAddress: user.useSameAddress,
         paymentMethod: user.paymentMethod,
         isAdmin: user.isAdmin,
         isVerified: user.isVerified,

@@ -23,10 +23,17 @@ export default async function ProductPage({ params }: { params: Promise<{ slug: 
     await connectToDatabase();
     categoryData = await Category.findById(product.categoryId).lean();
     
-    // Load subcategory data if product has subcategoryIds
+    // Load subcategory data if product has subcategoryIds or subcategoryId
+    let subcategoryId = null;
     if (product.subcategoryIds && product.subcategoryIds.length > 0) {
-      // Find subcategory by ID directly
-      const subcategoryId = product.subcategoryIds[0];
+      // Multiple subcategories - use first one
+      subcategoryId = product.subcategoryIds[0];
+    } else if ((product as any).subcategoryId) {
+      // Single subcategory - use it directly
+      subcategoryId = (product as any).subcategoryId;
+    }
+    
+    if (subcategoryId) {
       subcategoryData = await Category.findById(subcategoryId).lean();
     }
   }

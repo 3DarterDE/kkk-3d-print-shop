@@ -19,6 +19,7 @@ type Order = {
   shippingAddress: {
     firstName?: string;
     lastName?: string;
+    company?: string;
     street: string;
     houseNumber: string;
     addressLine2?: string;
@@ -29,6 +30,7 @@ type Order = {
   billingAddress?: {
     firstName?: string;
     lastName?: string;
+    company?: string;
     street: string;
     houseNumber: string;
     addressLine2?: string;
@@ -38,6 +40,9 @@ type Order = {
   };
   paymentMethod?: string;
   bonusPointsEarned: number;
+  bonusPointsCredited?: boolean;
+  bonusPointsCreditedAt?: string;
+  bonusPointsScheduledAt?: string;
   createdAt: string;
   updatedAt: string;
 };
@@ -50,16 +55,18 @@ type OrdersResponse = {
 };
 
 export default function OrdersPage() {
-  const { orders, loading, error } = useUserData();
+  const { orders, loading, error, ordersLoaded } = useUserData();
   const [expandedOrder, setExpandedOrder] = useState<string | null>(null);
   const [returnModalOrderId, setReturnModalOrderId] = useState<string | null>(null);
   const [returnSelections, setReturnSelections] = useState<Record<string, number>>({});
   const [returnSubmitting, setReturnSubmitting] = useState(false);
   const [returnError, setReturnError] = useState<string | null>(null);
+  const [returnReason, setReturnReason] = useState<string>('');
   const [reviewModalOrderId, setReviewModalOrderId] = useState<string | null>(null);
   const [reviewSubmitting, setReviewSubmitting] = useState(false);
+  const [reviewAttemptedSubmit, setReviewAttemptedSubmit] = useState(false);
   const [reviewError, setReviewError] = useState<string | null>(null);
-  const [reviews, setReviews] = useState<Record<string, { rating: number; title: string; comment: string; isAnonymous: boolean }>>({});
+  const [reviews, setReviews] = useState<Record<string, { rating: number; title: string; comment: string; isAnonymous: boolean; selected: boolean }>>({});
   const [existingReviews, setExistingReviews] = useState<Record<string, any>>({});
 
   // Load existing reviews for orders
@@ -100,11 +107,11 @@ export default function OrdersPage() {
           return acc;
         }, []);
         
-        const initialReviews: Record<string, { rating: number; title: string; comment: string; isAnonymous: boolean }> = {};
+        const initialReviews: Record<string, { rating: number; title: string; comment: string; isAnonymous: boolean; selected: boolean }> = {};
         uniqueProducts.forEach((item) => {
           const itemKey = `${order._id}-${item.productId}`;
           if (!reviews[itemKey]) {
-            initialReviews[itemKey] = { rating: 5, title: '', comment: '', isAnonymous: false };
+            initialReviews[itemKey] = { rating: 5, title: '', comment: '', isAnonymous: false, selected: false };
           }
         });
         
@@ -209,6 +216,47 @@ export default function OrdersPage() {
     }
   };
 
+  // Check if return is still possible (within 14 days of delivery)
+  const canReturnOrder = (order: any) => {
+    if (order.status !== 'delivered' && order.status !== 'shipped') {
+      return false;
+    }
+    
+    // For shipped orders, we need to estimate delivery date (usually 2-3 days after shipping)
+    // We'll use 3 days after shipping as the "delivery date" for return calculation
+    if (order.status === 'shipped') {
+      const shippedDate = new Date(order.updatedAt); // When status changed to "shipped"
+      const estimatedDeliveryDate = new Date(shippedDate);
+      estimatedDeliveryDate.setDate(estimatedDeliveryDate.getDate() + 3); // Add 3 days for delivery
+      
+      const now = new Date();
+      const daysSinceEstimatedDelivery = Math.floor((now.getTime() - estimatedDeliveryDate.getTime()) / (1000 * 60 * 60 * 24));
+      return daysSinceEstimatedDelivery <= 14;
+    }
+    
+    // For delivered orders, check if it's been less than 14 days since actual delivery
+    if (order.status === 'delivered') {
+      const deliveredDate = new Date(order.updatedAt); // When status changed to "delivered"
+      const now = new Date();
+      const daysSinceDelivered = Math.floor((now.getTime() - deliveredDate.getTime()) / (1000 * 60 * 60 * 24));
+      return daysSinceDelivered <= 14;
+    }
+    
+    return false;
+  };
+
+  // Get return status text
+  const getReturnStatusText = (order: any) => {
+    if (order.status === 'shipped' || order.status === 'delivered') {
+      if (canReturnOrder(order)) {
+        return 'Artikel zurücksenden';
+      } else {
+        return 'Rücksendung (Frist abgelaufen)';
+      }
+    }
+    return 'Rücksendung (nach Versand)';
+  };
+
   const getPaymentMethodText = (method?: string) => {
     switch (method) {
       case 'card':
@@ -273,7 +321,7 @@ export default function OrdersPage() {
     return 0;
   };
 
-  if (loading && orders.length === 0) {
+  if ((loading || !ordersLoaded) && orders.length === 0) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-slate-50 to-blue-50">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-4">
@@ -350,10 +398,6 @@ export default function OrdersPage() {
                   <div className="w-2 h-2 bg-slate-300 rounded-full mr-3 group-hover:bg-blue-500 transition-colors"></div>
                   Mein Wunschzettel
                 </a>
-                <a href="#" className="flex items-center px-4 py-3 text-sm font-medium text-slate-600 hover:text-blue-600 hover:bg-blue-50 rounded-xl transition-all duration-200 group">
-                  <div className="w-2 h-2 bg-slate-300 rounded-full mr-3 group-hover:bg-blue-500 transition-colors"></div>
-                  Newsletter
-                </a>
               </nav>
             </div>
           </div>
@@ -404,15 +448,15 @@ export default function OrdersPage() {
               ) : (
                 <div className="bg-white/70 backdrop-blur-sm border border-white/30 rounded-2xl overflow-hidden shadow-lg">
                   <div className="overflow-x-auto">
-                    <table className="min-w-full divide-y divide-slate-200">
+                    <table className="w-full table-fixed divide-y divide-slate-200">
                       <thead className="bg-gradient-to-r from-slate-50 to-blue-50">
                         <tr>
-                          <th className="px-3 sm:px-6 py-4 text-left text-xs font-semibold text-slate-600 uppercase tracking-wider">Bestellung #</th>
-                          <th className="px-3 sm:px-6 py-4 text-left text-xs font-semibold text-slate-600 uppercase tracking-wider hidden sm:table-cell">Datum</th>
-                          <th className="px-3 sm:px-6 py-4 text-left text-xs font-semibold text-slate-600 uppercase tracking-wider hidden md:table-cell">Senden an</th>
-                          <th className="px-3 sm:px-6 py-4 text-left text-xs font-semibold text-slate-600 uppercase tracking-wider">Bestellwert</th>
-                          <th className="px-3 sm:px-6 py-4 text-left text-xs font-semibold text-slate-600 uppercase tracking-wider">Status</th>
-                          <th className="px-3 sm:px-6 py-4 text-left text-xs font-semibold text-slate-600 uppercase tracking-wider">Aktionen</th>
+                          <th className="w-28 px-3 sm:px-6 py-4 text-left text-xs font-semibold text-slate-600 uppercase tracking-wider">Bestellung #</th>
+                          <th className="w-20 px-3 sm:px-6 py-4 text-left text-xs font-semibold text-slate-600 uppercase tracking-wider hidden sm:table-cell">Datum</th>
+                          <th className="w-32 px-3 sm:px-6 py-4 text-left text-xs font-semibold text-slate-600 uppercase tracking-wider hidden md:table-cell">Senden an</th>
+                          <th className="w-20 px-3 sm:px-6 py-4 text-left text-xs font-semibold text-slate-600 uppercase tracking-wider">Bestellwert</th>
+                          <th className="w-28 px-3 sm:px-6 py-4 text-left text-xs font-semibold text-slate-600 uppercase tracking-wider">Status</th>
+                          <th className="w-24 px-3 sm:px-6 py-4 text-left text-xs font-semibold text-slate-600 uppercase tracking-wider">Aktionen</th>
                         </tr>
                       </thead>
                       <tbody className="bg-white/50 divide-y divide-slate-200">
@@ -423,31 +467,37 @@ export default function OrdersPage() {
                           return (
                             <React.Fragment key={order._id}>
                               <tr className="hover:bg-blue-50/50 transition-colors">
-                                <td className="px-3 sm:px-6 py-4 whitespace-nowrap">
+                                <td className="px-3 sm:px-6 py-4">
                                   <span className="text-xs sm:text-sm font-semibold text-slate-800 bg-slate-100 px-2 sm:px-3 py-1 rounded-full">
                                     {order.orderNumber}
                                   </span>
                                 </td>
-                                <td className="px-3 sm:px-6 py-4 whitespace-nowrap text-xs sm:text-sm text-slate-600 hidden sm:table-cell">
+                                <td className="px-3 sm:px-6 py-4 text-xs sm:text-sm text-slate-600 hidden sm:table-cell">
                                   {formatDate(order.createdAt)}
                                 </td>
-                                <td className="px-3 sm:px-6 py-4 whitespace-nowrap text-xs sm:text-sm text-slate-600 hidden md:table-cell">
-                                  {order.shippingAddress.street} {order.shippingAddress.houseNumber}
+                                <td className="px-3 sm:px-6 py-4 text-xs sm:text-sm text-slate-600 hidden md:table-cell">
+                                  <div className="truncate" title={`${order.shippingAddress.street} ${order.shippingAddress.houseNumber}`}>
+                                    {order.shippingAddress.street} {order.shippingAddress.houseNumber}
+                                  </div>
                                 </td>
-                                <td className="px-3 sm:px-6 py-4 whitespace-nowrap text-xs sm:text-sm font-semibold text-slate-800">
+                                <td className="px-3 sm:px-6 py-4 text-xs sm:text-sm font-semibold text-slate-800">
                                   €{(order.total).toFixed(2)}
                                 </td>
-                                <td className="px-3 sm:px-6 py-4 whitespace-nowrap">
-                                  <span className={`inline-flex items-center px-2 sm:px-3 py-1 rounded-full text-xs font-medium ${statusInfo.bg} ${statusInfo.color}`}>
-                                    {statusInfo.text}
-                                  </span>
+                                <td className="px-3 sm:px-6 py-4">
+                                  <div className="truncate">
+                                    <span className={`inline-flex items-center px-2 sm:px-3 py-1 rounded-full text-xs font-medium ${statusInfo.bg} ${statusInfo.color}`} title={statusInfo.text}>
+                                      {statusInfo.text}
+                                    </span>
+                                  </div>
                                 </td>
-                                <td className="px-3 sm:px-6 py-4 whitespace-nowrap">
+                                <td className="px-3 sm:px-6 py-4">
                                   <button
                                     onClick={() => setExpandedOrder(isExpanded ? null : order._id)}
                                     className="text-blue-600 hover:text-blue-700 text-xs sm:text-sm font-medium hover:underline flex items-center"
                                   >
-                                    {isExpanded ? 'Weniger anzeigen' : 'Details anzeigen'}
+                                    <span className="truncate">
+                                      {isExpanded ? 'Weniger' : 'Details'}
+                                    </span>
                                     <svg 
                                       className={`w-4 h-4 ml-1 transition-transform ${isExpanded ? 'rotate-180' : ''}`}
                                       fill="none" 
@@ -466,10 +516,84 @@ export default function OrdersPage() {
                                   <td colSpan={6} className="px-0 py-0">
                                     <div className="bg-slate-50/50 border-t border-slate-200">
                                       <div className="p-6 space-y-6">
-                                        {/* Status Description */}
+                                        {/* Order Action Buttons */}
                                         <div className="bg-white rounded-lg p-4">
-                                          <h4 className="font-semibold text-slate-800 mb-2">Bestellstatus</h4>
-                                          <p className="text-slate-600">{statusInfo.description}</p>
+                                          <h4 className="font-semibold text-slate-800 mb-4">Aktionen</h4>
+                                          <div className="flex flex-wrap gap-3">
+                                            {/* Invoice Download Button - Always visible */}
+                                            <button 
+                                              onClick={() => (order.status === 'delivered' || (order as any).status === 'return_completed') ? downloadInvoice(order.orderNumber) : null}
+                                              disabled={order.status !== 'delivered' && (order as any).status !== 'return_completed'}
+                                              className={`px-4 py-2 text-sm font-medium rounded-lg transition-colors flex items-center gap-2 ${
+                                                order.status === 'delivered' || (order as any).status === 'return_completed'
+                                                  ? 'text-green-600 bg-green-50 hover:bg-green-100 cursor-pointer'
+                                                  : 'text-gray-400 bg-gray-100 cursor-not-allowed'
+                                              }`}
+                                            >
+                                              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                                              </svg>
+                                              {order.status === 'delivered' || (order as any).status === 'return_completed' ? 'Rechnung herunterladen' : 'Rechnung (nach Lieferung)'}
+                                            </button>
+
+                                            {/* Review Button - Always visible */}
+                                            <button 
+                                              onClick={() => {
+                                                if (order.status === 'delivered' || (order as any).status === 'return_completed') {
+                                                  const reviewStatus = getReviewStatus(order._id);
+                                                  if (!reviewStatus.allReviewed) {
+                                                    setReviewModalOrderId(order._id);
+                                                  }
+                                                }
+                                              }}
+                                              disabled={order.status !== 'delivered' && (order as any).status !== 'return_completed'}
+                                              className={`px-4 py-2 text-sm font-medium rounded-lg transition-colors flex items-center gap-2 ${
+                                                order.status === 'delivered' || (order as any).status === 'return_completed'
+                                                  ? getReviewStatus(order._id).allReviewed 
+                                                    ? 'text-green-600 bg-green-50 cursor-default' 
+                                                    : 'text-yellow-600 bg-yellow-50 hover:bg-yellow-100'
+                                                  : 'text-gray-400 bg-gray-100 cursor-not-allowed'
+                                              }`}
+                                            >
+                                              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.197-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.784-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z" />
+                                              </svg>
+                                              {(() => {
+                                                if (order.status !== 'delivered' && (order as any).status !== 'return_completed') {
+                                                  return 'Bewertung (nach Lieferung)';
+                                                }
+                                                const reviewStatus = getReviewStatus(order._id);
+                                                if (reviewStatus.allReviewed) {
+                                                  return `Alle bewertet (${reviewStatus.reviewedCount}/${reviewStatus.totalCount})`;
+                                                } else if (reviewStatus.reviewedCount > 0) {
+                                                  return `Weiter bewerten (${reviewStatus.reviewedCount}/${reviewStatus.totalCount})`;
+                                                } else {
+                                                  return 'Bewertung abgeben';
+                                                }
+                                              })()}
+                                            </button>
+
+                                            {/* Return Button - Always visible */}
+                                            <button
+                                              onClick={() => {
+                                                if (canReturnOrder(order)) {
+                                                  setReturnModalOrderId(order._id);
+                                                  // init selections by line index to support same product with different variations
+                                                  const init: Record<string, number> = {};
+                                                  order.items.forEach((_, idx) => { init[String(idx)] = 0; });
+                                                  setReturnSelections(init);
+                                                }
+                                              }}
+                                              disabled={!canReturnOrder(order)}
+                                              className={`px-4 py-2 text-sm font-medium rounded-lg transition-colors ${
+                                                canReturnOrder(order)
+                                                  ? 'text-purple-700 bg-purple-50 hover:bg-purple-100 cursor-pointer'
+                                                  : 'text-gray-400 bg-gray-100 cursor-not-allowed'
+                                              }`}
+                                            >
+                                              {getReturnStatusText(order)}
+                                            </button>
+                                          </div>
                                         </div>
 
                                         {/* Order Items */}
@@ -580,6 +704,21 @@ export default function OrdersPage() {
                                                   und {((order as any).bonusPointsRedeemed)} Punkte eingelöst
                                                 </span>
                                               )}
+                                              {order.status === 'delivered' && (order as any).bonusPointsScheduledAt && !(order as any).bonusPointsCredited && (
+                                                <span className="block mt-1 text-blue-700">
+                                                  Geplante Gutschrift: {new Date((order as any).bonusPointsScheduledAt).toLocaleDateString('de-DE', { year: '2-digit', month: '2-digit', day: '2-digit' })}
+                                                </span>
+                                              )}
+                                              {(order as any).bonusPointsCredited && (order as any).bonusPointsCreditedAt && (
+                                                <span className="block mt-1 text-green-700">
+                                                  Gutgeschrieben am: {new Date((order as any).bonusPointsCreditedAt).toLocaleDateString('de-DE', { year: '2-digit', month: '2-digit', day: '2-digit' })}
+                                                </span>
+                                              )}
+                                              {!(order as any).bonusPointsScheduledAt && order.status !== 'cancelled' && !(order as any).bonusPointsCredited && (
+                                                <span className="block mt-1 text-slate-600">
+                                                  Bonuspunkte werden 14 Tage nach der Lieferung gutgeschrieben.
+                                                </span>
+                                              )}
                                             </div>
                                           </div>
                                         </div>
@@ -589,6 +728,11 @@ export default function OrdersPage() {
                                           <div className="bg-white rounded-lg p-4">
                                             <h4 className="font-semibold text-slate-800 mb-3">Lieferadresse</h4>
                                             <div className="text-sm text-slate-600 space-y-1">
+                                              {(order.shippingAddress as any).company && (
+                                                <p className="font-medium text-slate-800">
+                                                  {(order.shippingAddress as any).company}
+                                                </p>
+                                              )}
                                               <p className="font-medium text-slate-800">
                                                 {(order.shippingAddress as any).firstName || ''} {(order.shippingAddress as any).lastName || ''}
                                               </p>
@@ -606,6 +750,11 @@ export default function OrdersPage() {
                                             <div className="text-sm text-slate-600 space-y-1">
                                               {(order as any).billingAddress ? (
                                                 <>
+                                                  {((order as any).billingAddress as any).company && (
+                                                    <p className="font-medium text-slate-800">
+                                                      {((order as any).billingAddress as any).company}
+                                                    </p>
+                                                  )}
                                                   <p className="font-medium text-slate-800">
                                                     {((order as any).billingAddress as any).firstName || ''} {((order as any).billingAddress as any).lastName || ''}
                                                   </p>
@@ -628,79 +777,6 @@ export default function OrdersPage() {
                                           </div>
                                         </div>
 
-                                        {/* Order Actions */}
-                                        <div className="flex flex-wrap gap-3 pt-4 border-t border-slate-200">
-                                          {order.status === 'delivered' && (
-                                            <>
-                                              <button 
-                                                onClick={() => downloadInvoice(order.orderNumber)}
-                                                className="px-4 py-2 text-sm font-medium text-green-600 bg-green-50 rounded-lg hover:bg-green-100 transition-colors flex items-center gap-2"
-                                              >
-                                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                                                </svg>
-                                                Rechnung herunterladen
-                                              </button>
-                                              <button 
-                                                onClick={() => {
-                                                  const reviewStatus = getReviewStatus(order._id);
-                                                  if (!reviewStatus.allReviewed) {
-                                                    setReviewModalOrderId(order._id);
-                                                  }
-                                                }}
-                                                className={`px-4 py-2 text-sm font-medium rounded-lg transition-colors flex items-center gap-2 ${
-                                                  getReviewStatus(order._id).allReviewed 
-                                                    ? 'text-green-600 bg-green-50 cursor-default' 
-                                                    : 'text-yellow-600 bg-yellow-50 hover:bg-yellow-100'
-                                                }`}
-                                              >
-                                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.197-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.784-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z" />
-                                                </svg>
-                                                {(() => {
-                                                  const reviewStatus = getReviewStatus(order._id);
-                                                  if (reviewStatus.allReviewed) {
-                                                    return `Alle bewertet (${reviewStatus.reviewedCount}/${reviewStatus.totalCount})`;
-                                                  } else if (reviewStatus.reviewedCount > 0) {
-                                                    return `Weiter bewerten (${reviewStatus.reviewedCount}/${reviewStatus.totalCount})`;
-                                                  } else {
-                                                    return 'Bewertung abgeben';
-                                                  }
-                                                })()}
-                                              </button>
-                                              <button className="px-4 py-2 text-sm font-medium text-blue-600 bg-blue-50 rounded-lg hover:bg-blue-100 transition-colors">
-                                                Erneut bestellen
-                                              </button>
-                                            </>
-                                          )}
-                                          {order.status !== 'delivered' && (
-                                            <div className="flex items-center gap-2 px-4 py-2 text-sm text-gray-600 bg-gray-50 rounded-lg">
-                                              <svg className="w-4 h-4 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                                              </svg>
-                                              <span>Rechnung verfügbar nach Lieferung</span>
-                                            </div>
-                                          )}
-                                          {order.status === 'pending' && (
-                                            <button className="px-4 py-2 text-sm font-medium text-red-600 bg-red-50 rounded-lg hover:bg-red-100 transition-colors">
-                                              Bestellung stornieren
-                                            </button>
-                                          )}
-                                          {order.status === 'shipped' && (
-                                            <button
-                                              onClick={() => {
-                                                setReturnModalOrderId(order._id);
-                                                // init selections by line index to support same product with different variations
-                                                const init: Record<string, number> = {};
-                                                order.items.forEach((_, idx) => { init[String(idx)] = 0; });
-                                                setReturnSelections(init);
-                                              }}
-                                              className="px-4 py-2 text-sm font-medium text-purple-700 bg-purple-50 rounded-lg hover:bg-purple-100 transition-colors"
-                                            >
-                                              Artikel zurücksenden
-                                            </button>
-                                          )}
-                                        </div>
                                       </div>
                                     </div>
                                   </td>
@@ -724,101 +800,269 @@ export default function OrdersPage() {
       {/* Return Modal */}
       {returnModalOrderId && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-          <div className="bg-white rounded-2xl w-full max-w-2xl shadow-xl overflow-hidden">
-            <div className="flex items-center justify-between p-4 border-b">
-              <h3 className="text-lg font-semibold text-slate-800">Artikel zurücksenden</h3>
+          <div className="bg-white rounded-2xl w-full max-w-3xl shadow-xl overflow-hidden">
+            <div className="flex items-center justify-between p-6 border-b bg-gradient-to-r from-purple-50 to-blue-50">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 bg-purple-100 rounded-full flex items-center justify-center">
+                  <svg className="w-5 h-5 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 15v-1a4 4 0 00-4-4H8m0 0l3 3m-3-3l-3 3m5-3v6m0 0l3-3m-3 3l-3-3" />
+                  </svg>
+                </div>
+                <div>
+                  <h3 className="text-xl font-semibold text-slate-800">Artikel zurücksenden</h3>
+                  <p className="text-sm text-slate-600">Wähle die Artikel aus, die du zurücksenden möchtest</p>
+                </div>
+              </div>
               <button
-                onClick={() => { setReturnModalOrderId(null); setReturnError(null); }}
-                className="text-slate-500 hover:text-slate-700"
+                onClick={() => { 
+                  setReturnModalOrderId(null); 
+                  setReturnError(null); 
+                  setReturnReason('');
+                  setReturnSelections({});
+                }}
+                className="text-slate-500 hover:text-slate-700 p-2 hover:bg-slate-100 rounded-lg transition-colors"
                 aria-label="Schließen"
               >
-                ✕
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
               </button>
             </div>
-            <div className="p-4 space-y-4 max-h-[70vh] overflow-y-auto">
+            
+            <div className="p-6 space-y-6 max-h-[70vh] overflow-y-auto">
               {orders.filter(o => o._id === returnModalOrderId).map(order => (
-                <div key={order._id} className="space-y-4">
-                  {order.items.map((item, index) => {
-                    const key = String(index);
-                    const selectedQty = returnSelections[key] ?? 0;
-                    return (
-                      <div key={`${item.productId}-${index}`} className="flex items-center gap-4 border rounded-xl p-3">
-                        <div className="flex-1 min-w-0">
-                          <div className="font-medium text-slate-800 truncate">{item.name}</div>
-                          {item.variations && Object.keys(item.variations).length > 0 && (
-                            <div className="text-xs text-slate-500">
-                              {Object.entries(item.variations).map(([k,v]) => (
-                                <span key={k} className="mr-2">{k}: {v}</span>
-                              ))}
-                            </div>
-                          )}
-                          <div className="text-xs text-slate-500">Gekauft: {item.quantity}×</div>
+                <div key={order._id} className="space-y-6">
+                  {/* Order Info */}
+                  <div className="bg-slate-50 rounded-lg p-4">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <h4 className="font-medium text-slate-800">Bestellung #{order.orderNumber}</h4>
+                        <p className="text-sm text-slate-600">Bestellt am {new Date(order.createdAt).toLocaleDateString('de-DE')}</p>
+                      </div>
+                      <div className="text-right">
+                        <div className="text-sm text-slate-600">Status</div>
+                        <div className={`px-2 py-1 rounded-full text-xs font-medium ${
+                          order.status === 'delivered' ? 'bg-green-100 text-green-800' : 'bg-blue-100 text-blue-800'
+                        }`}>
+                          {order.status === 'delivered' ? 'Geliefert' : 'Versandt'}
                         </div>
-                        <div className="flex items-center gap-2">
-                          <label className="text-xs text-slate-600">Menge:</label>
-                          <select
-                            className="border rounded-lg px-2 py-1 text-sm"
-                            value={selectedQty}
-                            onChange={(e) => {
-                              const value = parseInt(e.target.value, 10) || 0;
-                              setReturnSelections((prev) => ({ ...prev, [key]: value }));
-                            }}
-                          >
-                            {Array.from({ length: item.quantity + 1 }, (_, i) => i).map(i => (
-                              <option key={i} value={i}>{i}</option>
-                            ))}
-                          </select>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Items Selection */}
+                  <div className="space-y-3">
+                    <h4 className="font-medium text-slate-800 flex items-center gap-2">
+                      <svg className="w-4 h-4 text-slate-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
+                      </svg>
+                      Artikel auswählen
+                    </h4>
+                    
+                    {order.items.map((item, index) => {
+                      const key = String(index);
+                      const selectedQty = returnSelections[key] ?? 0;
+                      const isSelected = selectedQty > 0;
+                      
+                      return (
+                        <div key={`${item.productId}-${index}`} className={`border rounded-xl p-4 transition-all duration-200 ${
+                          isSelected 
+                            ? 'border-purple-200 bg-purple-50 shadow-sm' 
+                            : 'border-slate-200 bg-white hover:border-slate-300'
+                        }`}>
+                          <div className="flex items-start gap-4">
+                            <div className="flex-1 min-w-0">
+                              <div className="font-medium text-slate-800 mb-1">{item.name}</div>
+                              {item.variations && Object.keys(item.variations).length > 0 && (
+                                <div className="text-sm text-slate-600 mb-2">
+                                  {Object.entries(item.variations).map(([k,v]) => (
+                                    <span key={k} className="inline-block bg-slate-100 text-slate-700 px-2 py-1 rounded text-xs mr-2 mb-1">
+                                      {k}: {v}
+                                    </span>
+                                  ))}
+                                </div>
+                              )}
+                              <div className="flex items-center gap-4 text-sm text-slate-500">
+                                <span>Gekauft: {item.quantity}×</span>
+                                <span>Preis: €{(item.price / 100).toFixed(2)}</span>
+                                {isSelected && (
+                                  <span className="text-purple-600 font-medium">
+                                    Zurück: {selectedQty}×
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+                            <div className="flex items-center gap-3">
+                              <label className="text-sm font-medium text-slate-700">Menge:</label>
+                              <select
+                                className={`border rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
+                                  isSelected
+                                    ? 'border-purple-300 bg-purple-50 text-purple-700'
+                                    : 'border-slate-300 bg-white text-slate-700'
+                                }`}
+                                value={selectedQty}
+                                onChange={(e) => {
+                                  const value = parseInt(e.target.value, 10) || 0;
+                                  setReturnSelections((prev) => ({ ...prev, [key]: value }));
+                                }}
+                              >
+                                {Array.from({ length: item.quantity + 1 }, (_, i) => i).map(i => (
+                                  <option key={i} value={i}>{i}</option>
+                                ))}
+                              </select>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+
+                  {/* Return Reason */}
+                  <div className="space-y-3">
+                    <h4 className="font-medium text-slate-800 flex items-center gap-2">
+                      <svg className="w-4 h-4 text-slate-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                      </svg>
+                      Grund für Rücksendung (optional)
+                    </h4>
+                    <textarea
+                      value={returnReason}
+                      onChange={(e) => setReturnReason(e.target.value)}
+                      placeholder="Bitte beschreibe kurz, warum du die Artikel zurücksendest..."
+                      rows={3}
+                      className="w-full px-4 py-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500 resize-none"
+                      maxLength={500}
+                    />
+                    <div className="text-xs text-slate-500 text-right">
+                      {returnReason.length}/500 Zeichen
+                    </div>
+                  </div>
+
+                  {/* Summary */}
+                  {(() => {
+                    const selectedItems = order.items
+                      .map((it, idx) => ({ ...it, returnQty: returnSelections[String(idx)] || 0 }))
+                      .filter(it => it.returnQty > 0);
+                    
+                    if (selectedItems.length === 0) return null;
+                    
+                    return (
+                      <div className="bg-purple-50 border border-purple-200 rounded-lg p-4">
+                        <h4 className="font-medium text-purple-800 mb-3 flex items-center gap-2">
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                          </svg>
+                          Zusammenfassung
+                        </h4>
+                        <div className="space-y-2">
+                          {selectedItems.map((item, idx) => (
+                            <div key={idx} className="flex justify-between text-sm">
+                              <span className="text-purple-700">{item.name} × {item.returnQty}</span>
+                              <span className="text-purple-600 font-medium">
+                                €{((item.price * item.returnQty) / 100).toFixed(2)}
+                              </span>
+                            </div>
+                          ))}
+                          <div className="border-t border-purple-200 pt-2 mt-2">
+                            <div className="flex justify-between font-medium text-purple-800">
+                              <span>Gesamtbetrag:</span>
+                              <span>
+                                €{(selectedItems.reduce((sum, item) => sum + (item.price * item.returnQty), 0) / 100).toFixed(2)}
+                              </span>
+                            </div>
+                          </div>
                         </div>
                       </div>
                     );
-                  })}
-                  <div>
-                    {returnError && (
-                      <div className="text-sm text-red-600 mb-2">{returnError}</div>
-                    )}
-                    <div className="flex justify-end gap-2">
-                      <button
-                        onClick={() => { setReturnModalOrderId(null); setReturnError(null); }}
-                        className="px-4 py-2 text-sm rounded-lg bg-slate-100 text-slate-700 hover:bg-slate-200"
-                      >
-                        Abbrechen
-                      </button>
-                      <button
-                        disabled={returnSubmitting}
-                        onClick={async () => {
-                          setReturnError(null);
-                          const payloadItems = order.items
-                            .map((it, idx) => ({ productId: it.productId, quantity: returnSelections[String(idx)] || 0, variations: it.variations || undefined }))
-                            .filter(it => it.quantity > 0);
-                          if (payloadItems.length === 0) {
-                            setReturnError('Bitte mindestens einen Artikel auswählen.');
-                            return;
-                          }
-                          try {
-                            setReturnSubmitting(true);
-                            const res = await fetch('/api/returns', {
-                              method: 'POST',
-                              headers: { 'Content-Type': 'application/json' },
-                              body: JSON.stringify({ orderId: order._id, items: payloadItems })
-                            });
-                            const data = await res.json();
-                            if (!res.ok) {
-                              setReturnError(data.error || 'Fehler beim Absenden der Rücksendung');
-                            } else {
-                              setReturnModalOrderId(null);
-                              alert('Rücksendung eingereicht. Du erhältst eine Bestätigungs-E-Mail.');
-                            }
-                          } catch (e) {
-                            setReturnError('Netzwerkfehler. Bitte erneut versuchen.');
-                          } finally {
-                            setReturnSubmitting(false);
-                          }
-                        }}
-                        className="px-4 py-2 text-sm rounded-lg bg-purple-600 text-white hover:bg-purple-700 disabled:opacity-50"
-                      >
-                        {returnSubmitting ? 'Sende...' : 'Rücksendung absenden'}
-                      </button>
+                  })()}
+
+                  {/* Error Message */}
+                  {returnError && (
+                    <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+                      <div className="flex items-center gap-2">
+                        <svg className="w-5 h-5 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                        </svg>
+                        <span className="text-red-700 font-medium">Fehler</span>
+                      </div>
+                      <p className="text-red-600 mt-1">{returnError}</p>
                     </div>
+                  )}
+
+                  {/* Action Buttons */}
+                  <div className="flex justify-end gap-3 pt-4 border-t border-slate-200">
+                    <button
+                      onClick={() => { 
+                        setReturnModalOrderId(null); 
+                        setReturnError(null); 
+                        setReturnReason('');
+                        setReturnSelections({});
+                      }}
+                      className="px-6 py-3 text-sm font-medium rounded-lg bg-slate-100 text-slate-700 hover:bg-slate-200 transition-colors"
+                    >
+                      Abbrechen
+                    </button>
+                    <button
+                      disabled={returnSubmitting || Object.values(returnSelections).every(qty => qty === 0)}
+                      onClick={async () => {
+                        setReturnError(null);
+                        const payloadItems = order.items
+                          .map((it, idx) => ({ 
+                            productId: it.productId, 
+                            quantity: returnSelections[String(idx)] || 0, 
+                            variations: it.variations || undefined 
+                          }))
+                          .filter(it => it.quantity > 0);
+                        
+                        if (payloadItems.length === 0) {
+                          setReturnError('Bitte mindestens einen Artikel auswählen.');
+                          return;
+                        }
+                        
+                        try {
+                          setReturnSubmitting(true);
+                          const res = await fetch('/api/returns', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ 
+                              orderId: order._id, 
+                              items: payloadItems,
+                              reason: returnReason.trim() || undefined
+                            })
+                          });
+                          const data = await res.json();
+                          if (!res.ok) {
+                            setReturnError(data.error || 'Fehler beim Absenden der Rücksendung');
+                          } else {
+                            setReturnModalOrderId(null);
+                            setReturnReason('');
+                            setReturnSelections({});
+                            alert('Rücksendung eingereicht. Du erhältst eine Bestätigungs-E-Mail.');
+                          }
+                        } catch (e) {
+                          setReturnError('Netzwerkfehler. Bitte erneut versuchen.');
+                        } finally {
+                          setReturnSubmitting(false);
+                        }
+                      }}
+                      className="px-6 py-3 text-sm font-medium rounded-lg bg-purple-600 text-white hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center gap-2"
+                    >
+                      {returnSubmitting ? (
+                        <>
+                          <svg className="w-4 h-4 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                          </svg>
+                          Sende...
+                        </>
+                      ) : (
+                        <>
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
+                          </svg>
+                          Rücksendung absenden
+                        </>
+                      )}
+                    </button>
                   </div>
                 </div>
               ))}
@@ -834,7 +1078,7 @@ export default function OrdersPage() {
             <div className="flex items-center justify-between p-4 border-b">
               <h3 className="text-lg font-semibold text-slate-800">Bewertung abgeben</h3>
               <button
-                onClick={() => { setReviewModalOrderId(null); setReviewError(null); }}
+                onClick={() => { setReviewModalOrderId(null); setReviewError(null); setReviewAttemptedSubmit(false); }}
                 className="text-slate-500 hover:text-slate-700"
                 aria-label="Schließen"
               >
@@ -844,12 +1088,6 @@ export default function OrdersPage() {
             <div className="p-4 space-y-4 max-h-[70vh] overflow-y-auto">
               {orders.filter(o => o._id === reviewModalOrderId).map(order => (
                 <div key={order._id} className="space-y-4">
-                  <div className="bg-blue-50 rounded-lg p-3 mb-4">
-                    <p className="text-sm text-blue-800">
-                      <strong>💡 Tipp:</strong> Du erhältst 175% Bonuspunkte für jede Bewertung! 
-                      Bei einem 100€ Produkt bekommst du 175 Bonuspunkte. Nur die Sterne-Bewertung ist erforderlich.
-                    </p>
-                  </div>
                   
                   {(() => {
                     // Get unique products (by productId) to avoid showing same product multiple times
@@ -876,7 +1114,7 @@ export default function OrdersPage() {
                       
                       return (
                       <div key={itemKey} className="border rounded-xl p-4 bg-gray-50">
-                        <div className="flex items-start gap-4 mb-4">
+                        <div className="flex items-start gap-4">
                           <div className="flex-1">
                             <h4 className="font-medium text-slate-800">{item.name}</h4>
                             {item.variations && Object.keys(item.variations).length > 0 && (
@@ -890,86 +1128,103 @@ export default function OrdersPage() {
                               Preis: €{(item.price / 100).toFixed(2)} | Bonuspunkte: {Math.floor((item.price / 100) * 1.75)}
                             </div>
                           </div>
+                          <label className="flex items-center gap-2 select-none">
+                            <input
+                              type="checkbox"
+                              checked={!!currentReview.selected}
+                              onChange={(e) => setReviews(prev => ({
+                                ...prev,
+                                [itemKey]: { ...prev[itemKey] || { rating: 5, title: '', comment: '', isAnonymous: false, selected: false }, selected: e.target.checked }
+                              }))}
+                              className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                            />
+                            <span className="text-sm font-medium text-slate-700">Bewertung schreiben</span>
+                          </label>
                         </div>
                         
-                        <div className="space-y-3">
-                          <div>
-                            <label className="block text-sm font-medium text-slate-700 mb-2">
-                              Bewertung (1-5 Sterne) *
-                            </label>
-                            <div className="flex gap-1">
-                              {[1, 2, 3, 4, 5].map((star) => (
-                                <button
-                                  key={star}
-                                  onClick={() => setReviews(prev => ({
-                                    ...prev,
-                                    [itemKey]: { ...prev[itemKey] || { rating: 5, title: '', comment: '', isAnonymous: false }, rating: star }
-                                  }))}
-                                  className={`text-2xl ${star <= currentReview.rating ? 'text-yellow-400' : 'text-gray-300'} hover:text-yellow-400 transition-colors`}
-                                >
-                                  ★
-                                </button>
-                              ))}
+                        {currentReview.selected && (
+                          <div className="space-y-3 mt-4">
+                            <div>
+                              <label className="block text-sm font-medium text-slate-700 mb-2">
+                                Bewertung (1-5 Sterne) *
+                              </label>
+                              <div className="flex gap-1">
+                                {[1, 2, 3, 4, 5].map((star) => (
+                                  <button
+                                    key={star}
+                                    onClick={() => setReviews(prev => ({
+                                      ...prev,
+                                      [itemKey]: { ...prev[itemKey] || { rating: 5, title: '', comment: '', isAnonymous: false, selected: false }, rating: star }
+                                    }))}
+                                    className={`text-2xl ${star <= currentReview.rating ? 'text-yellow-400' : 'text-gray-300'} hover:text-yellow-400 transition-colors`}
+                                  >
+                                    ★
+                                  </button>
+                                ))}
+                              </div>
                             </div>
-                            <p className="text-xs text-slate-500 mt-1">
-                              Nur die Sterne-Bewertung ist erforderlich. Titel und Kommentar sind optional.
-                            </p>
-                          </div>
-                          
-                          <div>
-                            <label className="block text-sm font-medium text-slate-700 mb-2">
-                              Titel (optional)
-                            </label>
-                            <input
-                              type="text"
-                              placeholder="Optional: z.B. 'Sehr zufrieden!'"
-                              value={currentReview.title}
-                              onChange={(e) => setReviews(prev => ({
-                                ...prev,
-                                [itemKey]: { ...prev[itemKey] || { rating: 5, title: '', comment: '', isAnonymous: false }, title: e.target.value }
-                              }))}
-                              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                              maxLength={100}
-                            />
-                          </div>
-                          
-                          <div>
-                            <label className="block text-sm font-medium text-slate-700 mb-2">
-                              Kommentar (optional)
-                            </label>
-                            <textarea
-                              placeholder="Optional: Teile deine Erfahrung mit anderen Kunden..."
-                              value={currentReview.comment}
-                              onChange={(e) => setReviews(prev => ({
-                                ...prev,
-                                [itemKey]: { ...prev[itemKey] || { rating: 5, title: '', comment: '', isAnonymous: false }, comment: e.target.value }
-                              }))}
-                              rows={3}
-                              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                              maxLength={1000}
-                            />
-                          </div>
-                          
-                          <div>
-                            <label className="flex items-center gap-2">
+                            
+                            <div>
+                              <label className="block text-sm font-medium text-slate-700 mb-2">
+                                Titel (erforderlich)
+                              </label>
                               <input
-                                type="checkbox"
-                                checked={currentReview.isAnonymous}
+                                type="text"
+                                placeholder="z.B. 'Sehr zufrieden!'"
+                                value={currentReview.title}
                                 onChange={(e) => setReviews(prev => ({
                                   ...prev,
-                                  [itemKey]: { ...prev[itemKey] || { rating: 5, title: '', comment: '', isAnonymous: false }, isAnonymous: e.target.checked }
+                                  [itemKey]: { ...prev[itemKey] || { rating: 5, title: '', comment: '', isAnonymous: false, selected: false }, title: e.target.value }
                                 }))}
-                                className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                                className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${reviewAttemptedSubmit && currentReview.selected && !currentReview.title ? 'border-red-300' : 'border-gray-300'}`}
+                                maxLength={100}
                               />
-                              <span className="text-sm font-medium text-slate-700">
-                                Anonym bewerten
-                              </span>
-                            </label>
-                            <p className="text-xs text-slate-500 mt-1">
-                              Wenn aktiviert, wird "Anonymer Kunde" statt deinem Namen angezeigt
-                            </p>
+                              {reviewAttemptedSubmit && currentReview.selected && !currentReview.title && (
+                                <p className="text-xs text-red-600 mt-1">Titel ist erforderlich.</p>
+                              )}
+                            </div>
+                            
+                            <div>
+                              <label className="block text-sm font-medium text-slate-700 mb-2">
+                                Kommentar (erforderlich)
+                              </label>
+                              <textarea
+                                placeholder="Teile deine Erfahrung mit anderen Kunden..."
+                                value={currentReview.comment}
+                                onChange={(e) => setReviews(prev => ({
+                                  ...prev,
+                                  [itemKey]: { ...prev[itemKey] || { rating: 5, title: '', comment: '', isAnonymous: false, selected: false }, comment: e.target.value }
+                                }))}
+                                rows={3}
+                                className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${reviewAttemptedSubmit && currentReview.selected && !currentReview.comment ? 'border-red-300' : 'border-gray-300'}`}
+                                maxLength={1000}
+                              />
+                              {reviewAttemptedSubmit && currentReview.selected && !currentReview.comment && (
+                                <p className="text-xs text-red-600 mt-1">Kommentar ist erforderlich.</p>
+                              )}
+                            </div>
+                            
+                            <div>
+                              <label className="flex items-center gap-2">
+                                <input
+                                  type="checkbox"
+                                  checked={currentReview.isAnonymous}
+                                  onChange={(e) => setReviews(prev => ({
+                                    ...prev,
+                                    [itemKey]: { ...prev[itemKey] || { rating: 5, title: '', comment: '', isAnonymous: false, selected: false }, isAnonymous: e.target.checked }
+                                  }))}
+                                  className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                                />
+                                <span className="text-sm font-medium text-slate-700">
+                                  Anonym bewerten
+                                </span>
+                              </label>
+                              <p className="text-xs text-slate-500 mt-1">
+                                Wenn aktiviert, wird "Anonymer Kunde" statt deinem Namen angezeigt
+                              </p>
+                            </div>
                           </div>
-                        </div>
+                        )}
                       </div>
                     );
                     });
@@ -989,7 +1244,7 @@ export default function OrdersPage() {
                     
                     <div className="flex justify-end gap-2">
                       <button
-                        onClick={() => { setReviewModalOrderId(null); setReviewError(null); }}
+                        onClick={() => { setReviewModalOrderId(null); setReviewError(null); setReviewAttemptedSubmit(false); }}
                         className="px-4 py-2 text-sm rounded-lg bg-slate-100 text-slate-700 hover:bg-slate-200"
                       >
                         Abbrechen
@@ -998,6 +1253,7 @@ export default function OrdersPage() {
                         disabled={reviewSubmitting}
                         onClick={async () => {
                           setReviewError(null);
+                          setReviewAttemptedSubmit(true);
                           const currentOrder = orders.find(o => o._id === reviewModalOrderId);
                           if (!currentOrder) {
                             setReviewError('Bestellung nicht gefunden');
@@ -1005,7 +1261,7 @@ export default function OrdersPage() {
                           }
                           
                           const orderReviews = Object.entries(reviews)
-                            .filter(([key]) => key.startsWith(reviewModalOrderId))
+                            .filter(([key, review]) => key.startsWith(reviewModalOrderId) && (review as any).selected)
                             .map(([key, review]) => {
                               // Extract productId from key format: "orderId-productId"
                               const productId = key.substring(key.indexOf('-') + 1);
@@ -1018,22 +1274,26 @@ export default function OrdersPage() {
                               return {
                                 productId: item.productId,
                                 orderId: currentOrder._id,
-                                rating: review.rating,
-                                title: review.title,
-                                comment: review.comment,
-                                isAnonymous: review.isAnonymous,
+                                rating: (review as any).rating,
+                                title: (review as any).title,
+                                comment: (review as any).comment,
+                                isAnonymous: (review as any).isAnonymous,
                                 bonusPointsAwarded: Math.floor((item.price / 100) * 1.75)
                               };
                             })
                             .filter(review => review !== null);
                           
                           if (orderReviews.length === 0) {
-                            setReviewError('Bitte gib mindestens eine Bewertung ab.');
+                            setReviewError('Bitte wähle mindestens ein Produkt aus und fülle alle Felder aus.');
                             return;
                           }
                           
-                          // The reviews are valid if we have any reviews with ratings
-                          // No need for additional validation since rating is always present (default 5)
+                          // Validate required fields (title/comment) for selected reviews
+                          const invalid = (orderReviews as any[]).some(r => !r.title || !r.comment || !r.rating || r.rating < 1 || r.rating > 5);
+                          if (invalid) {
+                            setReviewError('Bitte fülle alle erforderlichen Felder für die ausgewählten Produkte aus.');
+                            return;
+                          }
                           
                           try {
                             setReviewSubmitting(true);
@@ -1060,6 +1320,7 @@ export default function OrdersPage() {
                               });
                               
                               setReviewModalOrderId(null);
+                              setReviewAttemptedSubmit(false);
                               alert('Bewertungen erfolgreich abgegeben! Du erhältst Bonuspunkte nach der Überprüfung.');
                             }
                           } catch (e) {

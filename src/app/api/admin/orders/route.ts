@@ -50,6 +50,8 @@ export async function GET(request: NextRequest) {
         { 'shippingAddress.street': { $regex: search, $options: 'i' } },
         { 'shippingAddress.city': { $regex: search, $options: 'i' } },
         { 'trackingNumber': { $regex: search, $options: 'i' } },
+        { guestEmail: { $regex: search, $options: 'i' } },
+        { guestName: { $regex: search, $options: 'i' } },
         ...(userIds.length > 0 ? [{ userId: { $in: userIds } }] : [])
       ];
     }
@@ -67,10 +69,10 @@ export async function GET(request: NextRequest) {
     // Format orders with user information
     const formattedOrders = orders.map(order => ({
       ...order,
-      userEmail: (order.userId as any)?.email || 'Unbekannt',
+      userEmail: (order.userId as any)?.email || order.guestEmail || 'Unbekannt',
       userName: order.userId ? 
         `${(order.userId as any).firstName || ''} ${(order.userId as any).lastName || ''}`.trim() || 'Unbekannt' : 
-        'Unbekannt'
+        order.guestName || 'Gast'
     }));
 
     return NextResponse.json({

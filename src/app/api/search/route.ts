@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { connectToDatabase } from '@/lib/mongodb';
 import { Product } from '@/lib/models/Product';
 import Category from '@/lib/models/Category';
+import Brand from '@/lib/models/Brand';
 
 export async function GET(request: NextRequest) {
   try {
@@ -61,21 +62,22 @@ export async function GET(request: NextRequest) {
     // Combine all matching category IDs
     const allMatchingCategoryIds = [...matchingCategoryIds, ...matchingSubcategoryIds];
     
-    // First, get all products that match in title, tags, category, subcategory, or belong to matching categories
-    // Use flexible search only for categories/subcategories, exact search for product fields
+    // First, get all products that match in title, tags, category, subcategory, brand, or belong to matching categories
+    // Use flexible search only for categories/subategories, exact search for product fields
     const primaryProducts = await Product.find({
       $or: [
         { title: { $regex: searchRegex } },
         { tags: { $in: [searchRegex] } },
         { category: { $regex: searchRegex } },
         { subcategory: { $regex: searchRegex } },
+        { brand: { $regex: searchRegex } },
         { categoryId: { $in: allMatchingCategoryIds } },
         { subcategoryId: { $in: allMatchingCategoryIds } },
         { subcategoryIds: { $in: allMatchingCategoryIds } }
       ]
       // Show all products, including out of stock ones
     })
-    .select('_id slug title price offerPrice isOnSale isTopSeller inStock stockQuantity images imageSizes tags categoryId subcategoryId subcategoryIds variations createdAt updatedAt')
+    .select('_id slug title price offerPrice isOnSale isTopSeller inStock stockQuantity images imageSizes tags brand categoryId subcategoryId subcategoryIds variations createdAt updatedAt')
     .limit(limit)
     .lean();
 
@@ -107,7 +109,7 @@ export async function GET(request: NextRequest) {
       ]
       // Show all products, including out of stock ones
     })
-    .select('_id slug title price offerPrice isOnSale isTopSeller inStock stockQuantity images imageSizes tags categoryId subcategoryId subcategoryIds variations createdAt updatedAt')
+    .select('_id slug title price offerPrice isOnSale isTopSeller inStock stockQuantity images imageSizes tags brand categoryId subcategoryId subcategoryIds variations createdAt updatedAt')
     .limit(5) // Limit description-only matches to 5
     .lean() : [];
 
@@ -124,6 +126,19 @@ export async function GET(request: NextRequest) {
     .select('name slug description _id parentId image imageSizes')
     .lean();
 
+    // Also search in brand names
+    const brandSearch = await Brand.find({
+      isActive: true,
+      $or: [
+        { name: { $regex: searchRegex } },
+        { name: { $regex: flexibleSearchRegex } },
+        { slug: { $regex: searchRegex } },
+        { slug: { $regex: flexibleSearchRegex } }
+      ]
+    })
+    .select('name slug description _id image imageSizes')
+    .lean();
+
     // Get products that belong to matching categories
     const categoryIds = categorySearch.map(cat => cat._id);
     const productsFromCategories = await Product.find({
@@ -134,12 +149,20 @@ export async function GET(request: NextRequest) {
       ]
       // Show all products, including out of stock ones
     })
-    .select('_id slug title price offerPrice isOnSale isTopSeller inStock stockQuantity images imageSizes tags categoryId subcategoryId subcategoryIds variations createdAt updatedAt')
+    .select('_id slug title price offerPrice isOnSale isTopSeller inStock stockQuantity images imageSizes tags brand categoryId subcategoryId subcategoryIds variations createdAt updatedAt')
+    .limit(limit)
+    .lean();
+
+    // Also get products that belong to matching brands
+    const productsFromBrands = await Product.find({
+      brand: { $in: brandSearch.map(brand => brand.slug) }
+    })
+    .select('_id slug title price offerPrice isOnSale isTopSeller inStock stockQuantity images imageSizes tags brand categoryId subcategoryId subcategoryIds variations createdAt updatedAt')
     .limit(limit)
     .lean();
 
     // Combine and deduplicate primary results (excluding description-only matches)
-    const allPrimaryProducts = [...primaryProducts, ...productsFromCategories];
+    const allPrimaryProducts = [...primaryProducts, ...productsFromCategories, ...productsFromBrands];
     const uniquePrimaryProducts = allPrimaryProducts.filter((product, index, self) => 
       index === self.findIndex(p => (p as any)._id.toString() === (product as any)._id.toString())
     );
@@ -390,6 +413,48 @@ export async function GET(request: NextRequest) {
       return nameA.localeCompare(nameB);
     });
 
+    // Sort brands with same logic as categories
+    const sortedBrands = brandSearch.sort((a, b) => {
+      const queryLower = query.toLowerCase();
+      const nameA = a.name.toLowerCase();
+      const nameB = b.name.toLowerCase();
+      const descA = (a.description || '').toLowerCase();
+      const descB = (b.description || '').toLowerCase();
+      
+      // Check for flexible matches
+      const hasFlexibleNameA = flexibleSearchRegex.test(nameA);
+      const hasFlexibleNameB = flexibleSearchRegex.test(nameB);
+      const hasFlexibleDescA = flexibleSearchRegex.test(descA);
+      const hasFlexibleDescB = flexibleSearchRegex.test(descB);
+      
+      // Exact name match gets highest priority
+      if (nameA === queryLower && nameB !== queryLower) return -1;
+      if (nameB === queryLower && nameA !== queryLower) return 1;
+      
+      // Name starts with query gets second priority
+      if (nameA.startsWith(queryLower) && !nameB.startsWith(queryLower)) return -1;
+      if (nameB.startsWith(queryLower) && !nameA.startsWith(queryLower)) return 1;
+      
+      // Name contains query gets third priority
+      if (nameA.includes(queryLower) && !nameB.includes(queryLower)) return -1;
+      if (nameB.includes(queryLower) && !nameA.includes(queryLower)) return 1;
+      
+      // Flexible name match gets fourth priority
+      if (hasFlexibleNameA && !hasFlexibleNameB) return -1;
+      if (hasFlexibleNameB && !hasFlexibleNameA) return 1;
+      
+      // Description contains query gets fifth priority
+      if (descA.includes(queryLower) && !descB.includes(queryLower)) return -1;
+      if (descB.includes(queryLower) && !descA.includes(queryLower)) return 1;
+      
+      // Flexible description match gets sixth priority
+      if (hasFlexibleDescA && !hasFlexibleDescB) return -1;
+      if (hasFlexibleDescB && !hasFlexibleDescA) return 1;
+      
+      // Finally by name alphabetically
+      return nameA.localeCompare(nameB);
+    });
+
     const formattedCategories = sortedCategories.slice(0, 5).map(category => {
       // Get parent category information if this is a subcategory
       let parentCategory = null;
@@ -415,21 +480,35 @@ export async function GET(request: NextRequest) {
       };
     });
 
-    // Combine results: primary products first, then categories, then description-only products
-    const allResults = [...formattedPrimaryProducts, ...formattedCategories, ...formattedDescriptionProducts];
+    const formattedBrands = sortedBrands.slice(0, 3).map(brand => {
+      return {
+        _id: (brand as any)._id.toString(),
+        slug: brand.slug,
+        name: brand.name,
+        description: brand.description,
+        imageSizes: brand.imageSizes,
+        type: 'brand'
+      };
+    });
+
+    // Combine results: primary products first, then categories, then brands, then description-only products
+    const allResults = [...formattedPrimaryProducts, ...formattedCategories, ...formattedBrands, ...formattedDescriptionProducts];
 
     // Count total products found (before limiting)
     const totalProductsFound = uniquePrimaryProducts.length + filteredDescriptionProducts.length;
     const totalCategoriesFound = categorySearch.length;
+    const totalBrandsFound = brandSearch.length;
 
     return NextResponse.json({ 
       products: formattedPrimaryProducts,
       categories: formattedCategories,
+      brands: formattedBrands,
       descriptionProducts: formattedDescriptionProducts, // New field for "Das könnte Sie auch interessieren"
       allResults: allResults,
       total: allResults.length,
       totalProductsFound: totalProductsFound,
       totalCategoriesFound: totalCategoriesFound,
+      totalBrandsFound: totalBrandsFound,
       query: query.trim()
     });
 

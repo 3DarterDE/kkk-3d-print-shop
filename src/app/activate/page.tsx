@@ -37,18 +37,25 @@ function ActivatePageContent() {
     let cancelled = false;
     const go = async () => {
       try {
-        router.replace('/');
+        // Check if there's a returnTo parameter in the URL
+        const returnTo = searchParams.get('returnTo');
+        const destination = returnTo ? decodeURIComponent(returnTo) : '/';
+        router.replace(destination);
       } catch {}
       // Hard fallback after small delay in case SPA nav is blocked
       setTimeout(() => {
         if (!cancelled) {
-          try { window.location.assign('/'); } catch {}
+          try { 
+            const returnTo = searchParams.get('returnTo');
+            const destination = returnTo ? decodeURIComponent(returnTo) : '/';
+            window.location.assign(destination); 
+          } catch {}
         }
       }, 800);
     };
     go();
     return () => { cancelled = true; };
-  }, [success, router]);
+  }, [success, router, searchParams]);
 
   // Optional: simple cooldown timer UI state
   useEffect(() => {

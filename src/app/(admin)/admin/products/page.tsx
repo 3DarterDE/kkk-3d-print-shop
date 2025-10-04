@@ -321,7 +321,7 @@ export default function ProductsPage() {
       category: formData.category,
       categoryId: formData.category,
       subcategoryId: formData.subcategory || undefined,
-      subcategoryIds: formData.subcategories,
+      subcategoryIds: formData.subcategory ? [formData.subcategory] : [],
       brand: formData.brand || undefined,
       tags: formData.tags.split(",").map(tag => tag.trim()).filter(tag => tag),
       inStock: formData.inStock,
@@ -843,13 +843,13 @@ export default function ProductsPage() {
                   Kategorie
                 </th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Marke
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Preis
                 </th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Status
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Bestseller
                 </th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Aktionen
@@ -907,7 +907,44 @@ export default function ProductsPage() {
                     {product.sku || 'N/A'}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                    {categories.find(c => c._id === product.categoryId)?.name || product.category || 'Unknown'}
+                    {(() => {
+                      // Find main category
+                      const mainCategory = categories.find(c => c._id === product.categoryId);
+                      const mainCategoryName = mainCategory?.name || product.category || 'Unknown';
+                      
+                      // Find subcategory
+                      let subcategoryName = '';
+                      if ((product as any).subcategoryIds && (product as any).subcategoryIds.length > 0) {
+                        // Multiple subcategories - find first one
+                        const subcategory = mainCategory?.subcategories?.find(sub => 
+                          sub._id === (product as any).subcategoryIds[0]
+                        );
+                        if (subcategory) subcategoryName = subcategory.name;
+                      } else if ((product as any).subcategoryId) {
+                        // Single subcategory
+                        const subcategory = mainCategory?.subcategories?.find(sub => 
+                          sub._id === (product as any).subcategoryId
+                        );
+                        if (subcategory) subcategoryName = subcategory.name;
+                      }
+                      
+                      // Display main category and subcategory
+                      return (
+                        <div className="flex flex-col">
+                          <span className="font-medium">{mainCategoryName}</span>
+                          {subcategoryName && (
+                            <span className="text-xs text-gray-500">{subcategoryName}</span>
+                          )}
+                        </div>
+                      );
+                    })()}
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                    {(() => {
+                      // Find brand by slug
+                      const brand = brands.find(b => b.slug === product.brand);
+                      return brand ? brand.name : (product.brand || '-');
+                    })()}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                     <div className="flex flex-col">
@@ -931,17 +968,8 @@ export default function ProductsPage() {
                       {product.isActive ? 'Aktiv' : 'Inaktiv'}
                     </button>
                   </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                      product.isTopSeller 
-                        ? 'bg-yellow-100 text-yellow-800' 
-                        : 'bg-gray-100 text-gray-800'
-                    }`}>
-                      {product.isTopSeller ? 'Ja' : 'Nein'}
-                    </span>
-                  </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                    <div className="flex space-x-2">
+                    <div className="flex flex-col space-y-1">
                       <button
                         onClick={() => handleEdit(product)}
                         className="text-blue-600 hover:text-blue-900"
@@ -1272,7 +1300,7 @@ export default function ProductsPage() {
                                 className="w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500"
                                 disabled={!formData.category}
                               >
-                                <option value="">Unterkategorie wählen</option>
+                                <option value="">--- Keine Unterkategorie ---</option>
                                 {categories
                                   .find(cat => cat._id === formData.category)
                                   ?.subcategories?.map((subcategory) => (
@@ -1293,7 +1321,7 @@ export default function ProductsPage() {
                                 onChange={(e) => setFormData({ ...formData, brand: e.target.value })}
                                 className="w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500"
                               >
-                                <option value="">Keine Marke</option>
+                                <option value="">--- Keine Marke ---</option>
                                 {brands.map((brand) => (
                                   <option key={brand._id} value={brand.slug}>{brand.name}</option>
                                 ))}

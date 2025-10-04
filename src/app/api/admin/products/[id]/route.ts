@@ -88,8 +88,33 @@ export async function PUT(
       }
     }
     
+    // Ensure subcategory fields are properly handled
+    const updateData = { ...body };
+    
+    // Handle subcategory removal explicitly
+    if (updateData.subcategoryId === null || updateData.subcategoryId === undefined || updateData.subcategoryId === '') {
+      updateData.subcategoryId = undefined;
+      updateData.subcategoryIds = [];
+      // Also ensure categoryId-only products don't have subcategory
+      if (!updateData.$unset) updateData.$unset = {};
+      updateData.$unset.subcategoryId = ""; // This explicitly removes the subcategoryId field
+    }
+    
+    // If subcategoryId has a value but subcategoryIds is empty, populate subcategoryIds
+    if (updateData.subcategoryId && updateData.subcategoryId !== '' && 
+        (!updateData.subcategoryIds || updateData.subcategoryIds.length === 0)) {
+      updateData.subcategoryIds = [updateData.subcategoryId];
+    }
+    
+    // Handle brand removal explicitly
+    if (updateData.brand === null || updateData.brand === undefined || updateData.brand === '') {
+      updateData.brand = undefined;
+      if (!updateData.$unset) updateData.$unset = {};
+      updateData.$unset.brand = ""; // This explicitly removes the brand field
+    }
+    
     // Update product in database
-    const product = await Product.findByIdAndUpdate(id, body, { new: true });
+    const product = await Product.findByIdAndUpdate(id, updateData, { new: true });
     
     // Invalidate cache for shop page and top sellers APIs
     revalidatePath('/shop');

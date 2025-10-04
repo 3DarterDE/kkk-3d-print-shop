@@ -48,8 +48,9 @@ export default function Breadcrumb({ className = "", category: propCategory, sub
       'elektronische-dartboards': 'Elektronische Dartboards',
       'steel-dartboards': 'Steel Dartboards',
       'soft-dartboards': 'Soft Dartboards',
-      'dartpfeile-steel': 'Steel Dartpfeile',
-      'dartpfeile-soft': 'Soft Dartpfeile'
+      'dartpfeile-steel': 'Steeldart',
+      'dartpfeile-soft': 'Soft Dartpfeile',
+      'steeldart': 'Steeldart'
     };
     return subcategoryNames[slug] || slug.charAt(0).toUpperCase() + slug.slice(1).replace(/-/g, ' ');
   };

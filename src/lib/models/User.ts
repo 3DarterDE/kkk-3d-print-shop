@@ -9,7 +9,6 @@ export interface IUser {
   lastName?: string;
   salutation?: 'Herr' | 'Frau' | 'Divers';
   phone?: string;
-  dateOfBirth?: Date;
   address?: {
     firstName?: string;
     lastName?: string;
@@ -32,12 +31,14 @@ export interface IUser {
     postalCode?: string;
     country?: string;
   };
+  useSameAddress?: boolean;
   paymentMethod?: 'card' | 'paypal' | 'bank';
   newsletterSubscribed?: boolean;
   newsletterSubscribedAt?: Date;
   isAdmin: boolean;
   isVerified?: boolean;
   bonusPoints: number; // Bonuspunkte-Guthaben des Users
+  welcomeEmailSent?: boolean;
   createdAt?: Date;
   updatedAt?: Date;
 }
@@ -66,9 +67,9 @@ const UserSchema = new Schema<IUser>({
     default: null
   },
   phone: { type: String },
-  dateOfBirth: { type: Date },
   address: AddressSchema,
   billingAddress: AddressSchema,
+  useSameAddress: { type: Boolean, default: false },
   paymentMethod: {
     type: String,
     enum: ['card', 'paypal', 'bank'],
@@ -79,6 +80,7 @@ const UserSchema = new Schema<IUser>({
   isAdmin: { type: Boolean, default: false, index: true },
   isVerified: { type: Boolean, default: false },
   bonusPoints: { type: Number, default: 0 }, // Bonuspunkte-Guthaben, startet bei 0
+  welcomeEmailSent: { type: Boolean, default: false },
 }, { timestamps: true });
 
 if (mongoose.models.User) {

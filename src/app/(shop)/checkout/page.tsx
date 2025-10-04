@@ -1,8 +1,45 @@
 import CheckoutClient, { CheckoutFormData } from "./CheckoutClient";
-import { requireUser } from "@/lib/auth";
+import { auth0 } from "@/lib/auth0";
+import { connectToDatabase } from "@/lib/mongodb";
+import User from "@/lib/models/User";
 
 export default async function CheckoutPage() {
-  const { user } = await requireUser();
+  const session = await auth0.getSession();
+  let user = null;
+  
+  // Load full user data from database if session exists
+  if (session?.user?.sub) {
+    try {
+      await connectToDatabase();
+      user = await User.findOne({ auth0Id: session.user.sub }).lean();
+    } catch (error) {
+      console.error('Error loading user data:', error);
+    }
+  }
+
+  const shippingAddress = {
+    firstName: user?.address?.firstName || user?.firstName || '',
+    lastName: user?.address?.lastName || user?.lastName || '',
+    company: user?.address?.company || '',
+    street: user?.address?.street || '',
+    houseNumber: user?.address?.houseNumber || '',
+    addressLine2: user?.address?.addressLine2 || '',
+    city: user?.address?.city || '',
+    postalCode: user?.address?.postalCode || '',
+    country: user?.address?.country || 'Deutschland',
+  };
+
+  const billingAddress = {
+    firstName: user?.billingAddress?.firstName || '',
+    lastName: user?.billingAddress?.lastName || '',
+    company: user?.billingAddress?.company || '',
+    street: user?.billingAddress?.street || '',
+    houseNumber: user?.billingAddress?.houseNumber || '',
+    addressLine2: user?.billingAddress?.addressLine2 || '',
+    city: user?.billingAddress?.city || '',
+    postalCode: user?.billingAddress?.postalCode || '',
+    country: user?.billingAddress?.country || 'Deutschland',
+  };
 
   const initialFormData: CheckoutFormData = {
     firstName: user?.firstName || '',
@@ -10,30 +47,10 @@ export default async function CheckoutPage() {
     salutation: user?.salutation || 'Herr',
     email: user?.email || '',
     phone: user?.phone || '',
-    shippingAddress: {
-      firstName: user?.address?.firstName || user?.firstName || '',
-      lastName: user?.address?.lastName || user?.lastName || '',
-      company: user?.address?.company || '',
-      street: user?.address?.street || '',
-      houseNumber: user?.address?.houseNumber || '',
-      addressLine2: user?.address?.addressLine2 || '',
-      city: user?.address?.city || '',
-      postalCode: user?.address?.postalCode || '',
-      country: user?.address?.country || 'Deutschland',
-    },
-    billingAddress: {
-      firstName: user?.billingAddress?.firstName || user?.address?.firstName || user?.firstName || '',
-      lastName: user?.billingAddress?.lastName || user?.address?.lastName || user?.lastName || '',
-      company: user?.billingAddress?.company || user?.address?.company || '',
-      street: user?.billingAddress?.street || user?.address?.street || '',
-      houseNumber: user?.billingAddress?.houseNumber || user?.address?.houseNumber || '',
-      addressLine2: user?.billingAddress?.addressLine2 || user?.address?.addressLine2 || '',
-      city: user?.billingAddress?.city || user?.address?.city || '',
-      postalCode: user?.billingAddress?.postalCode || user?.address?.postalCode || '',
-      country: user?.billingAddress?.country || user?.address?.country || 'Deutschland',
-    },
+    shippingAddress,
+    billingAddress,
     paymentMethod: user?.paymentMethod || 'card',
-    useSameAddress: false,
+    useSameAddress: user?.useSameAddress || false,
   };
 
   const hasContactData = Boolean(initialFormData.firstName && initialFormData.lastName && initialFormData.email);
@@ -43,12 +60,16 @@ export default async function CheckoutPage() {
     initialFormData.shippingAddress.city &&
     initialFormData.shippingAddress.postalCode
   );
-  const hasBillingAddressData = Boolean(
+  
+  // Check if billing address is needed (only if not using same address)
+  const needsBillingAddress = !initialFormData.useSameAddress;
+  const hasBillingAddressData = !needsBillingAddress || Boolean(
     initialFormData.billingAddress.street &&
     initialFormData.billingAddress.houseNumber &&
     initialFormData.billingAddress.city &&
     initialFormData.billingAddress.postalCode
   );
+  
   const hasPaymentData = Boolean(initialFormData.paymentMethod);
 
   const initialStep = hasContactData && hasShippingAddressData && hasBillingAddressData && hasPaymentData

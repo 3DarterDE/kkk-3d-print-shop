@@ -1,8 +1,60 @@
+"use client";
+
 import Link from "next/link";
 import Logo from "./Logo";
 import ScrollAnimation from "@/components/ScrollAnimation";
+import { useState } from "react";
 
 export default function Footer() {
+  const [email, setEmail] = useState('');
+  const [firstName, setFirstName] = useState('');
+  const [lastName, setLastName] = useState('');
+  const [status, setStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle');
+  const [message, setMessage] = useState('');
+
+  const handleNewsletterSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    
+    if (!email) {
+      setMessage('Bitte geben Sie eine E-Mail-Adresse ein.');
+      setStatus('error');
+      return;
+    }
+
+    setStatus('loading');
+    setMessage('');
+
+    try {
+      const response = await fetch('/api/newsletter/guest-subscribe', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          email: email.toLowerCase(),
+          firstName: firstName.trim() || undefined,
+          lastName: lastName.trim() || undefined,
+        }),
+      });
+
+      const data = await response.json();
+
+      if (response.ok) {
+        setStatus('success');
+        setMessage('Erfolgreich für den Newsletter angemeldet!');
+        setEmail('');
+        setFirstName('');
+        setLastName('');
+      } else {
+        setStatus('error');
+        setMessage(data.error || 'Fehler beim Anmelden für den Newsletter.');
+      }
+    } catch (error) {
+      setStatus('error');
+      setMessage('Netzwerkfehler. Bitte versuchen Sie es erneut.');
+    }
+  };
+
   return (
     <footer className="mt-12 bg-gray-800 relative">
       {/* Blauer Verlauf am oberen Rand */}
@@ -112,16 +164,61 @@ export default function Footer() {
             <p className="text-sm text-gray-300 mb-4">
               Bleiben Sie über neue Produkte und Angebote informiert.
             </p>
-            <div className="flex mb-6">
-              <input 
-                type="email" 
-                placeholder="Ihre E-Mail" 
-                className="flex-1 px-3 py-2 bg-gray-700 border border-gray-600 rounded-l-md text-sm text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              />
-              <button className="px-4 py-2 bg-gradient-to-r from-blue-600 to-blue-700 text-white rounded-r-md text-sm hover:from-blue-700 hover:to-blue-800 transition-all duration-300">
-                Anmelden
-              </button>
-            </div>
+            
+            <form onSubmit={handleNewsletterSubmit} className="space-y-3 mb-4">
+              <div className="flex gap-2">
+                <input 
+                  type="text" 
+                  placeholder="Vorname (optional)" 
+                  value={firstName}
+                  onChange={(e) => setFirstName(e.target.value)}
+                  className="flex-1 px-3 py-2 bg-gray-700 border border-gray-600 rounded-md text-sm text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                />
+                <input 
+                  type="text" 
+                  placeholder="Nachname (optional)" 
+                  value={lastName}
+                  onChange={(e) => setLastName(e.target.value)}
+                  className="flex-1 px-3 py-2 bg-gray-700 border border-gray-600 rounded-md text-sm text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                />
+              </div>
+              <div className="flex">
+                <input 
+                  type="email" 
+                  placeholder="Ihre E-Mail" 
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  required
+                  className="flex-1 px-3 py-2 bg-gray-700 border border-gray-600 rounded-l-md text-sm text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                />
+                <button 
+                  type="submit"
+                  disabled={status === 'loading'}
+                  className="px-4 py-2 bg-gradient-to-r from-blue-600 to-blue-700 text-white rounded-r-md text-sm hover:from-blue-700 hover:to-blue-800 transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {status === 'loading' ? 'Wird verarbeitet...' : 'Anmelden'}
+                </button>
+              </div>
+            </form>
+
+            {/* Status Message */}
+            {message && (
+              <div className={`text-sm mb-4 p-2 rounded-md ${
+                status === 'success' 
+                  ? 'bg-green-900/30 text-green-300 border border-green-700' 
+                  : 'bg-red-900/30 text-red-300 border border-red-700'
+              }`}>
+                {message}
+              </div>
+            )}
+
+            <p className="text-xs text-gray-400 mb-6">
+              Mit der Anmeldung akzeptieren Sie unsere{' '}
+              <Link href="/datenschutz" className="text-blue-400 hover:text-blue-300 underline">
+                Datenschutzerklärung
+              </Link>
+              .
+            </p>
             
             <div className="border-t border-gray-700 pt-4">
               <h4 className="font-medium text-white mb-2">Kontakt</h4>

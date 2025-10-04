@@ -30,6 +30,7 @@ interface Order {
   shippingAddress: {
     firstName?: string;
     lastName?: string;
+    company?: string;
     street: string;
     houseNumber: string;
     addressLine2?: string;
@@ -40,6 +41,7 @@ interface Order {
   billingAddress?: {
     firstName?: string;
     lastName?: string;
+    company?: string;
     street: string;
     houseNumber: string;
     addressLine2?: string;
@@ -62,6 +64,8 @@ interface Order {
   updatedAt: string;
   userEmail?: string;
   userName?: string;
+  guestEmail?: string;
+  guestName?: string;
 }
 
 interface OrdersResponse {
@@ -90,6 +94,7 @@ export default function AdminOrdersPage() {
     notes: string;
   }>({ trackingNumber: '', shippingProvider: 'dhl', notes: '' });
   const [sendingEmail, setSendingEmail] = useState(false);
+  const [deletingGuestData, setDeletingGuestData] = useState(false);
 
   const limit = 20;
 
@@ -275,6 +280,36 @@ export default function AdminOrdersPage() {
     }
   };
 
+  const deleteGuestData = async (order: Order) => {
+    if (!order.guestEmail) {
+      alert('Dies ist keine Gastbestellung oder bereits gelöscht');
+      return;
+    }
+
+    if (!confirm(`Möchten Sie die Daten für Gastbestellung ${order.orderNumber} wirklich löschen?\n\nDies wird alle persönlichen Daten anonymisieren.`)) {
+      return;
+    }
+
+    setDeletingGuestData(true);
+    try {
+      const response = await fetch(`/api/admin/orders/${order._id}/delete-guest-data`, {
+        method: 'POST',
+      });
+
+      if (response.ok) {
+        alert('Gastbestellungsdaten erfolgreich anonymisiert!');
+        fetchOrders(); // Refresh orders
+      } else {
+        const error = await response.json();
+        alert(`Fehler beim Löschen der Daten: ${error.error}`);
+      }
+    } catch (error) {
+      console.error('Error deleting guest data:', error);
+      alert('Fehler beim Löschen der Daten');
+    } finally {
+      setDeletingGuestData(false);
+    }
+  };
 
   const copyToClipboard = async (text: string, label: string) => {
     try {
@@ -454,58 +489,80 @@ export default function AdminOrdersPage() {
   return (
     <div className="min-h-screen bg-gray-50">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {/* Header */}
+        {/* Header mit verbessertem Design */}
         <div className="mb-8">
           <div className="flex items-center justify-between">
             <div>
-              <h1 className="text-3xl font-bold text-gray-900">Bestellungen verwalten</h1>
-              <p className="mt-2 text-gray-600">
-                {totalOrders} Bestellungen gefunden
-                {statusFilter !== 'all' && ` (Status: ${getStatusInfo(statusFilter).text})`}
-              </p>
+              <div className="flex items-center space-x-3 mb-2">
+                <svg className="w-8 h-8 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                </svg>
+                <h1 className="text-3xl font-bold text-gray-900">Bestellverwaltung</h1>
+              </div>
+              <div className="flex items-center space-x-4 text-sm text-gray-600">
+                <div className="flex items-center space-x-1">
+                  <span className="font-semibold text-lg text-blue-600">{totalOrders}</span>
+                  <span>Bestellungen</span>
+                </div>
+                {statusFilter !== 'all' && (
+                  <div className="flex items-center space-x-1">
+                    <span className="font-medium">Filter:</span>
+                    <span className="px-2 py-1 bg-blue-100 text-blue-700 rounded-md text-xs font-medium">
+                      {getStatusInfo(statusFilter).icon} {getStatusInfo(statusFilter).text}
+                    </span>
+                  </div>
+                )}
+              </div>
             </div>
             <Link
               href="/admin/dashboard"
-              className="inline-flex items-center px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50"
+              className="inline-flex items-center px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 transition-colors"
             >
-              ← Zurück zum Dashboard
+              <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+              </svg>
+              Dashboard
             </Link>
           </div>
         </div>
 
-        {/* Search and Filter */}
-        <div className="bg-white rounded-lg shadow p-6 mb-6">
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <form onSubmit={handleSearch} className="md:col-span-2">
-              <div className="flex">
+        {/* Verbesserte Such- und Filter-Sektion */}
+        <div className="bg-white rounded-lg shadow-md border border-gray-100 p-6 mb-6">
+          <div className="grid grid-cols-1 lg:grid-cols-4 gap-4">
+            <form onSubmit={handleSearch} className="lg:col-span-3">
+              <div className="relative">
+                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                  <svg className="h-5 w-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                  </svg>
+                </div>
                 <input
                   type="text"
                   placeholder="Suche nach Bestellnummer, Kunde oder E-Mail..."
                   value={searchTerm}
                   onChange={handleSearchInputChange}
-                  className="flex-1 px-3 py-2 border border-gray-300 rounded-l-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  className="block w-full pl-10 pr-3 py-3 border border-gray-300 rounded-lg leading-5 bg-white placeholder-gray-500 focus:outline-none focus:placeholder-gray-400 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                 />
-                <button
-                  type="submit"
-                  className="px-4 py-2 bg-blue-600 text-white rounded-r-md hover:bg-blue-700 focus:ring-2 focus:ring-blue-500"
-                >
-                  Suchen
-                </button>
               </div>
             </form>
             
-            <div>
+            <div className="relative">
+              <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                <svg className="h-5 w-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" />
+                </svg>
+              </div>
               <select
                 value={statusFilter}
                 onChange={handleStatusFilterChange}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                className="block w-full pl-10 pr-10 py-3 border border-gray-300 rounded-lg bg-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500 appearance-none"
               >
                 <option value="all">Alle Bestellungen</option>
-                <option value="pending">Nur ausstehende</option>
-                <option value="processing">In Bearbeitung</option>
-                <option value="shipped">Versandt</option>
-                <option value="delivered">Geliefert</option>
-                <option value="cancelled">Storniert</option>
+                <option value="pending">⏳ Ausstehend</option>
+                <option value="processing">⚙️ In Bearbeitung</option>
+                <option value="shipped">🚚 Versandt</option>
+                <option value="delivered">✅ Geliefert</option>
+                <option value="cancelled">❌ Storniert</option>
               </select>
             </div>
           </div>
@@ -530,28 +587,63 @@ export default function AdminOrdersPage() {
           ) : (
             <div className="overflow-x-auto">
               <table className="min-w-full divide-y divide-gray-200">
-                <thead className="bg-gray-50">
+                <thead className="bg-gradient-to-r from-gray-50 to-gray-100">
                   <tr>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Bestellung
+                    <th className="px-6 py-4 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">
+                      <div className="flex items-center space-x-2">
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                        </svg>
+                        <span>Bestellung</span>
+                      </div>
                     </th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Kunde
+                    <th className="px-6 py-4 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">
+                      <div className="flex items-center space-x-2">
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                        </svg>
+                        <span>Kunde</span>
+                      </div>
                     </th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Datum
+                    <th className="px-6 py-4 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">
+                      <div className="flex items-center space-x-2">
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                        </svg>
+                        <span>Datum</span>
+                      </div>
                     </th>
-                    <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Betrag
+                    <th className="px-6 py-4 text-right text-xs font-semibold text-gray-700 uppercase tracking-wider">
+                      <div className="flex items-center justify-end space-x-2">
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1" />
+                        </svg>
+                        <span>Betrag</span>
+                      </div>
                     </th>
-                    <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Status
+                    <th className="px-6 py-4 text-center text-xs font-semibold text-gray-700 uppercase tracking-wider">
+                      <div className="flex items-center justify-center space-x-2">
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                        </svg>
+                        <span>Status</span>
+                      </div>
                     </th>
-                    <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Sendung
+                    <th className="px-6 py-4 text-center text-xs font-semibold text-gray-700 uppercase tracking-wider">
+                      <div className="flex items-center justify-center space-x-2">
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
+                        </svg>
+                        <span>Sendung</span>
+                      </div>
                     </th>
-                    <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Aktionen
+                    <th className="px-6 py-4 text-center text-xs font-semibold text-gray-700 uppercase tracking-wider">
+                      <div className="flex items-center justify-center space-x-2">
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 5v.01M12 12v.01M12 19v.01M12 6a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2z" />
+                        </svg>
+                        <span>Aktionen</span>
+                      </div>
                     </th>
                   </tr>
                 </thead>
@@ -562,35 +654,72 @@ export default function AdminOrdersPage() {
                     
                     return (
                       <React.Fragment key={order._id}>
-                        <tr className="hover:bg-gray-50">
-                          <td className="px-4 py-3">
-                            <div className="text-sm font-medium text-gray-900">
-                              {order.orderNumber}
-                            </div>
-                            <div className="text-xs text-gray-500">
-                              {order.items.length} Artikel
+                        <tr className="hover:bg-gray-50 transition-colors duration-200">
+                          <td className="px-6 py-4">
+                            <div className="flex items-center space-x-3">
+                              <div className="bg-blue-100 rounded-full p-2">
+                                <svg className="w-4 h-4 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                                </svg>
+                              </div>
+                              <div>
+                                <div className="text-sm font-semibold text-gray-900">
+                                  {order.orderNumber}
+                                </div>
+                                <div className="text-xs text-gray-500">
+                                  {order.items.length} Artikel{(order.items.length === 1 ? '' : 's')}
+                                </div>
+                              </div>
                             </div>
                           </td>
-                          <td className="px-4 py-3">
-                            <div className="text-sm text-gray-900">
-                              {order.userName || 'Unbekannt'}
-                            </div>
-                            <div className="text-xs text-gray-500">
-                              {order.userEmail || 'Keine E-Mail'}
+                          <td className="px-6 py-4">
+                            <div className="flex items-center space-x-3">
+                              <div className="bg-gray-100 rounded-full p-2">
+                                <svg className="w-4 h-4 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                                </svg>
+                              </div>
+                              <div>
+                                <div className="text-sm font-medium text-gray-900">
+                                  {order.userName || 'Unbekannt'}
+                                </div>
+                                <div className="text-xs text-gray-500">
+                                  {order.userEmail || 'Keine E-Mail'}
+                                </div>
+                              </div>
                             </div>
                           </td>
-                          <td className="px-4 py-3 text-sm text-gray-900">
-                            {formatDate(order.createdAt)}
+                          <td className="px-6 py-4">
+                            <div className="flex items-center space-x-2">
+                              <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                              </svg>
+                              <span className="text-sm text-gray-900">
+                                {formatDate(order.createdAt)}
+                              </span>
+                            </div>
                           </td>
-                          <td className="px-4 py-3 text-right">
-                            <div className="text-sm font-medium text-gray-900">
-                              {formatCurrency(order.total)}
+                          <td className="px-6 py-4 text-right">
+                            <div className="flex items-center justify-end space-x-2">
+                              <svg className="w-4 h-4 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1" />
+                              </svg>
+                              <div className="text-sm font-semibold text-gray-900">
+                                {formatCurrency(order.total)}
+                              </div>
                             </div>
                           </td>
                           <td className="px-4 py-3 text-center">
-                            <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${statusInfo.bg} ${statusInfo.color}`}>
-                              {statusInfo.icon} {statusInfo.text}
-                            </span>
+                            <div className="flex flex-col items-center text-xs">
+                              <span className={`inline-flex items-center px-2 py-1 rounded-full font-medium ${statusInfo.bg} ${statusInfo.color}`}>
+                                {statusInfo.icon} {statusInfo.text}
+                              </span>
+                              {order.status === 'delivered' && order.bonusPointsScheduledAt && !order.bonusPointsCredited && (
+                                <span className="mt-1 text-blue-700">
+                                  Punkte am {formatDate(order.bonusPointsScheduledAt)}
+                                </span>
+                              )}
+                            </div>
                           </td>
                           <td className="px-4 py-3 text-center">
                             <div className="space-y-1">
@@ -615,21 +744,24 @@ export default function AdminOrdersPage() {
                               )}
                             </div>
                           </td>
-                          <td className="px-4 py-3 text-center">
-                            <div className="flex flex-col space-y-1">
+                          <td className="px-6 py-4 text-center">
+                            <div className="flex flex-col space-y-2">
                               <button
                                 onClick={() => setExpandedOrder(isExpanded ? null : order._id)}
-                                className="text-xs text-blue-600 hover:text-blue-900 px-2 py-1 rounded hover:bg-blue-50"
+                                className="inline-flex items-center justify-center px-3 py-2 text-xs font-medium text-blue-600 bg-blue-50 rounded-lg hover:bg-blue-100 transition-colors duration-200"
                               >
+                                <svg className="w-3 h-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d={isExpanded ? "M19 9l-7 7-7-7" : "M9 5l7 7-7 7"} />
+                                </svg>
                                 {isExpanded ? 'Weniger' : 'Details'}
                               </button>
                               {order.status === 'delivered' ? (
                                 <button
                                   onClick={() => downloadInvoice(order.orderNumber)}
-                                  className="text-xs text-green-600 hover:text-green-900 px-2 py-1 rounded hover:bg-green-50 flex items-center justify-center gap-1"
+                                  className="inline-flex items-center justify-center px-3 py-2 text-xs font-medium text-green-600 bg-green-50 rounded-lg hover:bg-green-100 transition-colors duration-200"
                                   title="Rechnung herunterladen"
                                 >
-                                  <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <svg className="w-3 h-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                                   </svg>
                                   Rechnung
@@ -662,143 +794,174 @@ export default function AdminOrdersPage() {
                           <tr>
                             <td colSpan={7} className="px-0 py-0">
                               <div className="bg-gray-50 border-t border-gray-200">
-                                <div className="p-6 space-y-6">
-                                  {/* Order Items */}
-                                  <div className="w-full">
-                                    <h4 className="text-lg font-medium text-gray-900 mb-4">Bestellte Artikel</h4>
-                                    <div className="bg-white rounded-lg overflow-hidden">
-                                      <div className="overflow-x-auto">
-                                        <table className="min-w-full divide-y divide-gray-200">
-                                          <thead className="bg-gray-50">
-                                            <tr>
-                                              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-2/5">
-                                                Produkt
-                                              </th>
-                                              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-1/5">
-                                                Variationen
-                                              </th>
-                                              <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider w-1/10">
-                                                Menge
-                                              </th>
-                                              <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider w-1/10">
-                                                Einzelpreis
-                                              </th>
-                                              <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider w-1/10">
-                                                Gesamt
-                                              </th>
-                                            </tr>
-                                          </thead>
-                                          <tbody className="bg-white divide-y divide-gray-200">
-                                            {order.items.map((item, index) => (
-                                              <tr key={index} className="hover:bg-gray-50">
-                                                <td className="px-6 py-4 w-2/5">
-                                                  <div className="text-sm font-medium text-gray-900">{item.name}</div>
-                                                </td>
-                                                <td className="px-6 py-4 w-1/5">
-                                                  <div className="text-sm text-gray-600">
-                                                    {item.variations && Object.keys(item.variations).length > 0 ? (
-                                                      Object.entries(item.variations).map(([key, value]) => (
-                                                        <span key={key} className="block">
-                                                          {key}: {value}
-                                                        </span>
-                                                      ))
-                                                    ) : (
-                                                      <span className="text-gray-400 italic">Keine Variationen</span>
-                                                    )}
-                                                  </div>
-                                                </td>
-                                                <td className="px-6 py-4 text-center w-1/10">
-                                                  <span className="text-sm font-medium text-gray-900">{item.quantity}</span>
-                                                </td>
-                                                <td className="px-6 py-4 text-right w-1/10">
-                                                  <span className="text-sm text-gray-600">{formatCurrency(item.price / 100)}</span>
-                                                </td>
-                                                <td className="px-6 py-4 text-right w-1/10">
-                                                  <span className="text-sm font-semibold text-gray-900">
-                                                    {formatCurrency((item.price * item.quantity) / 100)}
-                                                  </span>
-                                                </td>
+                                <div className="p-6">
+                                  {/* Zwei-Spalten-Layout: Links Bestellte Artikel (50%), Rechts alles andere (50%) */}
+                                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                                  {/* Linke Spalte: Bestellte Artikel und Bestellübersicht (50%) */}
+                                  <div className="space-y-6">
+                                    {/* Bestellte Artikel */}
+                                    <div>
+                                      <h4 className="text-lg font-medium text-gray-900 mb-4">Bestellte Artikel</h4>
+                                      <div className="bg-white rounded-lg overflow-hidden">
+                                        <div className="overflow-x-auto">
+                                          <table className="min-w-full divide-y divide-gray-200">
+                                            <thead className="bg-gray-50">
+                                              <tr>
+                                                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                                  Produkt
+                                                </th>
+                                                <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                                  Var.
+                                                </th>
+                                                <th className="px-3 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                                  Menge
+                                                </th>
+                                                <th className="px-3 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                                  Preis
+                                                </th>
+                                                <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                                  Gesamt
+                                                </th>
                                               </tr>
-                                            ))}
-                                          </tbody>
-                                        </table>
+                                            </thead>
+                                            <tbody className="bg-white divide-y divide-gray-200">
+                                              {order.items.map((item, index) => (
+                                                <tr key={index} className="hover:bg-gray-50">
+                                                  <td className="px-4 py-3">
+                                                    <div className="text-sm font-medium text-gray-900">{item.name}</div>
+                                                  </td>
+                                                  <td className="px-3 py-3">
+                                                    <div className="text-xs text-gray-600">
+                                                      {item.variations && Object.keys(item.variations).length > 0 ? (
+                                                        Object.entries(item.variations).map(([key, value]) => (
+                                                          <span key={key} className="block">
+                                                            {key}: {value}
+                                                          </span>
+                                                        ))
+                                                      ) : (
+                                                        <span className="text-gray-400 italic text-xs">Keine</span>
+                                                      )}
+                                                    </div>
+                                                  </td>
+                                                  <td className="px-3 py-3 text-center">
+                                                    <span className="text-sm font-medium text-gray-900">{item.quantity}</span>
+                                                  </td>
+                                                  <td className="px-3 py-3 text-right">
+                                                    <span className="text-xs text-gray-600">{formatCurrency(item.price / 100)}</span>
+                                                  </td>
+                                                  <td className="px-4 py-3 text-right">
+                                                    <span className="text-sm font-semibold text-gray-900">
+                                                      {formatCurrency((item.price * item.quantity) / 100)}
+                                                    </span>
+                                                  </td>
+                                                </tr>
+                                              ))}
+                                            </tbody>
+                                          </table>
+                                        </div>
                                       </div>
                                     </div>
-                                  </div>
 
-                                  {/* Bestellübersicht */}
-                                  <div className="bg-white p-4 rounded-lg">
-                                    <h4 className="font-medium text-gray-900 mb-4">Bestellübersicht</h4>
-                                    <div className="space-y-2">
-                                      <div className="flex justify-between text-sm">
-                                        <span className="text-gray-600">Zwischensumme ({order.items.length} Artikel)</span>
-                                        <span className="font-medium">{formatCurrency((order as any).subtotal || order.total)}</span>
-                                      </div>
-                                      {(order as any).shippingCosts > 0 && (
+                                    {/* Bestellübersicht */}
+                                    <div className="bg-white p-4 rounded-lg">
+                                      <h4 className="font-medium text-gray-900 mb-4">Bestellübersicht</h4>
+                                      <div className="space-y-2">
                                         <div className="flex justify-between text-sm">
-                                          <span className="text-gray-600">Versandkosten</span>
-                                          <span className="font-medium">{formatCurrency((order as any).shippingCosts / 100)}</span>
+                                          <span className="text-gray-600">Zwischensumme ({order.items.length} Artikel)</span>
+                                          <span className="font-medium">{formatCurrency((order as any).subtotal || order.total)}</span>
                                         </div>
-                                      )}
-                                      {(order as any).shippingCosts === 0 && (
-                                        <div className="flex justify-between text-sm">
-                                          <span className="text-gray-600">Versandkosten</span>
-                                          <span className="font-medium text-green-600">Kostenlos</span>
-                                        </div>
-                                      )}
-                                      {(order as any).bonusPointsRedeemed > 0 && (
-                                        <div className="flex justify-between text-sm">
-                                          <span className="text-gray-600">Bonuspunkte-Rabatt ({(order as any).bonusPointsRedeemed} Punkte)</span>
-                                          <span className="font-medium text-green-600">
-                                            -{formatCurrency(getPointsDiscountAmount((order as any).bonusPointsRedeemed))}
-                                          </span>
-                                        </div>
-                                      )}
-                                      <div className="border-t border-gray-200 pt-2">
-                                        <div className="flex justify-between text-base font-semibold">
-                                          <span className="text-gray-900">Gesamtbetrag (vor Rabatt)</span>
-                                          <span className="text-gray-900">{formatCurrency(((order as any).subtotal || order.total) + ((order as any).shippingCosts || 0) / 100)}</span>
-                                        </div>
-                                        {(order as any).bonusPointsRedeemed > 0 && (
-                                          <div className="flex justify-between text-base font-semibold text-green-600 mt-2">
-                                            <span>Endbetrag (nach Rabatt)</span>
-                                            <span>{formatCurrency(order.total)}</span>
+                                        {(order as any).shippingCosts > 0 && (
+                                          <div className="flex justify-between text-sm">
+                                            <span className="text-gray-600">Versandkosten</span>
+                                            <span className="font-medium">{formatCurrency((order as any).shippingCosts / 100)}</span>
                                           </div>
                                         )}
-                                      </div>
-                                      <div className="text-sm text-gray-600 bg-blue-50 rounded p-2">
-                                        <span className="font-medium">Kunde hat {order.bonusPointsEarned} Bonuspunkte für diese Bestellung erhalten</span>
-                                        {(order as any).bonusPointsRedeemed > 0 && (
-                                          <span className="block mt-1">
-                                            und {((order as any).bonusPointsRedeemed)} Punkte eingelöst
-                                          </span>
+                                        {(order as any).shippingCosts === 0 && (
+                                          <div className="flex justify-between text-sm">
+                                            <span className="text-gray-600">Versandkosten</span>
+                                            <span className="font-medium text-green-600">Kostenlos</span>
+                                          </div>
                                         )}
+                                        {(order as any).bonusPointsRedeemed > 0 && (
+                                          <div className="flex justify-between text-sm">
+                                            <span className="text-gray-600">Bonuspunkte-Rabatt ({(order as any).bonusPointsRedeemed} Punkte)</span>
+                                            <span className="font-medium text-green-600">
+                                              -{formatCurrency(getPointsDiscountAmount((order as any).bonusPointsRedeemed))}
+                                            </span>
+                                          </div>
+                                        )}
+                                        <div className="border-t border-gray-200 pt-2">
+                                          <div className="flex justify-between text-base font-semibold">
+                                            <span className="text-gray-900">Gesamtbetrag (vor Rabatt)</span>
+                                            <span className="text-gray-900">{formatCurrency(((order as any).subtotal || order.total) + ((order as any).shippingCosts || 0) / 100)}</span>
+                                          </div>
+                                          {(order as any).bonusPointsRedeemed > 0 && (
+                                            <div className="flex justify-between text-base font-semibold text-green-600 mt-2">
+                                              <span>Endbetrag (nach Rabatt)</span>
+                                              <span>{formatCurrency(order.total)}</span>
+                                            </div>
+                                          )}
+                                        </div>
+                                        <div className="mt-4 text-sm text-blue-600 bg-blue-50 rounded p-3">
+                                          <span className="font-medium">Kunde hat {order.bonusPointsEarned} Bonuspunkte für diese Bestellung erhalten</span>
+                                          {(order as any).bonusPointsRedeemed > 0 && (
+                                            <span className="block mt-1">
+                                              und {((order as any).bonusPointsRedeemed)} Punkte eingelöst
+                                            </span>
+                                          )}
+                                        </div>
                                       </div>
                                     </div>
                                   </div>
 
-                                        {/* Order Details */}
-                                        <div className="grid md:grid-cols-4 gap-4">
+                                  {/* Rechte Spalte: Bestelldetails (50%) */}
+                                  <div className="space-y-6">
+                                    {/* Order Details Grid */}
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                           <div className="bg-white p-4 rounded-lg">
                                             <h4 className="font-medium text-gray-900 mb-3">Lieferadresse</h4>
                                             <div className="text-sm text-gray-600 space-y-1">
-                                              <div className="flex items-center justify-between">
-                                                <p className="font-medium text-gray-900">
-                                                  {order.shippingAddress.firstName} {order.shippingAddress.lastName}
-                                                </p>
-                                                <button
-                                                  onClick={() => copyToClipboard(
-                                                    `${order.shippingAddress.firstName} ${order.shippingAddress.lastName}`,
-                                                    'Name'
-                                                  )}
-                                                  className="text-gray-400 hover:text-gray-600 p-1 rounded hover:bg-gray-100"
-                                                  title="Name kopieren"
-                                                >
-                                                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
-                                                  </svg>
-                                                </button>
-                                              </div>
+                                              {/* Name */}
+                                              {(order.shippingAddress.firstName || order.shippingAddress.lastName) && (
+                                                <div className="flex items-center justify-between">
+                                                  <p className="font-medium text-gray-900">
+                                                    {order.shippingAddress.firstName} {order.shippingAddress.lastName}
+                                                  </p>
+                                                  <button
+                                                    onClick={() => copyToClipboard(
+                                                      `${order.shippingAddress.firstName || ''} ${order.shippingAddress.lastName || ''}`,
+                                                      'Name'
+                                                    )}
+                                                    className="text-gray-400 hover:text-gray-600 p-1 rounded hover:bg-gray-100"
+                                                    title="Name kopieren"
+                                                  >
+                                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                                                    </svg>
+                                                  </button>
+                                                </div>
+                                              )}
+                                              
+                                              {/* Firma */}
+                                              {order.shippingAddress.company && (
+                                                <div className="flex items-center justify-between">
+                                                  <p className="font-medium text-gray-900">{order.shippingAddress.company}</p>
+                                                  <button
+                                                    onClick={() => copyToClipboard(
+                                                      order.shippingAddress.company!,
+                                                      'Firma'
+                                                    )}
+                                                    className="text-gray-400 hover:text-gray-600 p-1 rounded hover:bg-gray-100"
+                                                    title="Firma kopieren"
+                                                  >
+                                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                                                    </svg>
+                                                  </button>
+                                                </div>
+                                              )}
+                                              
+                                              {/* Straße + Hausnummer */}
                                               <div className="flex items-center justify-between">
                                                 <p>{order.shippingAddress.street} {order.shippingAddress.houseNumber}</p>
                                                 <button
@@ -814,9 +977,27 @@ export default function AdminOrdersPage() {
                                                   </svg>
                                                 </button>
                                               </div>
+                                              
+                                              {/* Adresszusatz */}
                                               {order.shippingAddress.addressLine2 && (
-                                                <p>{order.shippingAddress.addressLine2}</p>
+                                                <div className="flex items-center justify-between">
+                                                  <p>{order.shippingAddress.addressLine2}</p>
+                                                  <button
+                                                    onClick={() => copyToClipboard(
+                                                      order.shippingAddress.addressLine2!,
+                                                      'Adresszusatz'
+                                                    )}
+                                                    className="text-gray-400 hover:text-gray-600 p-1 rounded hover:bg-gray-100"
+                                                    title="Adresszusatz kopieren"
+                                                  >
+                                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                                                    </svg>
+                                                  </button>
+                                                </div>
                                               )}
+                                              
+                                              {/* PLZ */}
                                               <div className="flex items-center justify-between">
                                                 <p>{order.shippingAddress.postalCode}</p>
                                                 <button
@@ -832,6 +1013,8 @@ export default function AdminOrdersPage() {
                                                   </svg>
                                                 </button>
                                               </div>
+                                              
+                                              {/* Stadt */}
                                               <div className="flex items-center justify-between">
                                                 <p>{order.shippingAddress.city}</p>
                                                 <button
@@ -847,7 +1030,23 @@ export default function AdminOrdersPage() {
                                                   </svg>
                                                 </button>
                                               </div>
-                                              <p>{order.shippingAddress.country}</p>
+                                              
+                                              {/* Land */}
+                                              <div className="flex items-center justify-between">
+                                                <p>{order.shippingAddress.country}</p>
+                                                <button
+                                                  onClick={() => copyToClipboard(
+                                                    order.shippingAddress.country,
+                                                    'Land'
+                                                  )}
+                                                  className="text-gray-400 hover:text-gray-600 p-1 rounded hover:bg-gray-100"
+                                                  title="Land kopieren"
+                                                >
+                                                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                                                  </svg>
+                                                </button>
+                                              </div>
                                             </div>
                                           </div>
 
@@ -856,28 +1055,52 @@ export default function AdminOrdersPage() {
                                             <div className="text-sm text-gray-600 space-y-1">
                                               {order.billingAddress ? (
                                                 <>
+                                                  {/* Name */}
+                                                  {(order.billingAddress.firstName || order.billingAddress.lastName) && (
+                                                    <div className="flex items-center justify-between">
+                                                      <p className="font-medium text-gray-900">
+                                                        {order.billingAddress.firstName} {order.billingAddress.lastName}
+                                                      </p>
+                                                      <button
+                                                        onClick={() => copyToClipboard(
+                                                          `${order.billingAddress?.firstName || ''} ${order.billingAddress?.lastName || ''}`,
+                                                          'Name (Rechnung)'
+                                                        )}
+                                                        className="text-gray-400 hover:text-gray-600 p-1 rounded hover:bg-gray-100"
+                                                        title="Name kopieren"
+                                                      >
+                                                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                                                        </svg>
+                                                      </button>
+                                                    </div>
+                                                  )}
+                                                  
+                                                  {/* Firma */}
+                                                  {order.billingAddress!.company && (
+                                                    <div className="flex items-center justify-between">
+                                                      <p className="font-medium text-gray-900">{order.billingAddress.company}</p>
+                                                      <button
+                                                        onClick={() => copyToClipboard(
+                                                          order.billingAddress!.company!,
+                                                          'Firma (Rechnung)'
+                                                        )}
+                                                        className="text-gray-400 hover:text-gray-600 p-1 rounded hover:bg-gray-100"
+                                                        title="Firma kopieren"
+                                                      >
+                                                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                                                        </svg>
+                                                      </button>
+                                                    </div>
+                                                  )}
+                                                  
+                                                  {/* Straße + Hausnummer */}
                                                   <div className="flex items-center justify-between">
-                                                    <p className="font-medium text-gray-900">
-                                                      {order.billingAddress?.firstName} {order.billingAddress?.lastName}
-                                                    </p>
+                                                    <p>{order.billingAddress.street} {order.billingAddress.houseNumber}</p>
                                                     <button
                                                       onClick={() => copyToClipboard(
-                                                        `${order.billingAddress?.firstName ?? ''} ${order.billingAddress?.lastName ?? ''}`,
-                                                        'Name (Rechnung)'
-                                                      )}
-                                                      className="text-gray-400 hover:text-gray-600 p-1 rounded hover:bg-gray-100"
-                                                      title="Name kopieren"
-                                                    >
-                                                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
-                                                      </svg>
-                                                    </button>
-                                                  </div>
-                                                  <div className="flex items-center justify-between">
-                                                    <p>{order.billingAddress?.street} {order.billingAddress?.houseNumber}</p>
-                                                    <button
-                                                      onClick={() => copyToClipboard(
-                                                        `${order.billingAddress?.street ?? ''} ${order.billingAddress?.houseNumber ?? ''}`,
+                                                        `${order.billingAddress!.street} ${order.billingAddress!.houseNumber}`,
                                                         'Adresse (Rechnung)'
                                                       )}
                                                       className="text-gray-400 hover:text-gray-600 p-1 rounded hover:bg-gray-100"
@@ -888,14 +1111,32 @@ export default function AdminOrdersPage() {
                                                       </svg>
                                                     </button>
                                                   </div>
-                                                  {order.billingAddress?.addressLine2 && (
-                                                    <p>{order.billingAddress?.addressLine2}</p>
+                                                  
+                                                  {/* Adresszusatz */}
+                                                  {order.billingAddress!.addressLine2 && (
+                                                    <div className="flex items-center justify-between">
+                                                      <p>{order.billingAddress.addressLine2}</p>
+                                                      <button
+                                                        onClick={() => copyToClipboard(
+                                                          order.billingAddress!.addressLine2!,
+                                                          'Adresszusatz (Rechnung)'
+                                                        )}
+                                                        className="text-gray-400 hover:text-gray-600 p-1 rounded hover:bg-gray-100"
+                                                        title="Adresszusatz kopieren"
+                                                      >
+                                                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                                                        </svg>
+                                                      </button>
+                                                    </div>
                                                   )}
+                                                  
+                                                  {/* PLZ */}
                                                   <div className="flex items-center justify-between">
-                                                    <p>{order.billingAddress?.postalCode}</p>
+                                                    <p>{order.billingAddress.postalCode}</p>
                                                     <button
                                                       onClick={() => copyToClipboard(
-                                                        order.billingAddress?.postalCode ?? '',
+                                                        order.billingAddress!.postalCode,
                                                         'PLZ (Rechnung)'
                                                       )}
                                                       className="text-gray-400 hover:text-gray-600 p-1 rounded hover:bg-gray-100"
@@ -906,11 +1147,12 @@ export default function AdminOrdersPage() {
                                                       </svg>
                                                     </button>
                                                   </div>
+                                                  {/* Stadt */}
                                                   <div className="flex items-center justify-between">
-                                                    <p>{order.billingAddress?.city}</p>
+                                                    <p>{order.billingAddress.city}</p>
                                                     <button
                                                       onClick={() => copyToClipboard(
-                                                        order.billingAddress?.city ?? '',
+                                                        order.billingAddress!.city,
                                                         'Stadt (Rechnung)'
                                                       )}
                                                       className="text-gray-400 hover:text-gray-600 p-1 rounded hover:bg-gray-100"
@@ -921,7 +1163,23 @@ export default function AdminOrdersPage() {
                                                       </svg>
                                                     </button>
                                                   </div>
-                                                  <p>{order.billingAddress?.country}</p>
+                                                  
+                                                  {/* Land */}
+                                                  <div className="flex items-center justify-between">
+                                                    <p>{order.billingAddress.country}</p>
+                                                    <button
+                                                      onClick={() => copyToClipboard(
+                                                        order.billingAddress!.country,
+                                                        'Land (Rechnung)'
+                                                      )}
+                                                      className="text-gray-400 hover:text-gray-600 p-1 rounded hover:bg-gray-100"
+                                                      title="Land kopieren"
+                                                    >
+                                                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                                                      </svg>
+                                                    </button>
+                                                  </div>
                                                 </>
                                               ) : (
                                                 <p className="text-gray-500 italic">Gleich wie Lieferadresse</p>
@@ -1067,9 +1325,20 @@ export default function AdminOrdersPage() {
                                               >
                                                 {order.trackingInfo && order.trackingInfo.length > 0 ? 'Sendungen verwalten' : 'Sendungsnummer hinzufügen'}
                                               </button>
+                                              {order.guestEmail && (
+                                                <button
+                                                  onClick={() => deleteGuestData(order)}
+                                                  disabled={deletingGuestData}
+                                                  className="w-full mt-2 px-3 py-2 text-sm text-red-600 bg-red-50 rounded-md hover:bg-red-100 focus:ring-2 focus:ring-red-500 disabled:opacity-50 disabled:cursor-not-allowed"
+                                                >
+                                                  {deletingGuestData ? 'Wird gelöscht...' : 'Gastdaten löschen'}
+                                                </button>
+                                              )}
                                             </div>
                                           </div>
-                                        </div>
+                                      </div>
+                                    </div>
+                                  </div>
                                 </div>
                               </div>
                             </td>

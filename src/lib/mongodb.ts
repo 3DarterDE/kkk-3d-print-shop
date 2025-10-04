@@ -10,7 +10,7 @@ declare global {
   var mongooseConn: Cached | undefined;
 }
 
-const g = global as unknown as { mongooseConn?: Cached };
+const g = globalThis as unknown as { mongooseConn?: Cached };
 
 const cached: Cached = g.mongooseConn ?? { conn: null, promise: null };
 if (!g.mongooseConn) {

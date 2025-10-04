@@ -29,16 +29,25 @@ export async function POST(
       return NextResponse.json({ error: 'No tracking information available' }, { status: 400 });
     }
 
-    if (!order.userId) {
-      return NextResponse.json({ error: 'User not found' }, { status: 404 });
-    }
+    // Handle both regular users and guest orders
+    let userName: string;
+    let userEmail: string;
 
-    const userData = order.userId as any;
-    const userName = `${userData.firstName || ''} ${userData.lastName || ''}`.trim() || 'Kunde';
-    const userEmail = userData.email;
+    if (order.userId) {
+      // Regular user order
+      const userData = order.userId as any;
+      userName = `${userData.firstName || ''} ${userData.lastName || ''}`.trim() || 'Kunde';
+      userEmail = userData.email;
 
-    if (!userEmail) {
-      return NextResponse.json({ error: 'User email not found' }, { status: 400 });
+      if (!userEmail) {
+        return NextResponse.json({ error: 'User email not found' }, { status: 400 });
+      }
+    } else if (order.guestEmail && order.guestName) {
+      // Guest order
+      userName = order.guestName;
+      userEmail = order.guestEmail;
+    } else {
+      return NextResponse.json({ error: 'No user or guest information found' }, { status: 404 });
     }
 
     // Send tracking email

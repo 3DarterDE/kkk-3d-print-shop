@@ -49,9 +49,11 @@ export default function SearchBar({
   const [query, setQuery] = useState('');
   const [results, setResults] = useState<SearchResult[]>([]);
   const [categories, setCategories] = useState<SearchResult[]>([]);
+  const [brands, setBrands] = useState<SearchResult[]>([]);
   const [descriptionProducts, setDescriptionProducts] = useState<SearchResult[]>([]);
   const [totalProductsFound, setTotalProductsFound] = useState(0);
   const [totalCategoriesFound, setTotalCategoriesFound] = useState(0);
+  const [totalBrandsFound, setTotalBrandsFound] = useState(0);
   const [isLoading, setIsLoading] = useState(false);
   const [showDropdown, setShowDropdown] = useState(false);
   const [selectedIndex, setSelectedIndex] = useState(-1);
@@ -167,9 +169,11 @@ export default function SearchBar({
     if (!query.trim() || query.length < 2) {
       setResults([]);
       setCategories([]);
+      setBrands([]);
       setDescriptionProducts([]);
       setTotalProductsFound(0);
       setTotalCategoriesFound(0);
+      setTotalBrandsFound(0);
       setShowDropdown(false);
       return;
     }
@@ -181,18 +185,22 @@ export default function SearchBar({
         const data = await response.json();
         setResults(data.products || []);
         setCategories(data.categories || []);
+        setBrands(data.brands || []);
         setDescriptionProducts(data.descriptionProducts || []);
         setTotalProductsFound(data.totalProductsFound || 0);
         setTotalCategoriesFound(data.totalCategoriesFound || 0);
+        setTotalBrandsFound(data.totalBrandsFound || 0);
         setShowDropdown(true);
         setSelectedIndex(-1);
       } catch (error) {
         console.error('Search error:', error);
         setResults([]);
         setCategories([]);
+        setBrands([]);
         setDescriptionProducts([]);
         setTotalProductsFound(0);
         setTotalCategoriesFound(0);
+        setTotalBrandsFound(0);
       } finally {
         setIsLoading(false);
       }
@@ -216,7 +224,7 @@ export default function SearchBar({
 
   // Handle keyboard navigation
   const handleKeyDown = (e: React.KeyboardEvent) => {
-    const totalResults = results.length + categories.length + descriptionProducts.length;
+    const totalResults = results.length + categories.length + brands.length + descriptionProducts.length;
     if (!showDropdown || totalResults === 0) return;
 
     switch (e.key) {
@@ -239,8 +247,10 @@ export default function SearchBar({
             handleProductClick(results[selectedIndex]);
           } else if (selectedIndex < results.length + categories.length) {
             handleCategoryClick(categories[selectedIndex - results.length]);
+          } else if (selectedIndex < results.length + categories.length + brands.length) {
+            handleBrandClick(brands[selectedIndex - results.length - categories.length]);
           } else {
-            handleProductClick(descriptionProducts[selectedIndex - results.length - categories.length]);
+            handleProductClick(descriptionProducts[selectedIndex - results.length - categories.length - brands.length]);
           }
         } else if (query.trim()) {
           // Navigate to shop with search query
@@ -278,6 +288,14 @@ export default function SearchBar({
     inputRef.current?.blur();
   };
 
+  const handleBrandClick = (brand: SearchResult) => {
+    // Navigate to shop with brand URL structure
+    router.push(`/shop/marke/${brand.slug}`);
+    setShowDropdown(false);
+    setQuery('');
+    inputRef.current?.blur();
+  };
+
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setQuery(e.target.value);
     if (e.target.value.trim()) {
@@ -287,12 +305,14 @@ export default function SearchBar({
 
   const clearSearch = () => {
     setQuery('');
-    setResults([]);
-    setCategories([]);
-    setDescriptionProducts([]);
-    setTotalProductsFound(0);
-    setTotalCategoriesFound(0);
-    setShowDropdown(false);
+      setResults([]);
+      setCategories([]);
+      setBrands([]);
+      setDescriptionProducts([]);
+      setTotalProductsFound(0);
+      setTotalCategoriesFound(0);
+      setTotalBrandsFound(0);
+      setShowDropdown(false);
     setSelectedIndex(-1);
     inputRef.current?.focus();
   };
@@ -482,6 +502,56 @@ export default function SearchBar({
                           )}
                           <div className="text-xs text-green-600 font-medium mt-1">
                             Kategorie durchsuchen →
+                          </div>
+                        </div>
+                      </button>
+                    ))}
+                  </>
+                )}
+
+                {/* Brands Section */}
+                {brands.length > 0 && (
+                  <>
+                    <div className="px-4 py-2 bg-blue-50 border-b border-blue-100">
+                      <p className="text-xs font-medium text-blue-700 uppercase tracking-wide">
+                        Marken ({totalBrandsFound > 3 ? `${brands.length} von ${totalBrandsFound}` : brands.length})
+                      </p>
+                    </div>
+                    {brands.map((brand, index) => (
+                      <button
+                        key={brand._id}
+                        onClick={() => handleBrandClick(brand)}
+                        className={`w-full px-4 py-3 text-left hover:bg-gray-50 transition-colors flex items-center gap-3 ${
+                          (results.length + categories.length + index) === selectedIndex ? 'bg-blue-50' : ''
+                        }`}
+                      >
+                        {/* Brand Image */}
+                        <div className="flex-shrink-0 w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center overflow-hidden">
+                          {brand.imageSizes?.thumb ? (
+                            <img
+                              src={brand.imageSizes.thumb}
+                              alt={brand.name}
+                              className="w-full h-full object-cover"
+                            />
+                          ) : (
+                            <svg className="w-6 h-6 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0L7 18a2 2 0 01-2-2V5a2 2 0 012-2z" />
+                            </svg>
+                          )}
+                        </div>
+
+                        {/* Brand Info */}
+                        <div className="flex-1 min-w-0">
+                          <h3 className="text-sm font-medium text-gray-900">
+                            {brand.name}
+                          </h3>
+                          {brand.description && (
+                            <p className="text-xs text-gray-500 mt-0.5 line-clamp-2">
+                              {brand.description}
+                            </p>
+                          )}
+                          <div className="text-xs text-blue-600 font-medium mt-1">
+                            Marke durchsuchen →
                           </div>
                         </div>
                       </button>

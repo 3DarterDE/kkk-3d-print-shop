@@ -25,7 +25,6 @@ export async function GET() {
       lastName: user.lastName,
       email: user.email,
       phone: user.phone,
-      dateOfBirth: user.dateOfBirth,
       address: {
         firstName: user.address?.firstName,
         lastName: user.address?.lastName,
@@ -48,10 +47,12 @@ export async function GET() {
         postalCode: user.billingAddress?.postalCode,
         country: user.billingAddress?.country
       },
+      useSameAddress: user.useSameAddress,
       paymentMethod: user.paymentMethod,
       isAdmin: user.isAdmin,
       isVerified: user.isVerified,
       bonusPoints: user.bonusPoints,
+      newsletterSubscribed: user.newsletterSubscribed,
       createdAt: user.createdAt,
     },
     orders: orders || [],

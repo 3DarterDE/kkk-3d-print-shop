@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useCartStore } from "@/lib/store/cart";
 import { useUserData } from "@/lib/contexts/UserDataContext";
 import { useSearchParams } from "next/navigation";
+import { useAuth } from "@/lib/hooks/useAuth";
 
 export type CheckoutFormData = {
   firstName: string;
@@ -52,15 +53,42 @@ export default function CheckoutClient({ initialIsLoggedIn, initialFormData, ini
   const [completedSteps, setCompletedSteps] = useState<number[]>([]);
   const [redeemPoints, setRedeemPoints] = useState(false);
   const [pointsToRedeem, setPointsToRedeem] = useState(0);
+  const [emailExistsWarning, setEmailExistsWarning] = useState(false);
+  const [agbAccepted, setAgbAccepted] = useState(false);
+  const [privacyAccepted, setPrivacyAccepted] = useState(false);
+  const [newsletterSubscribed, setNewsletterSubscribed] = useState(false);
 
-  const { user } = useUserData();
+  const { user, refetchUser } = useUserData();
+  const { user: authUser, isAuthenticated, refresh } = useAuth();
   const searchParams = useSearchParams();
   const [currentStep, setCurrentStep] = useState(initialStep);
   const [isLoggedIn, setIsLoggedIn] = useState(initialIsLoggedIn);
   const { items, clear, validateItems } = useCartStore();
   
   const [formData, setFormData] = useState<CheckoutFormData>(initialFormData);
-  const [useSameAddress, setUseSameAddress] = useState(false);
+  const [useSameAddress, setUseSameAddress] = useState(initialFormData.useSameAddress);
+
+  // Update login status and email field when auth state changes
+  useEffect(() => {
+    const wasLoggedIn = isLoggedIn;
+    setIsLoggedIn(isAuthenticated);
+    
+    // If user logs out (was logged in, now not), clear the email field to make it editable
+    if (wasLoggedIn && !isAuthenticated && formData.email) {
+      setFormData(prev => ({
+        ...prev,
+        email: ''
+      }));
+    }
+    
+    // If user logs in, populate email from auth user
+    if (isAuthenticated && authUser?.email && !formData.email) {
+      setFormData(prev => ({
+        ...prev,
+        email: authUser.email || ''
+      }));
+    }
+  }, [isAuthenticated, authUser?.email, isLoggedIn]);
 
   // Bonuspunkte-Berechnung: Automatisch höchsten verfügbaren Rabatt nehmen
   const getPointsDiscount = (points: number, orderTotal: number) => {
@@ -87,6 +115,55 @@ export default function CheckoutClient({ initialIsLoggedIn, initialFormData, ini
     if (availablePoints >= 1000 && 5 * 100 <= maxDiscount) return { points: 1000, amount: 5 };
     
     return null;
+  };
+  
+  // Prüfe ob noch mehr Punkte eingelöst werden könnten
+  const getRemainingPointsInfo = (availablePoints: number, orderTotal: number) => {
+    const maxDiscount = orderTotal - 1; // Mindestens 1 Cent zu bezahlen
+    
+    // Finde den höchsten möglichen Rabatt für den aktuellen Bestellwert
+    let maxPossibleDiscount = 0;
+    if (availablePoints >= 5000 && 50 * 100 <= maxDiscount) maxPossibleDiscount = 50 * 100;
+    else if (availablePoints >= 4000 && 35 * 100 <= maxDiscount) maxPossibleDiscount = 35 * 100;
+    else if (availablePoints >= 3000 && 20 * 100 <= maxDiscount) maxPossibleDiscount = 20 * 100;
+    else if (availablePoints >= 2000 && 10 * 100 <= maxDiscount) maxPossibleDiscount = 10 * 100;
+    else if (availablePoints >= 1000 && 5 * 100 <= maxDiscount) maxPossibleDiscount = 5 * 100;
+    
+    // Prüfe ob höhere Rabattstufen verfügbar sind
+    if (availablePoints >= 5000 && 50 * 100 > maxDiscount) {
+      const neededAmount = (50 * 100 - maxDiscount) / 100;
+      return { 
+        hasMore: true, 
+        neededAmount: neededAmount,
+        message: `Füge noch ${neededAmount.toFixed(2)}€ zum Warenkorb hinzu, um 5000 Punkte (50€ Rabatt) einzulösen`
+      };
+    }
+    if (availablePoints >= 4000 && 35 * 100 > maxDiscount) {
+      const neededAmount = (35 * 100 - maxDiscount) / 100;
+      return { 
+        hasMore: true, 
+        neededAmount: neededAmount,
+        message: `Füge noch ${neededAmount.toFixed(2)}€ zum Warenkorb hinzu, um 4000 Punkte (35€ Rabatt) einzulösen`
+      };
+    }
+    if (availablePoints >= 3000 && 20 * 100 > maxDiscount) {
+      const neededAmount = (20 * 100 - maxDiscount) / 100;
+      return { 
+        hasMore: true, 
+        neededAmount: neededAmount,
+        message: `Füge noch ${neededAmount.toFixed(2)}€ zum Warenkorb hinzu, um 3000 Punkte (20€ Rabatt) einzulösen`
+      };
+    }
+    if (availablePoints >= 2000 && 10 * 100 > maxDiscount) {
+      const neededAmount = (10 * 100 - maxDiscount) / 100;
+      return { 
+        hasMore: true, 
+        neededAmount: neededAmount,
+        message: `Füge noch ${neededAmount.toFixed(2)}€ zum Warenkorb hinzu, um 2000 Punkte (10€ Rabatt) einzulösen`
+      };
+    }
+    
+    return { hasMore: false };
   };
   
   const availablePoints = user?.bonusPoints || 0;
@@ -143,11 +220,37 @@ export default function CheckoutClient({ initialIsLoggedIn, initialFormData, ini
           [child]: value
         }
       }));
+      
+      // Auto-disable "useSameAddress" if user manually edits billing address
+      if (parent === 'billingAddress' && useSameAddress) {
+        setUseSameAddress(false);
+      }
     } else {
       setFormData(prev => ({
         ...prev,
         [field]: value
       }));
+    }
+    
+    // Check email existence for guest users
+    if (field === 'email' && !isLoggedIn && typeof value === 'string' && value.includes('@')) {
+      checkEmailExists(value);
+    }
+  };
+
+  const checkEmailExists = async (email: string) => {
+    try {
+      const response = await fetch('/api/check-email', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email }),
+      });
+      
+      const result = await response.json();
+      setEmailExistsWarning(result.exists);
+    } catch (error) {
+      console.error('Error checking email:', error);
+      setEmailExistsWarning(false);
     }
   };
 
@@ -160,6 +263,7 @@ export default function CheckoutClient({ initialIsLoggedIn, initialFormData, ini
         if (!formData.firstName) { errors.firstName = true; isValid = false; }
         if (!formData.lastName) { errors.lastName = true; isValid = false; }
         if (!formData.email) { errors.email = true; isValid = false; }
+        if (!isLoggedIn && emailExistsWarning) { errors.email = true; isValid = false; }
         break;
       case 2:
         if (!formData.shippingAddress.firstName) { errors['shippingAddress.firstName'] = true; isValid = false; }
@@ -192,7 +296,7 @@ export default function CheckoutClient({ initialIsLoggedIn, initialFormData, ini
     if (step >= currentStep) return false;
     switch (step) {
       case 1:
-        return formData.salutation && formData.firstName && formData.lastName && formData.email;
+        return formData.salutation && formData.firstName && formData.lastName && formData.email && (isLoggedIn || !emailExistsWarning);
       case 2:
         return formData.shippingAddress.firstName && formData.shippingAddress.lastName && 
                formData.shippingAddress.street && formData.shippingAddress.houseNumber && 
@@ -219,7 +323,8 @@ export default function CheckoutClient({ initialIsLoggedIn, initialFormData, ini
         lastName: formData.lastName,
         phone: formData.phone,
         address: formData.shippingAddress,
-        billingAddress: formData.useSameAddress ? formData.shippingAddress : formData.billingAddress,
+        billingAddress: useSameAddress ? formData.shippingAddress : formData.billingAddress,
+        useSameAddress: useSameAddress,
         paymentMethod: formData.paymentMethod
       };
       const response = await fetch('/api/profile/update', {
@@ -242,6 +347,34 @@ export default function CheckoutClient({ initialIsLoggedIn, initialFormData, ini
       return;
     }
 
+    // Check if AGB and Privacy are accepted
+    if (!agbAccepted || !privacyAccepted) {
+      setErrorMessage('Bitte akzeptieren Sie die Allgemeinen Geschäftsbedingungen und die Datenschutzerklärung.');
+      setOrderStatus('error');
+      return;
+    }
+
+    // For guest orders, check if email already exists
+    if (!isLoggedIn && formData.email) {
+      try {
+        const response = await fetch('/api/check-email', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email: formData.email }),
+        });
+        
+        const result = await response.json();
+        if (response.ok && result.exists) {
+          setErrorMessage('Diese E-Mail-Adresse ist bereits registriert. Bitte loggen Sie sich ein, um fortzufahren.');
+          setOrderStatus('error');
+          return;
+        }
+      } catch (error) {
+        console.error('Error checking email:', error);
+        // Continue with checkout if email check fails
+      }
+    }
+
     setIsProcessing(true);
     setOrderStatus('processing');
 
@@ -260,10 +393,12 @@ export default function CheckoutClient({ initialIsLoggedIn, initialFormData, ini
         paymentMethod: formData.paymentMethod,
         redeemPoints: redeemPoints,
         pointsToRedeem: pointsToRedeem,
+        newsletterSubscribed: newsletterSubscribed,
       };
 
-      // For logged-in users, create order in database
+      // Create order in database (for both logged-in users and guests)
       if (isLoggedIn) {
+        // Logged-in user order
         const response = await fetch('/api/orders', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -274,11 +409,41 @@ export default function CheckoutClient({ initialIsLoggedIn, initialFormData, ini
         if (!response.ok) {
           throw new Error(result.error || 'Fehler beim Erstellen der Bestellung');
         }
+      } else {
+        // Guest order
+        const guestOrderData = {
+          ...orderData,
+          email: formData.email,
+          firstName: formData.firstName,
+          lastName: formData.lastName,
+        };
+
+        const response = await fetch('/api/orders/guest', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(guestOrderData),
+        });
+
+        const result = await response.json();
+        if (!response.ok) {
+          if (result.requiresLogin) {
+            setErrorMessage(result.error);
+            setOrderStatus('error');
+            setIsProcessing(false);
+            return;
+          }
+          throw new Error(result.error || 'Fehler beim Erstellen der Bestellung');
+        }
       }
 
       // Clear cart and show success
       clear();
       setOrderStatus('success');
+      
+      // Refresh user data to update newsletter subscription status
+      if (isLoggedIn) {
+        await refetchUser();
+      }
     } catch (error) {
       console.error('Checkout error:', error);
       setErrorMessage(error instanceof Error ? error.message : 'Unbekannter Fehler');
@@ -290,7 +455,7 @@ export default function CheckoutClient({ initialIsLoggedIn, initialFormData, ini
 
   if (orderStatus === 'success') {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-slate-50 to-blue-50">
+      <div className="bg-gradient-to-br from-slate-50 to-blue-50">
         <div className="max-w-4xl mx-auto px-4 py-8">
           <div className="bg-white/70 backdrop-blur-sm border border-white/30 rounded-2xl p-8 text-center shadow-xl">
             <div className="w-20 h-20 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-6">
@@ -305,22 +470,12 @@ export default function CheckoutClient({ initialIsLoggedIn, initialFormData, ini
                 : 'Ihre Bestellung wurde erfolgreich verarbeitet.'
               }
             </p>
-            <div className="flex flex-col sm:flex-row gap-4 justify-center">
+            <div className="flex justify-center">
               {isLoggedIn && (
                 <a href="/orders" className="px-6 py-3 bg-blue-600 text-white font-medium rounded-lg hover:bg-blue-700 transition-colors">
                   Meine Bestellungen anzeigen
                 </a>
               )}
-              <button 
-                onClick={() => {
-                  setOrderStatus('idle');
-                  setErrorMessage('');
-                  setCurrentStep(1);
-                }}
-                className="px-6 py-3 bg-gray-600 text-white font-medium rounded-lg hover:bg-gray-700 transition-colors"
-              >
-                Neue Bestellung
-              </button>
             </div>
           </div>
         </div>
@@ -476,8 +631,127 @@ export default function CheckoutClient({ initialIsLoggedIn, initialFormData, ini
 
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">E-Mail *</label>
-                    <input type="email" value={formData.email} onChange={(e) => handleInputChange('email', e.target.value)} className={`w-full px-4 py-3 border rounded-lg shadow-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-gray-100 cursor-not-allowed ${fieldErrors.email ? 'border-red-500 bg-red-50' : 'border-gray-300'}`} readOnly required />
+                    <input 
+                      type="email" 
+                      value={formData.email} 
+                      onChange={(e) => handleInputChange('email', e.target.value)} 
+                      className={`w-full px-4 py-3 border rounded-lg shadow-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${isLoggedIn ? 'bg-gray-100 cursor-not-allowed' : 'bg-white'} ${fieldErrors.email ? 'border-red-500 bg-red-50' : 'border-gray-300'}`} 
+                      readOnly={isLoggedIn} 
+                      required 
+                    />
                     {fieldErrors.email && (<p className="mt-1 text-sm text-red-600">Dieses Feld ist erforderlich</p>)}
+                    {emailExistsWarning && !isLoggedIn && (
+                      <p className="mt-1 text-sm text-orange-600">
+                        Diese E-Mail-Adresse ist bereits registriert.{' '}
+                        <button
+                          onClick={() => {
+                            // Open Auth0 login in popup
+                            const w = 500;
+                            const h = 650;
+                            const dualScreenLeft = window.screenLeft !== undefined ? window.screenLeft : (window as any).screenX;
+                            const dualScreenTop = window.screenTop !== undefined ? window.screenTop : (window as any).screenY;
+                            const width = window.innerWidth ? window.innerWidth : document.documentElement.clientWidth ? document.documentElement.clientWidth : screen.width;
+                            const height = window.innerHeight ? window.innerHeight : document.documentElement.clientHeight ? document.documentElement.clientHeight : screen.height;
+                            const systemZoom = width / window.screen.availWidth;
+                            const left = (width - w) / 2 / systemZoom + dualScreenLeft;
+                            const top = (height - h) / 2 / systemZoom + dualScreenTop;
+
+                            // Get current page path for returnTo
+                            const currentPath = encodeURIComponent(window.location.pathname + window.location.search);
+                            const returnTo = encodeURIComponent('/auth/popup-complete?next=' + currentPath);
+
+                            const popup = window.open(
+                              `/api/auth/login?prompt=login&max_age=0&returnTo=${returnTo}`,
+                              '_blank',
+                              `scrollbars=yes, width=${w}, height=${h}, top=${top}, left=${left}`
+                            );
+
+                            // Fallback if popup was blocked
+                            if (!popup || popup.closed) {
+                              window.location.assign(`/api/auth/login?prompt=login&max_age=0&returnTo=${returnTo}`);
+                              return;
+                            }
+
+                            if (popup) {
+                              // Listen for completion message
+                              const onMessage = async (event: MessageEvent) => {
+                                if (event.origin !== window.location.origin) return;
+                                if (!event.data || event.data.type !== 'auth:popup-complete') return;
+                                window.removeEventListener('message', onMessage);
+                                try {
+                                  let ok = false;
+                                  for (let i = 0; i < 6; i++) {
+                                    const r = await fetch('/api/auth/me?login=1', { cache: 'no-store' });
+                                    const j = await r.json().catch(() => null);
+                                    if (j && j.authenticated) { ok = true; break; }
+                                    await new Promise(res => setTimeout(res, 250));
+                                  }
+                                  await refresh();
+                                } catch {}
+                                // If backend signaled a post-login destination (e.g., /activate), go there immediately
+                                if (event.data && typeof event.data.next === 'string' && event.data.next.length > 0) {
+                                  try { window.location.assign(event.data.next); } catch {}
+                                }
+                              };
+                              window.addEventListener('message', onMessage);
+                            }
+                          }}
+                          className="text-blue-600 hover:text-blue-700 font-medium underline"
+                        >
+                          Hier einloggen
+                        </button>
+                      </p>
+                    )}
+                    {!isLoggedIn && (
+                      <p className="mt-2 text-sm text-gray-600">
+                        Noch kein Account?{' '}
+                        <button
+                          onClick={() => {
+                            // Open Auth0 signup in popup
+                            const w = 500;
+                            const h = 650;
+                            const dualScreenLeft = window.screenLeft !== undefined ? window.screenLeft : (window as any).screenX;
+                            const dualScreenTop = window.screenTop !== undefined ? window.screenTop : (window as any).screenY;
+                            const width = window.innerWidth ? window.innerWidth : document.documentElement.clientWidth ? document.documentElement.clientWidth : screen.width;
+                            const height = window.innerHeight ? window.innerHeight : document.documentElement.clientHeight ? document.documentElement.clientHeight : screen.height;
+                            const systemZoom = width / window.screen.availWidth;
+                            const left = (width - w) / 2 / systemZoom + dualScreenLeft;
+                            const top = (height - h) / 2 / systemZoom + dualScreenTop;
+
+                            const currentPath = encodeURIComponent(window.location.pathname + window.location.search);
+                            const popup = window.open(
+                              `/api/auth/login?screen_hint=signup&prompt=login&max_age=0&returnTo=${encodeURIComponent('/auth/popup-complete?next=' + currentPath)}`,
+                              '_blank',
+                              `scrollbars=yes, width=${w}, height=${h}, top=${top}, left=${left}`
+                            );
+
+                            if (!popup || popup.closed) {
+                              window.location.assign(`/api/auth/login?screen_hint=signup&prompt=login&max_age=0&returnTo=${encodeURIComponent('/auth/popup-complete?next=' + currentPath)}`);
+                              return;
+                            }
+
+                            if (popup) {
+                              const onMessage = async (event: MessageEvent) => {
+                                if (event.origin !== window.location.origin) return;
+                                if (!event.data || event.data.type !== 'auth:popup-complete') return;
+                                window.removeEventListener('message', onMessage);
+                                // Check if there's a next URL from the popup
+                                if (event.data.next) {
+                                  window.location.assign(event.data.next);
+                                } else {
+                                  // Refresh page to update login state
+                                  window.location.reload();
+                                }
+                              };
+                              window.addEventListener('message', onMessage);
+                            }
+                          }}
+                          className="text-blue-600 hover:text-blue-700 font-medium underline"
+                        >
+                          Hier Account erstellen
+                        </button>
+                      </p>
+                    )}
                   </div>
 
                   <div>
@@ -579,7 +853,7 @@ export default function CheckoutClient({ initialIsLoggedIn, initialFormData, ini
 
                   <div className="flex justify-between">
                     <button onClick={() => setCurrentStep(1)} className="px-6 py-3 bg-gray-600 text-white font-medium rounded-lg hover:bg-gray-700 transition-colors">Zurück</button>
-                    <button onClick={() => setCurrentStep(3)} className="px-6 py-3 bg-blue-600 text-white font-medium rounded-lg hover:bg-blue-700 transition-colors">Weiter</button>
+                    <button onClick={async () => { if (validateStep(2)) { await saveProfileData(); setCurrentStep(3); } }} className="px-6 py-3 bg-blue-600 text-white font-medium rounded-lg hover:bg-blue-700 transition-colors">Weiter</button>
                   </div>
                 </div>
               )}
@@ -597,7 +871,7 @@ export default function CheckoutClient({ initialIsLoggedIn, initialFormData, ini
                     <input
                       type="checkbox"
                       checked={useSameAddress}
-                      onChange={(e) => {
+                      onChange={async (e) => {
                         setUseSameAddress(e.target.checked);
                         if (e.target.checked) {
                           setFormData(prev => ({
@@ -606,6 +880,10 @@ export default function CheckoutClient({ initialIsLoggedIn, initialFormData, ini
                               ...prev.shippingAddress
                             }
                           }));
+                        }
+                        // Automatically save the checkbox change
+                        if (isLoggedIn) {
+                          await saveProfileData();
                         }
                       }}
                       className="mr-2"
@@ -721,7 +999,7 @@ export default function CheckoutClient({ initialIsLoggedIn, initialFormData, ini
 
                   <div className="flex justify-between">
                     <button onClick={() => setCurrentStep(2)} className="px-6 py-3 bg-gray-600 text-white font-medium rounded-lg hover:bg-gray-700 transition-colors">Zurück</button>
-                    <button onClick={() => setCurrentStep(4)} className="px-6 py-3 bg-blue-600 text-white font-medium rounded-lg hover:bg-blue-700 transition-colors">Weiter</button>
+                    <button onClick={async () => { if (validateStep(3)) { await saveProfileData(); setCurrentStep(4); } }} className="px-6 py-3 bg-blue-600 text-white font-medium rounded-lg hover:bg-blue-700 transition-colors">Weiter</button>
                   </div>
                 </div>
               )}
@@ -816,42 +1094,60 @@ export default function CheckoutClient({ initialIsLoggedIn, initialFormData, ini
                     <button onClick={() => setCurrentStep(1)} className="mt-3 text-sm text-blue-600 hover:text-blue-700 font-medium">Bearbeiten</button>
                   </div>
 
-                  <div className="bg-slate-50 rounded-lg p-4">
-                    <h3 className="font-semibold text-slate-800 mb-3 flex items-center">
-                      <svg className="w-5 h-5 mr-2 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
-                      Lieferadresse
-                    </h3>
-                    <div className="text-sm">
-                      {formData.shippingAddress.company && (
-                        <p className="font-medium text-slate-800">{formData.shippingAddress.company}</p>
-                      )}
-                      <p className="font-medium text-slate-800">
-                        {formData.shippingAddress.firstName} {formData.shippingAddress.lastName}
-                      </p>
-                      <p className="text-slate-600">{formData.shippingAddress.street} {formData.shippingAddress.houseNumber}{formData.shippingAddress.addressLine2 && `, ${formData.shippingAddress.addressLine2}`}</p>
-                      <p className="text-slate-600">{formData.shippingAddress.postalCode} {formData.shippingAddress.city}</p>
-                      <p className="text-slate-600">{formData.shippingAddress.country}</p>
+                  {/* Adressen nebeneinander */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="bg-slate-50 rounded-lg p-4">
+                      <h3 className="font-semibold text-slate-800 mb-3 flex items-center">
+                        <svg className="w-5 h-5 mr-2 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
+                        Lieferadresse
+                      </h3>
+                      <div className="text-sm">
+                        {formData.shippingAddress.company && (
+                          <p className="font-medium text-slate-800">{formData.shippingAddress.company}</p>
+                        )}
+                        <p className="font-medium text-slate-800">
+                          {formData.shippingAddress.firstName} {formData.shippingAddress.lastName}
+                        </p>
+                        <p className="text-slate-600">{formData.shippingAddress.street} {formData.shippingAddress.houseNumber}{formData.shippingAddress.addressLine2 && `, ${formData.shippingAddress.addressLine2}`}</p>
+                        <p className="text-slate-600">{formData.shippingAddress.postalCode} {formData.shippingAddress.city}</p>
+                        <p className="text-slate-600">{formData.shippingAddress.country}</p>
+                      </div>
+                      <button onClick={() => setCurrentStep(2)} className="mt-3 text-sm text-blue-600 hover:text-blue-700 font-medium">Bearbeiten</button>
                     </div>
-                    <button onClick={() => setCurrentStep(2)} className="mt-3 text-sm text-blue-600 hover:text-blue-700 font-medium">Bearbeiten</button>
-                  </div>
 
-                  <div className="bg-slate-50 rounded-lg p-4">
-                    <h3 className="font-semibold text-slate-800 mb-3 flex items-center">
-                      <svg className="w-5 h-5 mr-2 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
-                      Rechnungsadresse
-                    </h3>
-                    <div className="text-sm">
-                      {formData.billingAddress.company && (
-                        <p className="font-medium text-slate-800">{formData.billingAddress.company}</p>
+                    <div className="bg-slate-50 rounded-lg p-4">
+                      <h3 className="font-semibold text-slate-800 mb-3 flex items-center">
+                        <svg className="w-5 h-5 mr-2 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
+                        Rechnungsadresse
+                      </h3>
+                      {useSameAddress ? (
+                        <div className="text-sm">
+                          <p className="text-blue-600 font-medium mb-2">✓ Identisch mit Lieferadresse</p>
+                          <div className="text-slate-500 italic">
+                            {formData.shippingAddress.company && (
+                              <p>{formData.shippingAddress.company}</p>
+                            )}
+                            <p>{formData.shippingAddress.firstName} {formData.shippingAddress.lastName}</p>
+                            <p>{formData.shippingAddress.street} {formData.shippingAddress.houseNumber}{formData.shippingAddress.addressLine2 && `, ${formData.shippingAddress.addressLine2}`}</p>
+                            <p>{formData.shippingAddress.postalCode} {formData.shippingAddress.city}</p>
+                            <p>{formData.shippingAddress.country}</p>
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="text-sm">
+                          {formData.billingAddress.company && (
+                            <p className="font-medium text-slate-800">{formData.billingAddress.company}</p>
+                          )}
+                          <p className="font-medium text-slate-800">
+                            {formData.billingAddress.firstName} {formData.billingAddress.lastName}
+                          </p>
+                          <p className="text-slate-600">{formData.billingAddress.street} {formData.billingAddress.houseNumber}{formData.billingAddress.addressLine2 && `, ${formData.billingAddress.addressLine2}`}</p>
+                          <p className="text-slate-600">{formData.billingAddress.postalCode} {formData.billingAddress.city}</p>
+                          <p className="text-slate-600">{formData.billingAddress.country}</p>
+                        </div>
                       )}
-                      <p className="font-medium text-slate-800">
-                        {formData.billingAddress.firstName} {formData.billingAddress.lastName}
-                      </p>
-                      <p className="text-slate-600">{formData.billingAddress.street} {formData.billingAddress.houseNumber}{formData.billingAddress.addressLine2 && `, ${formData.billingAddress.addressLine2}`}</p>
-                      <p className="text-slate-600">{formData.billingAddress.postalCode} {formData.billingAddress.city}</p>
-                      <p className="text-slate-600">{formData.billingAddress.country}</p>
+                      <button onClick={() => setCurrentStep(3)} className="mt-3 text-sm text-blue-600 hover:text-blue-700 font-medium">Bearbeiten</button>
                     </div>
-                    <button onClick={() => setCurrentStep(2)} className="mt-3 text-sm text-blue-600 hover:text-blue-700 font-medium">Bearbeiten</button>
                   </div>
 
                   <div className="bg-slate-50 rounded-lg p-4">
@@ -871,9 +1167,73 @@ export default function CheckoutClient({ initialIsLoggedIn, initialFormData, ini
 
                   {orderStatus === 'error' && (<div className="p-4 bg-red-50 border border-red-200 rounded-lg text-red-700">{errorMessage}</div>)}
 
+                  {/* AGB und Datenschutz Checkboxes */}
+                  <div className="space-y-3 p-4 bg-gray-50 rounded-lg border">
+                    <label className="flex items-start space-x-3">
+                      <input 
+                        type="checkbox" 
+                        checked={agbAccepted}
+                        onChange={(e) => setAgbAccepted(e.target.checked)}
+                        className="mt-1 w-4 h-4 border-2 border-gray-400 rounded focus:ring-blue-500 focus:ring-2"
+                        style={{ 
+                          backgroundColor: agbAccepted ? '#10b981' : 'white',
+                          accentColor: '#10b981'
+                        }}
+                        required
+                      />
+                      <span className="text-sm text-gray-700">
+                        Ich habe die{' '}
+                        <a href="/agb" target="_blank" className="text-blue-600 hover:text-blue-700 underline">
+                          Allgemeinen Geschäftsbedingungen
+                        </a>{' '}
+                        gelesen und akzeptiere sie. *
+                      </span>
+                    </label>
+                    
+                    <label className="flex items-start space-x-3">
+                      <input 
+                        type="checkbox" 
+                        checked={privacyAccepted}
+                        onChange={(e) => setPrivacyAccepted(e.target.checked)}
+                        className="mt-1 w-4 h-4 border-2 border-gray-400 rounded focus:ring-blue-500 focus:ring-2"
+                        style={{ 
+                          backgroundColor: privacyAccepted ? '#10b981' : 'white',
+                          accentColor: '#10b981'
+                        }}
+                        required
+                      />
+                      <span className="text-sm text-gray-700">
+                        Ich habe die{' '}
+                        <a href="/datenschutz" target="_blank" className="text-blue-600 hover:text-blue-700 underline">
+                          Datenschutzerklärung
+                        </a>{' '}
+                        gelesen und stimme der Datenverarbeitung zu. *
+                      </span>
+                    </label>
+                    
+                    {!user?.newsletterSubscribed && (
+                      <label className="flex items-start space-x-3">
+                        <input 
+                          type="checkbox" 
+                          checked={newsletterSubscribed}
+                          onChange={(e) => setNewsletterSubscribed(e.target.checked)}
+                          className="mt-1 w-4 h-4 border-2 border-gray-400 rounded focus:ring-blue-500 focus:ring-2"
+                          style={{ 
+                            backgroundColor: newsletterSubscribed ? '#10b981' : 'white',
+                            accentColor: '#10b981'
+                          }}
+                        />
+                        <span className="text-sm text-gray-700">
+                          Ich möchte den Newsletter mit Produktankündigungen und Rabatten erhalten.
+                          <a href="/datenschutz" target="_blank" className="text-blue-600 hover:text-blue-700 underline">Datenschutz</a>
+                        </span>
+                      </label>
+                    )}
+                  </div>
+
                   <div className="flex justify-between">
                     <button onClick={() => setCurrentStep(3)} className="px-6 py-3 bg-gray-600 text-white font-medium rounded-lg hover:bg-gray-700 transition-colors">Zurück</button>
-                    <button onClick={handleCheckout} disabled={isProcessing} className={`px-8 py-3 font-medium rounded-lg transition-colors ${isProcessing ? 'bg-gray-300 text-gray-500 cursor-not-allowed' : 'bg-green-600 text-white hover:bg-green-700'}`}>
+                    <button onClick={handleCheckout} disabled={isProcessing || !agbAccepted || !privacyAccepted} className={`px-8 py-3 font-medium rounded-lg transition-colors ${isProcessing || !agbAccepted || !privacyAccepted ? 'bg-gray-300 text-gray-500 cursor-not-allowed' : 'bg-green-600 text-white hover:bg-green-700'}`}>
                       {isProcessing ? 'Wird verarbeitet...' : 'Bestellung abschicken'}
                     </button>
                   </div>
@@ -906,6 +1266,89 @@ export default function CheckoutClient({ initialIsLoggedIn, initialFormData, ini
                   </div>
                 ))}
               </div>
+
+              {/* Bonuspunkte: Anzeige der verdienten Punkte */}
+              <div className="mt-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                <div className="flex items-center">
+                  <span className="text-sm text-blue-800 font-medium">
+                    Du erhältst {Math.floor(total / 100 * 3.5)} Bonuspunkte für diese Bestellung
+                  </span>
+                  <div className="relative group ml-2">
+                    <svg className="w-4 h-4 text-blue-600 cursor-help" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                    {/* Tooltip */}
+                    <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-3 py-2 bg-gray-900 text-white text-xs rounded-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 whitespace-nowrap z-10">
+                      Du erhältst weitere Bonuspunkte für das Bewerten der Produkte nach der Lieferung
+                      {/* Tooltip arrow */}
+                      <div className="absolute top-full left-1/2 transform -translate-x-1/2 border-4 border-transparent border-t-gray-900"></div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Bonuspunkte im Checkout einlösen (direkt unter der Anzeige) */}
+              {isLoggedIn && availablePoints >= 1000 && (
+                <div className="mt-4 p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
+                  <div className="flex items-start justify-between">
+                    <div className="flex items-start">
+                      <div>
+                        <p className="text-sm text-yellow-800 font-medium">Verfügbare Bonuspunkte: {availablePoints}</p>
+                      </div>
+                    </div>
+                    <label className="flex items-center cursor-pointer ml-3">
+                      <input
+                        type="checkbox"
+                        checked={redeemPoints}
+                        onChange={(e) => {
+                          setRedeemPoints(e.target.checked);
+                          if (e.target.checked) {
+                            const best = getBestAvailableDiscount(availablePoints, totalWithShipping);
+                            setPointsToRedeem(best ? best.points : 1000);
+                          } else {
+                            setPointsToRedeem(0);
+                          }
+                        }}
+                        className="sr-only"
+                      />
+                      <div className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+                        redeemPoints ? 'bg-yellow-600' : 'bg-gray-200'
+                      }`}>
+                        <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                          redeemPoints ? 'translate-x-6' : 'translate-x-1'
+                        }`} />
+                      </div>
+                    </label>
+                  </div>
+
+                  {redeemPoints && pointsToRedeem > 0 && (
+                    <div className="mt-3 space-y-2">
+                      <div className="text-sm text-yellow-800">
+                        <div className="flex items-center gap-2">
+                          <span>Du löst {pointsToRedeem} Punkte für {(pointsDiscount / 100).toFixed(2)}€ ein</span>
+                          <span className="text-xs bg-green-100 text-green-800 px-2 py-1 rounded-full">✓ Optimaler Rabatt</span>
+                        </div>
+                      </div>
+                      {(() => {
+                        const remainingInfo = getRemainingPointsInfo(availablePoints, totalWithShipping);
+                        return remainingInfo.hasMore && (
+                          <div className="p-2 bg-blue-50 rounded-lg border border-blue-200">
+                            <div className="flex items-start gap-2">
+                              <svg className="w-4 h-4 text-blue-600 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                              </svg>
+                              <div className="text-xs text-blue-800">
+                                <div className="font-medium mb-1">💡 Mehr sparen möglich!</div>
+                                <div>{remainingInfo.message}</div>
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })()}
+                    </div>
+                  )}
+                </div>
+              )}
 
               <div className="border-t border-slate-200 pt-4 space-y-2">
                 <div className="flex justify-between text-sm"><span className="text-slate-600">Zwischensumme</span><span className="text-slate-800">€{(total / 100).toFixed(2)}</span></div>
@@ -944,26 +1387,7 @@ export default function CheckoutClient({ initialIsLoggedIn, initialFormData, ini
                 <div className="flex justify-between text-lg font-semibold border-t border-slate-200 pt-2"><span className="text-slate-800">Gesamt</span><span className="text-slate-800">€{(finalTotal / 100).toFixed(2)}</span></div>
               </div>
 
-              {/* Bonuspunkte-Hinweis */}
-              {isLoggedIn && availablePoints >= 1000 && !redeemPoints && (
-                <div className="mt-6 p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
-                  <div className="flex items-start">
-                    <svg className="w-5 h-5 text-yellow-600 mt-0.5 mr-3 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1" />
-                    </svg>
-                    <div>
-                      <p className="text-sm text-yellow-800 font-medium">Sie haben {availablePoints} Bonuspunkte!</p>
-                      <p className="text-sm text-yellow-700 mt-1">Sie können bis zu {getBestAvailableDiscount(availablePoints, totalWithShipping)?.points || 0} Punkte einlösen und dabei sparen.</p>
-                      <a 
-                        href="/cart" 
-                        className="inline-block mt-2 text-sm text-yellow-600 hover:text-yellow-700 font-medium underline"
-                      >
-                        Zum Warenkorb zurückkehren →
-                      </a>
-                    </div>
-                  </div>
-                </div>
-              )}
+              
 
               {!isLoggedIn && (
                 <div className="mt-6 p-4 bg-blue-50 border border-blue-200 rounded-lg">

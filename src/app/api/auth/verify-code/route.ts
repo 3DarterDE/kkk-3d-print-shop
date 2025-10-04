@@ -50,10 +50,22 @@ export async function POST(request: NextRequest) {
     // Delete the code immediately after successful verification
     await VerificationCode.deleteOne({ _id: doc._id });
 
-    // Mark user as verified in DB
-    await User.updateOne(
-      { auth0Id: session.user.sub },
-      { $set: { isVerified: true, email } }
+    // Ensure user exists and mark as verified in DB (explicit interactive action)
+    const nameFromSession = (session.user as any).name || email;
+    await User.findOneAndUpdate(
+      { auth0Id: (session.user as any).sub },
+      {
+        $setOnInsert: {
+          auth0Id: (session.user as any).sub,
+          isAdmin: false,
+        },
+        $set: {
+          isVerified: true,
+          email,
+          name: nameFromSession,
+        },
+      },
+      { upsert: true, new: true }
     );
 
     // Update session to reflect verification immediately (so middleware allows navigation)

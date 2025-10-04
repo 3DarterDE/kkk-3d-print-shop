@@ -10,7 +10,7 @@ export const auth0 = new Auth0Client({
 	clientSecret: process.env.AUTH0_CLIENT_SECRET,
 	appBaseUrl,
 	secret: process.env.AUTH0_SECRET,
-	signInReturnToPath: '/activate?send=1',
+	signInReturnToPath: '/auth/popup-complete',
 	authorizationParameters: {
 		redirect_uri: `${appBaseUrl}/api/auth/callback`,
 		// Request only minimal scopes to avoid consent; exclude offline_access
@@ -30,6 +30,20 @@ export const auth0 = new Auth0Client({
 	},
 	// Redirect strategy after Auth0 callback completes
 	onCallback: async (error, ctx, session: any) => {
+		// Check if this originated from popup (returnTo contains popup-complete)
+		const isPopupFlow = typeof ctx.returnTo === 'string' && ctx.returnTo.includes('/auth/popup-complete');
+		// Extract inner next from returnTo like /auth/popup-complete?next=/checkout
+		let nextFromReturnTo: string | null = null;
+		if (typeof ctx.returnTo === 'string') {
+			try {
+				const u = new URL(ctx.returnTo, appBaseUrl);
+				const innerNext = u.searchParams.get('next');
+				if (innerNext && innerNext.startsWith('/')) {
+					nextFromReturnTo = innerNext;
+				}
+			} catch {}
+		}
+
 		// In case of error, fall back to default behavior
 		if (error) {
 			const dest = ctx.returnTo || '/';
@@ -38,7 +52,8 @@ export const auth0 = new Auth0Client({
 		// If user is not present, just go home
 		const user: any = session?.user;
 		if (!user) {
-			return NextResponse.redirect(new URL('/', appBaseUrl));
+			const finalDest = isPopupFlow ? '/auth/popup-complete?next=%2F' : '/';
+			return NextResponse.redirect(new URL(finalDest, appBaseUrl));
 		}
 
 		// Check verification status from Auth0 session
@@ -72,13 +87,16 @@ export const auth0 = new Auth0Client({
 		if (!isVerified) {
 			let nextUrl = '/activate?send=1';
 			if (user.email) nextUrl += `&email=${encodeURIComponent(user.email)}`;
-			// If this auth flow originated from popup (/auth/popup-complete as returnTo),
-			// send the popup to popup-complete so it can notify and close, passing next.
-			if (typeof ctx.returnTo === 'string' && ctx.returnTo.includes('/auth/popup-complete')) {
-				const popupComplete = `/auth/popup-complete?next=${encodeURIComponent(nextUrl)}`;
-				return NextResponse.redirect(new URL(popupComplete, appBaseUrl));
+			// Add returnTo parameter prioritizing inner next if present
+			if (nextFromReturnTo) {
+				nextUrl += `&returnTo=${encodeURIComponent(nextFromReturnTo)}`;
+			} else if (ctx.returnTo && typeof ctx.returnTo === 'string' && !ctx.returnTo.includes('/auth/popup-complete')) {
+				nextUrl += `&returnTo=${encodeURIComponent(ctx.returnTo)}`;
 			}
-			return NextResponse.redirect(new URL(nextUrl, appBaseUrl));
+			const finalDest = isPopupFlow 
+				? `/auth/popup-complete?next=${encodeURIComponent(nextUrl)}`
+				: nextUrl;
+			return NextResponse.redirect(new URL(finalDest, appBaseUrl));
 		}
 
 
@@ -91,13 +109,73 @@ export const auth0 = new Auth0Client({
 		const isSocialLogin = socialProviders.has(connection) || (providerFromSub ? socialProviders.has(providerFromSub) : false);
 		
 		if (isSocialLogin && user.email) {
-			// For social logins, always redirect to welcome page
-			// The welcome page will check if user exists and only send email for new users
-			return NextResponse.redirect(new URL(`/welcome?email=${encodeURIComponent(user.email)}&name=${encodeURIComponent(user.name || user.email)}`, appBaseUrl));
+			let shouldShowWelcome = false;
+			try {
+				const { connectToDatabase } = await import('@/lib/mongodb');
+				const { default: User } = await import('@/lib/models/User');
+				await connectToDatabase();
+				const existing = await User.findOne({ auth0Id: user.sub }).lean();
+				shouldShowWelcome = !existing || existing.welcomeEmailSent !== true;
+			} catch {
+				// If DB lookup fails, still show welcome so the page can trigger sending via API
+				shouldShowWelcome = true;
+			}
+
+			if (shouldShowWelcome) {
+				let welcomeUrl = `/welcome?email=${encodeURIComponent(user.email)}&name=${encodeURIComponent(user.name || user.email)}`;
+				if (nextFromReturnTo) {
+					welcomeUrl += `&next=${encodeURIComponent(nextFromReturnTo)}`;
+				}
+				// Send welcome email and ensure user exists in DB before redirect
+				try {
+					const { connectToDatabase } = await import('@/lib/mongodb');
+					const { default: User } = await import('@/lib/models/User');
+					const { sendWelcomeEmail } = await import('@/lib/email');
+					await connectToDatabase();
+					
+					// Ensure user exists in DB with full upsert (like /api/auth/me does)
+					const dbUser = await User.findOneAndUpdate(
+						{ auth0Id: user.sub },
+						{
+							$setOnInsert: {
+								auth0Id: user.sub,
+								isAdmin: false
+							},
+							$set: {
+								email: user.email,
+								name: user.name,
+								isVerified: true,
+							}
+						},
+						{ upsert: true, new: true }
+					);
+					
+					// Send welcome email if not sent yet
+					if (!dbUser.welcomeEmailSent) {
+						await sendWelcomeEmail({ name: user.name || user.email, email: user.email });
+						await User.updateOne({ _id: dbUser._id }, { $set: { welcomeEmailSent: true } });
+					}
+				} catch {}
+				
+				// Add small delay to ensure session is fully established
+				await new Promise(resolve => setTimeout(resolve, 100));
+				
+				const finalDest = isPopupFlow
+					? `/auth/popup-complete?next=${encodeURIComponent(welcomeUrl)}`
+					: welcomeUrl;
+				return NextResponse.redirect(new URL(finalDest, appBaseUrl));
+			}
 		}
 
-		// If verified, respect returnTo or default
-		const dest = ctx.returnTo || '/';
-		return NextResponse.redirect(new URL(dest, appBaseUrl));
+		// If verified, respect returnTo or default (prefer inner next)
+		const baseReturnTo = nextFromReturnTo
+			? nextFromReturnTo
+			: (typeof ctx.returnTo === 'string' && !ctx.returnTo.includes('/auth/popup-complete')
+				? ctx.returnTo
+				: '/');
+		const finalDest = isPopupFlow
+			? `/auth/popup-complete?next=${encodeURIComponent(baseReturnTo)}`
+			: baseReturnTo;
+		return NextResponse.redirect(new URL(finalDest, appBaseUrl));
 	},
 });

@@ -14,26 +14,27 @@ export async function GET(request: NextRequest) {
     const status = searchParams.get('status') || 'all'; // all, pending, ready, credited
     const search = searchParams.get('search') || ''; // search by customer name or email
 
-    let query: any = {
-      bonusPointsAwarded: { $gt: 0 }
-    };
-
+    // Build queries separately for Reviews and AdminBonusPoints (different points field names)
+    const baseFilter: any = {};
     if (status === 'pending') {
-      query.bonusPointsCredited = false;
-      query.bonusPointsScheduledAt = { $gt: new Date() };
+      baseFilter.bonusPointsCredited = false;
+      baseFilter.bonusPointsScheduledAt = { $gt: new Date() };
     } else if (status === 'ready') {
-      query.bonusPointsCredited = false;
-      query.bonusPointsScheduledAt = { $lte: new Date() };
+      baseFilter.bonusPointsCredited = false;
+      baseFilter.bonusPointsScheduledAt = { $lte: new Date() };
     } else if (status === 'credited') {
-      query.bonusPointsCredited = true;
+      baseFilter.bonusPointsCredited = true;
     }
+
+    const reviewQuery: any = { bonusPointsAwarded: { $gt: 0 }, ...baseFilter };
+    const adminQuery: any = { pointsAwarded: { $gt: 0 }, ...baseFilter };
 
     // Get both review and admin bonus points
     const [reviews, adminBonusPoints] = await Promise.all([
-      Review.find(query)
+      Review.find(reviewQuery)
         .sort({ bonusPointsCredited: 1, bonusPointsScheduledAt: 1 })
         .lean(),
-      AdminBonusPoints.find(query)
+      AdminBonusPoints.find(adminQuery)
         .sort({ bonusPointsCredited: 1, bonusPointsScheduledAt: 1 })
         .lean()
     ]);
@@ -153,6 +154,7 @@ export async function POST(request: NextRequest) {
       case 'credit_now':
         // Credit bonus points immediately
         const userId = timerType === 'review' ? review?.userId : adminBonus?.userId;
+        const orderId = timerType === 'review' ? review?.orderId : adminBonus?.orderId;
         const pointsToCredit = timerType === 'review' ? review?.bonusPointsAwarded : adminBonus?.pointsAwarded;
         
         const user = await User.findById(userId);
@@ -173,6 +175,17 @@ export async function POST(request: NextRequest) {
           await adminBonus.save();
         }
 
+        // Update the corresponding order to mark bonus points as credited
+        // Only for AdminBonusPoints (order-related), not for Reviews (review-related)
+        if (orderId && timerType === 'admin') {
+          const order = await Order.findById(orderId);
+          if (order) {
+            order.bonusPointsCredited = true;
+            order.bonusPointsCreditedAt = new Date();
+            await order.save();
+          }
+        }
+
         return NextResponse.json({
           success: true,
           message: `${pointsToCredit} Bonuspunkte wurden gutgeschrieben`,
@@ -181,6 +194,8 @@ export async function POST(request: NextRequest) {
 
       case 'cancel':
         // Cancel the bonus points timer
+        const cancelOrderId = timerType === 'review' ? review?.orderId : adminBonus?.orderId;
+        
         if (timerType === 'review' && review) {
           review.bonusPointsAwarded = 0;
           review.bonusPointsCredited = true;
@@ -191,6 +206,17 @@ export async function POST(request: NextRequest) {
           adminBonus.bonusPointsCredited = true;
           adminBonus.bonusPointsCreditedAt = new Date();
           await adminBonus.save();
+        }
+
+        // Update the corresponding order to mark bonus points as credited (cancelled)
+        // Only for AdminBonusPoints (order-related), not for Reviews (review-related)
+        if (cancelOrderId && timerType === 'admin') {
+          const order = await Order.findById(cancelOrderId);
+          if (order) {
+            order.bonusPointsCredited = true;
+            order.bonusPointsCreditedAt = new Date();
+            await order.save();
+          }
         }
 
         return NextResponse.json({
@@ -206,6 +232,7 @@ export async function POST(request: NextRequest) {
           : (adminBonus?.bonusPointsScheduledAt || new Date());
         const newDate = new Date(currentDate);
         newDate.setDate(newDate.getDate() + 7);
+        const extendOrderId = timerType === 'review' ? review?.orderId : adminBonus?.orderId;
         
         if (timerType === 'review' && review) {
           review.bonusPointsScheduledAt = newDate;
@@ -213,6 +240,16 @@ export async function POST(request: NextRequest) {
         } else if (adminBonus) {
           adminBonus.bonusPointsScheduledAt = newDate;
           await adminBonus.save();
+        }
+
+        // Update the corresponding order's scheduled date
+        // Only for AdminBonusPoints (order-related), not for Reviews (review-related)
+        if (extendOrderId && timerType === 'admin') {
+          const order = await Order.findById(extendOrderId);
+          if (order) {
+            order.bonusPointsScheduledAt = newDate;
+            await order.save();
+          }
         }
 
         return NextResponse.json({

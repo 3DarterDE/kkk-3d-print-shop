@@ -63,8 +63,8 @@ export async function GET(
       return NextResponse.json({ error: 'Keine Berechtigung' }, { status: 403 });
     }
 
-    // Only allow invoice download for delivered orders
-    if (order.status !== 'delivered') {
+    // Only allow invoice download for delivered orders or completed returns
+    if (order.status !== 'delivered' && order.status !== 'return_completed') {
       return NextResponse.json({ error: 'Rechnung nur für gelieferte Bestellungen verfügbar' }, { status: 400 });
     }
 

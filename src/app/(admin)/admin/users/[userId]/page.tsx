@@ -11,7 +11,6 @@ interface User {
   firstName?: string;
   lastName?: string;
   phone?: string;
-  dateOfBirth?: string;
   address?: {
     street?: string;
     houseNumber?: string;
@@ -338,14 +337,6 @@ export default function UserDetailPage() {
                     </div>
                   )}
                   
-                  {user.dateOfBirth && (
-                    <div>
-                      <label className="text-sm font-medium text-gray-500">Geburtsdatum</label>
-                      <p className="mt-1 text-sm text-gray-900">
-                        {new Date(user.dateOfBirth).toLocaleDateString('de-DE')}
-                      </p>
-                    </div>
-                  )}
                   
                   <div>
                     <label className="text-sm font-medium text-gray-500">Status</label>

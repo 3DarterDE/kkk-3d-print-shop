@@ -25,7 +25,6 @@ export const fetchAllProducts = cache(async (): Promise<ProductDocument[]> => {
     .lean();
   const queryTime = Date.now() - queryStart;
   
-  console.log(`fetchAllProducts - Connect: ${connectTime}ms, Query: ${queryTime}ms, Total: ${Date.now() - start}ms`);
   return products as unknown as ProductDocument[];
 });
 
@@ -125,8 +124,6 @@ export const fetchProductBySlug = cache(async (slug: string): Promise<ProductDoc
     };
   }
 
-  console.log(`fetchProductBySlug - Connect: ${connectTime}ms, Query: ${queryTime}ms, Total: ${Date.now() - start}ms`);
-  
   if (product && !Array.isArray(product)) {
     // Serialize the product object for client components
     const serializedProduct = {
@@ -193,11 +190,9 @@ export const fetchRecommendedProducts = cache(async (productIds: string[]): Prom
       }
     }));
 
-    console.log(`fetchRecommendedProducts - Connect: ${connectTime}ms, Query: ${queryTime}ms, Total: ${Date.now() - start}ms`);
     return productsWithReviews as unknown as ProductDocument[];
   }
 
-  console.log(`fetchRecommendedProducts - Connect: ${connectTime}ms, Query: ${queryTime}ms, Total: ${Date.now() - start}ms`);
   return products.map(product => ({
     ...product,
     _id: (product._id as any).toString(),

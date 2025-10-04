@@ -88,7 +88,7 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json();
-    const { items, shippingAddress, billingAddress, paymentMethod, redeemPoints, pointsToRedeem } = body;
+    const { items, shippingAddress, billingAddress, paymentMethod, redeemPoints, pointsToRedeem, newsletterSubscribed } = body;
 
     if (!items || !Array.isArray(items) || items.length === 0) {
       return NextResponse.json({ error: 'No items provided' }, { status: 400 });
@@ -136,7 +136,7 @@ export async function POST(request: NextRequest) {
       shippingCosts: shippingCents,
       total: totalCents / 100,
       shippingAddress: shippingAddress,
-      billingAddress: billingAddress || shippingAddress,
+      billingAddress: billingAddress && billingAddress.street && billingAddress.houseNumber && billingAddress.city && billingAddress.postalCode ? billingAddress : shippingAddress,
       paymentMethod: paymentMethod || 'card',
       paymentStatus: 'pending',
       bonusPointsEarned: bonusPointsEarned,
@@ -162,6 +162,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Send order confirmation email
+    let emailSent = false;
     try {
       const userData = await User.findById(user._id.toString());
       if (userData && userData.email) {
@@ -179,13 +180,49 @@ export async function POST(request: NextRequest) {
           pointsRedeemed: redeemPoints ? pointsToRedeem : 0,
           pointsDiscount: pointsDiscountCents,
           shippingAddress: shippingAddress,
-          billingAddress: billingAddress || shippingAddress,
+          billingAddress: billingAddress && billingAddress.street && billingAddress.houseNumber && billingAddress.city && billingAddress.postalCode ? billingAddress : shippingAddress,
           paymentMethod: paymentMethod || 'card'
         });
+        emailSent = true;
       }
     } catch (emailError) {
       console.error('Error sending order confirmation email:', emailError);
       // Don't fail the order creation if email fails
+    }
+
+    // Update order with email status
+    if (emailSent) {
+      order.isEmailSent = true;
+      await order.save();
+    }
+
+    // Subscribe to newsletter if requested
+    if (newsletterSubscribed) {
+      try {
+        const userData = await User.findById(user._id.toString());
+        if (userData && userData.email) {
+          // Update newsletter subscription in database
+          userData.newsletterSubscribed = true;
+          await userData.save();
+          
+          const newsletterResponse = await fetch(`${process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000'}/api/newsletter/subscribe`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              email: userData.email,
+              firstName: userData.firstName || '',
+              lastName: userData.lastName || ''
+            })
+          });
+          
+          if (!newsletterResponse.ok) {
+            console.error('Newsletter subscription failed:', await newsletterResponse.text());
+          }
+        }
+      } catch (newsletterError) {
+        console.error('Error subscribing to newsletter:', newsletterError);
+        // Don't fail the order creation if newsletter subscription fails
+      }
     }
 
     return NextResponse.json({

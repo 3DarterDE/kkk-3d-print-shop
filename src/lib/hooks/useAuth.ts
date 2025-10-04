@@ -45,17 +45,31 @@ export function useAuth() {
         return;
       }
 
-      // Reuse in-flight request when multiple components mount simultaneously
-      if (!inFlightAuthRequest) {
-        inFlightAuthRequest = fetch('/api/auth/me', { cache: 'no-store' })
-          .then((res) => res.json())
-          .finally(() => {
-            // allow new requests after resolution
-            inFlightAuthRequest = null;
-          });
+      // If we are forcing a refresh while an old request is in flight, wait for it to settle
+      // and clear it so we can issue a brand-new request with the latest cookies/session data.
+      if (force && inFlightAuthRequest) {
+        try {
+          await inFlightAuthRequest;
+        } catch {}
+        inFlightAuthRequest = null;
       }
 
-      const data = await inFlightAuthRequest;
+      const ensureRequest = () => {
+        if (!inFlightAuthRequest) {
+          const pending = fetch('/api/auth/me', { cache: 'no-store' })
+            .then((res) => res.json());
+          const wrapped = pending.finally(() => {
+            if (inFlightAuthRequest === wrapped) {
+              inFlightAuthRequest = null;
+            }
+          });
+          inFlightAuthRequest = wrapped;
+        }
+        return inFlightAuthRequest;
+      };
+
+      // Reuse in-flight request when multiple components mount simultaneously
+      const data = await ensureRequest();
       cachedAuthResult = data;
       cachedAt = Date.now();
       const authenticated = Boolean(data.authenticated);
