@@ -2,9 +2,11 @@ import { NextRequest, NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
 import { connectToDatabase } from '@/lib/mongodb';
 import VerificationCode from '@/lib/models/VerificationCode';
+import { syncNewsletterStatusForEmail } from '@/lib/sync-newsletter';
 import User from '@/lib/models/User';
 import { auth0 } from '@/lib/auth0';
 import { sendWelcomeEmail } from '@/lib/email';
+import { linkGuestOrdersToUser } from '@/lib/link-guest-orders';
 
 export const runtime = 'nodejs';
 
@@ -52,7 +54,7 @@ export async function POST(request: NextRequest) {
 
     // Ensure user exists and mark as verified in DB (explicit interactive action)
     const nameFromSession = (session.user as any).name || email;
-    await User.findOneAndUpdate(
+    const user = await User.findOneAndUpdate(
       { auth0Id: (session.user as any).sub },
       {
         $setOnInsert: {
@@ -67,6 +69,26 @@ export async function POST(request: NextRequest) {
       },
       { upsert: true, new: true }
     );
+
+    // Link guest orders to this user if email matches guest orders
+    if (user && email) {
+      try {
+        const linkedCount = await linkGuestOrdersToUser(user._id.toString(), email);
+        if (linkedCount > 0) {
+          console.log(`Linked ${linkedCount} guest orders to user ${user._id} for email ${email}`);
+        }
+      } catch (error) {
+        console.error('Error linking guest orders to user:', error);
+        // Don't fail the verification if order linking fails
+      }
+    }
+
+    // Also sync newsletter subscription if one exists for this email
+    try {
+      await syncNewsletterStatusForEmail(user._id.toString(), email);
+    } catch (e) {
+      console.warn('verify-code: failed to sync newsletter status:', e);
+    }
 
     // Update session to reflect verification immediately (so middleware allows navigation)
     try {

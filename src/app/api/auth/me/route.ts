@@ -72,7 +72,6 @@ export async function GET(request: NextRequest) {
       firstName: dbUser?.firstName,
       lastName: dbUser?.lastName,
       salutation: dbUser?.salutation,
-      phone: dbUser?.phone,
       address: dbUser?.address,
       billingAddress: dbUser?.billingAddress,
       paymentMethod: dbUser?.paymentMethod,

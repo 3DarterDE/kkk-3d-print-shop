@@ -846,7 +846,9 @@ Akzeptiert:
 ${acceptedItems.map(i => `• ${i.name} x${i.quantity}${i.variations ? ` (${Object.entries(i.variations).map(([k,v])=>`${k}: ${v}`).join(', ')})` : ''}`).join('\n')}
 ${(rejectedItems && rejectedItems.length) ? `\nNicht akzeptiert:\n${rejectedItems.map(i => `• ${i.name} x${i.quantity}${i.variations ? ` (${Object.entries(i.variations).map(([k,v])=>`${k}: ${v}`).join(', ')})` : ''}`).join('\n')}` : ''}
 
-Die Rückerstattung für die akzeptierten Artikel wird jetzt veranlasst.`,
+Die Rückerstattung für die akzeptierten Artikel wird jetzt veranlasst.
+
+📄 Storno-Rechnung: Du kannst die Storno-Rechnung für diese Rücksendung in deinem Profil unter "Meine Bestellungen" herunterladen.`,
     html: `
       <!DOCTYPE html>
       <html>
@@ -915,6 +917,10 @@ Die Rückerstattung für die akzeptierten Artikel wird jetzt veranlasst.`,
               <strong>💰 Rückerstattung:</strong> Die Rückerstattung für die akzeptierten Artikel wird jetzt veranlasst.
             </p>
             
+            <p style="background: #f0f9ff; padding: 15px; border-radius: 8px; border-left: 4px solid #3b82f6; margin: 20px 0;">
+              <strong>📄 Storno-Rechnung:</strong> Du kannst die Storno-Rechnung für diese Rücksendung in deinem Profil unter "Meine Bestellungen" herunterladen.
+            </p>
+            
             <div class="footer">
               <p>Mit freundlichen Grüßen</p>
               <p>Dein 3DarterDE Team</p>
@@ -925,6 +931,7 @@ Die Rückerstattung für die akzeptierten Artikel wird jetzt veranlasst.`,
       </html>
     `,
   };
+
   try {
     await transporter.sendMail(mailOptions);
     return { success: true };

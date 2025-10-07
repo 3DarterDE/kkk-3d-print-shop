@@ -44,6 +44,9 @@ export interface IOrder extends Document {
   billingAddress?: IShippingAddress;
   paymentMethod?: string;
   paymentStatus?: 'pending' | 'paid' | 'failed' | 'refunded';
+  discountId?: string; // Applied discount document id
+  discountCode?: string; // Applied discount code
+  discountCents?: number; // Total discount in cents
   trackingNumber?: string; // Legacy field for backward compatibility
   shippingProvider?: 'dhl' | 'dpd' | 'ups' | 'fedex' | 'hermes' | 'gls' | 'other'; // Legacy field
   trackingInfo: ITrackingInfo[];
@@ -55,6 +58,8 @@ export interface IOrder extends Document {
   bonusPointsCreditedAt?: Date; // Wann die Bonuspunkte gutgeschrieben wurden
   bonusPointsScheduledAt?: Date; // Wann die Bonuspunkte geplant sind (für Timer)
   bonusPointsRedeemed?: number; // Bonuspunkte die bei dieser Bestellung eingelöst wurden
+  bonusPointsDeducted?: number; // Bonuspunkte die bei Rücksendungen abgezogen wurden
+  bonusPointsDeductedAt?: Date; // Wann die Bonuspunkte abgezogen wurden
   createdAt: Date;
   updatedAt: Date;
 }
@@ -142,6 +147,9 @@ const OrderSchema = new Schema<IOrder>({
     enum: ['pending', 'paid', 'failed', 'refunded'],
     default: 'pending' 
   },
+  discountId: { type: String },
+  discountCode: { type: String },
+  discountCents: { type: Number, default: 0 },
   trackingNumber: { type: String }, // Legacy field
   shippingProvider: { 
     type: String, 
@@ -158,7 +166,9 @@ const OrderSchema = new Schema<IOrder>({
   bonusPointsCredited: { type: Boolean, default: false }, // Ob die Bonuspunkte bereits gutgeschrieben wurden
   bonusPointsCreditedAt: { type: Date }, // Wann die Bonuspunkte gutgeschrieben wurden
   bonusPointsScheduledAt: { type: Date }, // Wann die Bonuspunkte geplant sind (für Timer)
-  bonusPointsRedeemed: { type: Number, default: 0 } // Bonuspunkte die bei dieser Bestellung eingelöst wurden
+  bonusPointsRedeemed: { type: Number, default: 0 }, // Bonuspunkte die bei dieser Bestellung eingelöst wurden
+  bonusPointsDeducted: { type: Number, default: 0 }, // Bonuspunkte die bei Rücksendungen abgezogen wurden
+  bonusPointsDeductedAt: { type: Date } // Wann die Bonuspunkte abgezogen wurden
 }, {
   timestamps: true
 });

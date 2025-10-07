@@ -10,7 +10,6 @@ type UserProfile = {
   firstName?: string;
   lastName?: string;
   email?: string;
-  phone?: string;
   salutation?: 'Herr' | 'Frau' | 'Divers';
   address?: {
     firstName?: string;
@@ -46,7 +45,7 @@ type UserProfile = {
 type Order = { 
   _id: string;
   orderNumber: string;
-  status: 'pending' | 'processing' | 'shipped' | 'delivered' | 'cancelled';
+  status: 'pending' | 'processing' | 'shipped' | 'delivered' | 'cancelled' | 'return_requested' | 'return_completed';
   total: number;
   items: {
     productId: string;
@@ -91,7 +90,6 @@ export default function ProfilePage() {
     salutation: '',
     firstName: '',
     lastName: '',
-    phone: '',
     address: {
       firstName: '',
       lastName: '',
@@ -123,7 +121,6 @@ export default function ProfilePage() {
         salutation: user.salutation || '',
         firstName: user.firstName || '',
         lastName: user.lastName || '',
-        phone: user.phone || '',
         address: {
           firstName: user.address?.firstName || user.firstName || '',
           lastName: user.address?.lastName || user.lastName || '',
@@ -287,6 +284,18 @@ export default function ProfilePage() {
           color: 'text-red-600',
           bg: 'bg-red-100'
         };
+      case 'return_requested':
+        return {
+          text: 'Rücksendung angefordert',
+          color: 'text-amber-700',
+          bg: 'bg-amber-100'
+        };
+      case 'return_completed':
+        return {
+          text: 'Rücksendung\nabgeschlossen',
+          color: 'text-purple-700',
+          bg: 'bg-purple-100'
+        };
       default:
         return {
           text: status,
@@ -331,7 +340,6 @@ export default function ProfilePage() {
         salutation: formData.salutation,
         firstName: formData.firstName,
         lastName: formData.lastName,
-        phone: formData.phone,
         address: formData.address,
         billingAddress: useSameAddress ? formData.address : formData.billingAddress,
         useSameAddress: useSameAddress,
@@ -371,7 +379,6 @@ export default function ProfilePage() {
         salutation: user.salutation || '',
         firstName: user.firstName || '',
         lastName: user.lastName || '',
-        phone: user.phone || '',
         address: {
           firstName: user.address?.firstName || user.firstName || '',
           lastName: user.address?.lastName || user.lastName || '',
@@ -659,10 +666,6 @@ export default function ProfilePage() {
                     <div className="w-2 h-2 bg-blue-500 rounded-full mr-3 flex-shrink-0"></div>
                     <p className="text-slate-700 truncate" title={user.email}>{user.email}</p>
                   </div>
-                  <div className="flex items-center">
-                    <div className="w-2 h-2 bg-blue-500 rounded-full mr-3 flex-shrink-0"></div>
-                    <p className="text-slate-700 truncate" title={user.phone || '-'}>{user.phone || '-'}</p>
-                  </div>
                 </div>
               </div>
 
@@ -882,11 +885,11 @@ export default function ProfilePage() {
                 <table className="w-full table-fixed divide-y divide-slate-200">
                   <thead className="bg-gradient-to-r from-slate-50 to-blue-50">
                     <tr>
-                      <th className="w-24 px-3 sm:px-6 py-4 text-left text-xs font-semibold text-slate-600 uppercase tracking-wider">Bestellung #</th>
-                      <th className="w-20 px-3 sm:px-6 py-4 text-left text-xs font-semibold text-slate-600 uppercase tracking-wider hidden sm:table-cell">Datum</th>
-                      <th className="w-32 px-3 sm:px-6 py-4 text-left text-xs font-semibold text-slate-600 uppercase tracking-wider hidden md:table-cell">Senden an</th>
-                      <th className="w-20 px-3 sm:px-6 py-4 text-left text-xs font-semibold text-slate-600 uppercase tracking-wider">Bestellwert</th>
-                      <th className="w-32 px-3 sm:px-6 py-4 text-left text-xs font-semibold text-slate-600 uppercase tracking-wider">Status</th>
+                      <th className="w-24 px-3 sm:px-6 py-4 text-center text-xs font-semibold text-slate-600 uppercase tracking-wider">Bestellung #</th>
+                      <th className="w-20 px-3 sm:px-6 py-4 text-center text-xs font-semibold text-slate-600 uppercase tracking-wider hidden sm:table-cell">Datum</th>
+                      <th className="w-32 px-3 sm:px-6 py-4 text-center text-xs font-semibold text-slate-600 uppercase tracking-wider hidden md:table-cell">Senden an</th>
+                      <th className="w-20 px-3 sm:px-6 py-4 text-center text-xs font-semibold text-slate-600 uppercase tracking-wider">Bestellwert</th>
+                      <th className="w-32 px-3 sm:px-6 py-4 text-center text-xs font-semibold text-slate-600 uppercase tracking-wider">Status</th>
                     </tr>
                   </thead>
                   <tbody className="bg-white/50 divide-y divide-slate-200">
@@ -909,32 +912,27 @@ export default function ProfilePage() {
                         const statusInfo = getStatusInfo(order.status);
                         return (
                           <tr key={order._id} className="hover:bg-blue-50/50 transition-colors">
-                            <td className="px-3 sm:px-6 py-4">
+                            <td className="px-3 sm:px-6 py-4 text-center">
                               <span className="text-xs sm:text-sm font-semibold text-slate-800 bg-slate-100 px-2 sm:px-3 py-1 rounded-full">
                                 {order.orderNumber}
                               </span>
                             </td>
-                            <td className="px-3 sm:px-6 py-4 text-xs sm:text-sm text-slate-600 hidden sm:table-cell">
+                            <td className="px-3 sm:px-6 py-4 text-xs sm:text-sm text-slate-600 hidden sm:table-cell text-center">
                               {formatDate(order.createdAt)}
                             </td>
-                            <td className="px-3 sm:px-6 py-4 text-xs sm:text-sm text-slate-600 hidden md:table-cell">
+                            <td className="px-3 sm:px-6 py-4 text-xs sm:text-sm text-slate-600 hidden md:table-cell text-center">
                               <div className="truncate" title={`${order.shippingAddress.street} ${order.shippingAddress.houseNumber}`}>
                                 {order.shippingAddress.street} {order.shippingAddress.houseNumber}
                               </div>
                             </td>
-                            <td className="px-3 sm:px-6 py-4 text-xs sm:text-sm font-semibold text-slate-800">
+                            <td className="px-3 sm:px-6 py-4 text-xs sm:text-sm font-semibold text-slate-800 text-center">
                               €{order.total.toFixed(2)}
                             </td>
                             <td className="px-3 sm:px-6 py-4">
-                              <div className="flex flex-col sm:flex-row sm:items-center gap-2">
-                                <div className="truncate">
-                                  <span className={`inline-flex items-center px-2 sm:px-3 py-1 rounded-full text-xs font-medium ${statusInfo.bg} ${statusInfo.color}`} title={statusInfo.text}>
-                                    {statusInfo.text}
-                                  </span>
-                                </div>
-                                <Link href={`/orders#${order._id}`} prefetch className="text-blue-600 hover:text-blue-700 text-xs sm:text-sm font-medium hover:underline">
-                                  Ansehen
-                                </Link>
+                              <div className="whitespace-pre-line text-center">
+                                <span className={`inline-flex items-center px-2 sm:px-3 py-1 rounded-full text-xs font-medium ${statusInfo.bg} ${statusInfo.color}`} title={statusInfo.text}>
+                                  {statusInfo.text}
+                                </span>
                               </div>
                             </td>
                           </tr>
@@ -1014,16 +1012,6 @@ export default function ProfilePage() {
                       <label className="block text-sm font-medium text-gray-700 mb-1">E-Mail</label>
                       <p className="text-gray-900 py-2 text-sm">{user.email}</p>
                       <p className="text-xs text-gray-500">E-Mail kann nicht geändert werden</p>
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Telefon</label>
-                      <input
-                        type="tel"
-                        value={formData.phone}
-                        onChange={(e) => handleInputChange('phone', e.target.value)}
-                        maxLength={20}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm"
-                      />
                     </div>
                   </div>
 

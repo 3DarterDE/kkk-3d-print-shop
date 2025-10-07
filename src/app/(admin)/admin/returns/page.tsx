@@ -32,6 +32,7 @@ export default function AdminReturnsPage() {
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [selected, setSelected] = useState<ReturnRequest | null>(null);
   const [updating, setUpdating] = useState(false);
+  const [orderForReturn, setOrderForReturn] = useState<any | null>(null);
 
   useEffect(() => {
     fetchList();
@@ -91,6 +92,72 @@ export default function AdminReturnsPage() {
     } finally {
       setUpdating(false);
     }
+  };
+
+  // Load original order for selected return to compute refund preview
+  useEffect(() => {
+    const fetchOrder = async () => {
+      if (!selected) {
+        setOrderForReturn(null);
+        return;
+      }
+      try {
+        const res = await fetch(`/api/admin/orders?search=${encodeURIComponent(selected.orderNumber)}`);
+        if (!res.ok) return;
+        const data = await res.json();
+        const found = Array.isArray(data.orders)
+          ? data.orders.find((o: any) => String(o.orderNumber) === String(selected.orderNumber))
+          : null;
+        setOrderForReturn(found || null);
+      } catch {
+        setOrderForReturn(null);
+      }
+    };
+    fetchOrder();
+  }, [selected]);
+
+  // Helpers to compute prorated refund based on order discount and bonus points
+  const getPointsDiscountAmount = (points: number) => {
+    if (points >= 5000) return 50; // 50€
+    if (points >= 4000) return 35; // 35€
+    if (points >= 3000) return 20; // 20€
+    if (points >= 2000) return 10; // 10€
+    if (points >= 1000) return 5;  // 5€
+    return 0;
+  };
+
+  const computeEffectiveUnitCents = (retItem: any) => {
+    if (!orderForReturn) return Number(retItem.price) || 0;
+    const orderItems = Array.isArray(orderForReturn.items) ? orderForReturn.items : [];
+    const orderSubtotalCents = orderItems.reduce((s: number, it: any) => s + (Number(it.price) * Number(it.quantity)), 0);
+    const orderDiscountCents = Number(orderForReturn.discountCents || 0);
+    const pointsDiscountCents = Number(getPointsDiscountAmount(Number(orderForReturn.bonusPointsRedeemed || 0)) * 100);
+    const findOriginal = (name: string, variations?: any) => {
+      return orderItems.find((oi: any) => {
+        const sameName = oi.name === name;
+        const sameVar = JSON.stringify(oi.variations || {}) === JSON.stringify(variations || {});
+        return sameName && sameVar;
+      });
+    };
+    const orig = findOriginal(retItem.name, retItem.variations);
+    if (!orig || orderSubtotalCents <= 0) return Number(retItem.price) || 0;
+    const origLineTotal = Number(orig.price) * Number(orig.quantity);
+    const share = Math.min(1, Math.max(0, origLineTotal / orderSubtotalCents));
+    const proratedDiscount = Math.floor(orderDiscountCents * share);
+    const proratedPoints = Math.floor(pointsDiscountCents * share);
+    const perUnitDeduction = Math.floor(proratedDiscount / Number(orig.quantity)) + Math.floor(proratedPoints / Number(orig.quantity));
+    const unitPrice = Number(retItem.price) || 0;
+    return Math.max(0, unitPrice - perUnitDeduction);
+  };
+
+  const computeAcceptedRefundTotalCents = () => {
+    if (!selected) return 0;
+    return selected.items.reduce((sum, it: any) => {
+      if (!it.accepted) return sum;
+      const eff = computeEffectiveUnitCents(it);
+      const qty = Number(it.quantity) || 0;
+      return sum + eff * qty;
+    }, 0);
   };
 
   if (loading && returns.length === 0) {
@@ -195,6 +262,22 @@ export default function AdminReturnsPage() {
                       </div>
                     )}
                     <div className="text-xs text-gray-500">Menge: {it.quantity}</div>
+                    <div className="mt-1 text-xs">
+                      {orderForReturn ? (
+                        <>
+                          <div className="text-gray-600">
+                            Erstattung/Stück: <span className="font-medium text-green-700">€{(computeEffectiveUnitCents(it) / 100).toFixed(2)}</span>
+                          </div>
+                          {!!it.accepted && (
+                            <div className="text-gray-600">
+                              Erstattung gesamt: <span className="font-medium text-green-700">€{((computeEffectiveUnitCents(it) * (Number(it.quantity) || 0)) / 100).toFixed(2)}</span>
+                            </div>
+                          )}
+                        </>
+                      ) : (
+                        <div className="text-gray-400">Bestellinformationen werden geladen…</div>
+                      )}
+                    </div>
                   </div>
                   <label className="inline-flex items-center gap-2 text-sm text-gray-700">
                     <input type="checkbox" checked={!!it.accepted} onChange={() => toggleAccepted(it.productId)} />
@@ -202,6 +285,26 @@ export default function AdminReturnsPage() {
                   </label>
                 </div>
               ))}
+              {orderForReturn && (
+                <div className="bg-green-50 border border-green-200 rounded-lg p-3 text-sm">
+                  <div className="flex justify-between">
+                    <span className="text-green-800 font-medium">Voraussichtliche Rückerstattung (rabattiert)</span>
+                    <span className="text-green-800 font-semibold">€{(computeAcceptedRefundTotalCents() / 100).toFixed(2)}</span>
+                  </div>
+                  {(() => {
+                    const hasDiscount = Number(orderForReturn.discountCents || 0) > 0;
+                    const hasPoints = Number(orderForReturn.bonusPointsRedeemed || 0) > 0;
+                    if (hasDiscount || hasPoints) {
+                      return (
+                        <div className="mt-1 text-xs text-green-700">
+                          inkl. anteiligem {hasDiscount ? 'Rabatt' : ''}{hasDiscount && hasPoints ? ' und ' : ''}{hasPoints ? 'Bonuspunkte-Rabatt' : ''}
+                        </div>
+                      );
+                    }
+                    return null;
+                  })()}
+                </div>
+              )}
               <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                 <div>
                   <label className="block text-xs text-gray-600 mb-1">Rückerstattungsmethode</label>

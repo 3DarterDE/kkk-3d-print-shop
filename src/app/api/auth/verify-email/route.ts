@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { auth0 } from '@/lib/auth0';
 import { connectToDatabase } from '@/lib/mongodb';
 import User from '@/lib/models/User';
+import { linkGuestOrdersToUser } from '@/lib/link-guest-orders';
+import { syncNewsletterStatusForEmail } from '@/lib/sync-newsletter';
 
 export async function POST(request: NextRequest) {
   try {
@@ -24,10 +26,30 @@ export async function POST(request: NextRequest) {
     if (code.length === 6 && /^\d+$/.test(code)) {
       // Update user as verified in database
       await connectToDatabase();
-      await User.updateOne(
+      const user = await User.findOneAndUpdate(
         { auth0Id: session.user.sub },
-        { $set: { isVerified: true } }
+        { $set: { isVerified: true } },
+        { new: true }
       );
+      
+      // Link guest orders to this user if email matches guest orders
+      if (user && user.email) {
+        try {
+          const linkedCount = await linkGuestOrdersToUser(user._id.toString(), user.email);
+          if (linkedCount > 0) {
+            console.log(`Linked ${linkedCount} guest orders to user ${user._id} for email ${user.email}`);
+          }
+        } catch (error) {
+          console.error('Error linking guest orders to user:', error);
+          // Don't fail the verification if order linking fails
+        }
+        // Sync newsletter status as well
+        try {
+          await syncNewsletterStatusForEmail(user._id.toString(), user.email);
+        } catch (e) {
+          console.warn('verify-email: failed to sync newsletter status:', e);
+        }
+      }
       
       return NextResponse.json({ success: true });
     } else {

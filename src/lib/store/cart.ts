@@ -27,6 +27,8 @@ export type ProductValidationResult = {
 
 type CartState = {
   items: CartItem[];
+  discountCode: string | null;
+  discountCents: number;
   addItem: (item: CartItem) => void;
   removeItem: (slug: string, variations?: Record<string, string>) => void;
   updateQuantity: (slug: string, variations: Record<string, string> | undefined, newQuantity: number) => void;
@@ -35,6 +37,8 @@ type CartState = {
   updateItemPrice: (slug: string, newPrice: number) => void;
   removeInvalidItems: (invalidSlugs: string[]) => void;
   syncFromStorage: () => void;
+  setDiscount: (code: string, cents: number) => void;
+  clearDiscount: () => void;
 };
 
 export const useCartStore = create<CartState>()(
@@ -42,6 +46,8 @@ export const useCartStore = create<CartState>()(
     (set, get) => {
       return {
         items: [],
+        discountCode: null,
+        discountCents: 0,
         addItem: (item) => {
           // Debug logging
           console.log('Adding item to cart:', item);
@@ -128,7 +134,17 @@ export const useCartStore = create<CartState>()(
             })
           });
         },
-        clear: () => set({ items: [] }),
+        clear: () => {
+          set({ items: [], discountCode: null, discountCents: 0 });
+          // Ensure persisted cart is fully cleared across reloads/tabs
+          try {
+            if (typeof window !== 'undefined') {
+              localStorage.removeItem('cart');
+            }
+          } catch (e) {
+            // ignore
+          }
+        },
         validateItems: async () => {
           const items = get().items;
           if (items.length === 0) return;
@@ -263,6 +279,12 @@ export const useCartStore = create<CartState>()(
           } catch (error) {
             console.error("Error syncing from storage:", error);
           }
+        },
+        setDiscount: (code, cents) => {
+          set({ discountCode: code.trim().toUpperCase(), discountCents: Math.max(0, Math.floor(cents)) });
+        },
+        clearDiscount: () => {
+          set({ discountCode: null, discountCents: 0 });
         }
       };
     },

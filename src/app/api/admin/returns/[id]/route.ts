@@ -6,6 +6,11 @@ import { Product } from '@/lib/models/Product';
 import Order from '@/lib/models/Order';
 import User from '@/lib/models/User';
 import { sendReturnCompletedEmail } from '@/lib/email';
+import { generateCreditNotePDF } from '@/lib/credit-note-template';
+import AdminBonusPoints from '@/lib/models/AdminBonusPoints';
+import { calculateReturnBonusPointsDeduction, deductReturnBonusPoints } from '@/lib/return-bonus-points';
+import fs from 'fs/promises';
+import path from 'path';
 
 async function incrementStockForAcceptedItems(returnDoc: any) {
   for (const item of returnDoc.items) {
@@ -95,6 +100,63 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
     if (status === 'completed') {
       await incrementStockForAcceptedItems(returnDoc);
 
+      // Calculate and handle bonus points for returned items
+      try {
+        const acceptedItems = returnDoc.items.filter((item: any) => item.accepted);
+        if (acceptedItems.length > 0) {
+          const pointsToDeduct = await calculateReturnBonusPointsDeduction(
+            returnDoc.orderId,
+            acceptedItems
+          );
+
+          if (pointsToDeduct > 0) {
+            // Load order doc (not lean) to inspect credited state
+            const orderDoc = await Order.findById(returnDoc.orderId);
+            if (orderDoc) {
+              if (!orderDoc.bonusPointsCredited) {
+                // Points are not credited yet → adjust scheduled timer and order values
+                try {
+                  const timer = await AdminBonusPoints.findOne({
+                    orderId: (orderDoc._id as any).toString(),
+                    bonusPointsCredited: false
+                  });
+
+                  const previousPoints = timer ? (timer.pointsAwarded || 0) : (orderDoc.bonusPointsEarned || 0);
+                  const newPoints = Math.max(0, previousPoints - pointsToDeduct);
+
+                  if (timer) {
+                    if (newPoints <= 0) {
+                      await AdminBonusPoints.deleteOne({ _id: timer._id });
+                    } else {
+                      timer.pointsAwarded = newPoints;
+                      await timer.save();
+                    }
+                  }
+
+                  orderDoc.bonusPointsEarned = newPoints;
+                  if (newPoints <= 0) {
+                    // Clear scheduled date so UI no longer shows planned credit
+                    (orderDoc as any).bonusPointsScheduledAt = undefined;
+                  }
+                  await orderDoc.save();
+
+                  console.log(`Geplante Bonuspunkte angepasst: -${pointsToDeduct} Punkte für Bestellung ${orderDoc.orderNumber}. Neu geplant: ${newPoints}`);
+                } catch (timerErr) {
+                  console.error('Fehler beim Anpassen der geplanten Bonuspunkte:', timerErr);
+                }
+              } else {
+                // Points were already credited → deduct from user balance and mark on order
+                await deductReturnBonusPoints(returnDoc.userId, returnDoc.orderId, pointsToDeduct);
+                console.log(`Bonuspunkte-Abzug bei Rücksendung: ${pointsToDeduct} Punkte von Benutzer ${returnDoc.userId} abgezogen`);
+              }
+            }
+          }
+        }
+      } catch (bonusPointsError) {
+        console.error('Fehler bei der Bonuspunkte-Verarbeitung für Rücksendung:', bonusPointsError);
+        // Fehler nicht weiterwerfen, da die Rücksendung trotzdem abgeschlossen werden soll
+      }
+
       // fetch order to get orderNumber and user data if needed
       const order = await Order.findById(returnDoc.orderId).lean();
       
@@ -107,6 +169,7 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
       const acceptedItems = returnDoc.items.filter((it: any) => it.accepted).map((it: any) => ({ name: it.name, quantity: it.quantity, variations: it.variations }));
       const rejectedItems = returnDoc.items.filter((it: any) => !it.accepted).map((it: any) => ({ name: it.name, quantity: it.quantity, variations: it.variations }));
       
+      // Send return completed email
       await sendReturnCompletedEmail({
         name: customerName,
         email: returnDoc.customer?.email,
@@ -114,6 +177,75 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
         acceptedItems,
         rejectedItems,
       });
+
+      // Generate and send credit note if there are accepted items
+      if (acceptedItems.length > 0) {
+        try {
+          // Prepare accepted items for credit note
+          // If the original order had a discount, prorate it over items by their line totals
+          const originalOrder = order; // loaded as lean earlier
+          const orderItems = Array.isArray(originalOrder?.items) ? originalOrder!.items : [];
+          const orderSubtotalCents = orderItems.reduce((s: number, it: any) => s + (Number(it.price) * Number(it.quantity)), 0);
+          const orderDiscountCents = Number(originalOrder?.discountCents || 0);
+
+          const findOriginalLine = (name: string, variations?: any) => {
+            return orderItems.find((oi: any) => {
+              const sameName = oi.name === name;
+              const sameVar = JSON.stringify(oi.variations || {}) === JSON.stringify(variations || {});
+              return sameName && sameVar;
+            });
+          };
+
+          const creditNoteItems = acceptedItems.map((item: any) => {
+            const orig = findOriginalLine(item.name, item.variations);
+            const unitPrice = Number(returnDoc.items.find((it: any) => it.name === item.name)?.price || 0);
+            let lineTotal = unitPrice * item.quantity;
+            let effectiveUnit = unitPrice;
+            if (orderDiscountCents > 0 && orderSubtotalCents > 0 && orig) {
+              const origLineTotal = Number(orig.price) * Number(orig.quantity);
+              const share = Math.min(1, Math.max(0, origLineTotal / orderSubtotalCents));
+              const proratedDiscount = Math.floor(orderDiscountCents * share);
+              const proratedPerUnit = Math.floor(proratedDiscount / Number(orig.quantity));
+              effectiveUnit = Math.max(0, unitPrice - proratedPerUnit);
+              lineTotal = effectiveUnit * item.quantity;
+            }
+            return {
+              name: item.name,
+              quantity: item.quantity,
+              price: effectiveUnit,
+              total: lineTotal,
+              variations: item.variations || undefined,
+            };
+          });
+
+          // Generate credit note PDF
+          const creditNoteDoc = await generateCreditNotePDF(order, returnDoc, creditNoteItems);
+          const pdfBuffer = creditNoteDoc.output('arraybuffer');
+          
+          // Cache the credit note PDF
+          const cacheDir = path.join(process.cwd(), 'cache', 'credit-notes');
+          const pdfPath = path.join(cacheDir, `storno-${order?.orderNumber || returnDoc.orderNumber}.pdf`);
+          try {
+            await fs.mkdir(cacheDir, { recursive: true });
+            await fs.writeFile(pdfPath, Buffer.from(pdfBuffer));
+          } catch (cacheError) {
+            console.warn('Failed to cache credit note PDF:', cacheError);
+          }
+
+          // Calculate total amount for credit note
+          const totalAmount = creditNoteItems.reduce((sum, item) => sum + item.total, 0);
+          // Default refund amount to discounted total if not explicitly provided
+          if (!returnDoc.refund || typeof returnDoc.refund.amount !== 'number' || isNaN(returnDoc.refund.amount)) {
+            (returnDoc as any).refund = { ...(returnDoc.refund || {}), amount: totalAmount };
+          }
+          const creditNoteNumber = `ST-${order?.orderNumber || returnDoc.orderNumber}`;
+
+          console.log(`Credit note generated for order ${order?.orderNumber || returnDoc.orderNumber}`);
+        } catch (creditNoteError) {
+          console.error('Error generating credit note:', creditNoteError);
+          // Don't fail the return completion if credit note generation fails
+        }
+      }
 
       // Also set order status -> return_completed
       await Order.findByIdAndUpdate(returnDoc.orderId, { $set: { status: 'return_completed' } });

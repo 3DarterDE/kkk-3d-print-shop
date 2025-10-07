@@ -60,6 +60,8 @@ interface Order {
   bonusPointsCredited: boolean; // Ob die Bonuspunkte bereits gutgeschrieben wurden
   bonusPointsCreditedAt?: string; // Wann die Bonuspunkte gutgeschrieben wurden
   bonusPointsScheduledAt?: string; // Wann die Bonuspunkte geplant sind (für Timer)
+  discountCode?: string;
+  discountCents?: number;
   createdAt: string;
   updatedAt: string;
   userEmail?: string;
@@ -882,6 +884,12 @@ export default function AdminOrdersPage() {
                                             <span className="font-medium text-green-600">Kostenlos</span>
                                           </div>
                                         )}
+                                        {(order as any).discountCents > 0 && (
+                                          <div className="flex justify-between text-sm">
+                                            <span className="text-gray-600">Rabatt{(order as any).discountCode ? ` (${(order as any).discountCode})` : ''}</span>
+                                            <span className="font-medium text-green-600">-{formatCurrency(((order as any).discountCents || 0) / 100)}</span>
+                                          </div>
+                                        )}
                                         {(order as any).bonusPointsRedeemed > 0 && (
                                           <div className="flex justify-between text-sm">
                                             <span className="text-gray-600">Bonuspunkte-Rabatt ({(order as any).bonusPointsRedeemed} Punkte)</span>
@@ -891,16 +899,32 @@ export default function AdminOrdersPage() {
                                           </div>
                                         )}
                                         <div className="border-t border-gray-200 pt-2">
-                                          <div className="flex justify-between text-base font-semibold">
-                                            <span className="text-gray-900">Gesamtbetrag (vor Rabatt)</span>
-                                            <span className="text-gray-900">{formatCurrency(((order as any).subtotal || order.total) + ((order as any).shippingCosts || 0) / 100)}</span>
-                                          </div>
-                                          {(order as any).bonusPointsRedeemed > 0 && (
-                                            <div className="flex justify-between text-base font-semibold text-green-600 mt-2">
-                                              <span>Endbetrag (nach Rabatt)</span>
-                                              <span>{formatCurrency(order.total)}</span>
-                                            </div>
-                                          )}
+                                          {(() => {
+                                            const hasDiscount = ((order as any).discountCents || 0) > 0;
+                                            const hasPoints = ((order as any).bonusPointsRedeemed || 0) > 0;
+                                            const showSplitTotals = hasDiscount || hasPoints;
+                                            const subtotalPlusShipping = (((order as any).subtotal || order.total) + ((((order as any).shippingCosts || 0)) / 100));
+                                            if (showSplitTotals) {
+                                              return (
+                                                <>
+                                                  <div className="flex justify-between text-base font-semibold">
+                                                    <span className="text-gray-900">Gesamtbetrag (vor Rabatt)</span>
+                                                    <span className="text-gray-900">{formatCurrency(subtotalPlusShipping)}</span>
+                                                  </div>
+                                                  <div className="flex justify-between text-base font-semibold text-green-700 mt-2">
+                                                    <span>Endbetrag (nach Rabatt)</span>
+                                                    <span>{formatCurrency(order.total)}</span>
+                                                  </div>
+                                                </>
+                                              );
+                                            }
+                                            return (
+                                              <div className="flex justify-between text-base font-semibold">
+                                                <span className="text-gray-900">Gesamtbetrag</span>
+                                                <span className="text-gray-900">{formatCurrency(order.total)}</span>
+                                              </div>
+                                            );
+                                          })()}
                                         </div>
                                         <div className="mt-4 text-sm text-blue-600 bg-blue-50 rounded p-3">
                                           <span className="font-medium">Kunde hat {order.bonusPointsEarned} Bonuspunkte für diese Bestellung erhalten</span>

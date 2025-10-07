@@ -9,7 +9,6 @@ type UserProfile = {
   lastName?: string;
   salutation?: 'Herr' | 'Frau' | 'Divers';
   email?: string;
-  phone?: string;
   address?: {
     firstName?: string;
     lastName?: string;
@@ -44,7 +43,7 @@ type UserProfile = {
 type Order = { 
   _id: string;
   orderNumber: string;
-  status: 'pending' | 'processing' | 'shipped' | 'delivered' | 'cancelled';
+  status: 'pending' | 'processing' | 'shipped' | 'delivered' | 'cancelled' | 'return_requested' | 'return_completed';
   total: number;
   items: {
     productId: string;

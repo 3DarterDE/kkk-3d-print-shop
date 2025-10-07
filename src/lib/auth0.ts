@@ -128,9 +128,11 @@ export const auth0 = new Auth0Client({
 				}
 				// Send welcome email and ensure user exists in DB before redirect
 				try {
-					const { connectToDatabase } = await import('@/lib/mongodb');
+                    const { connectToDatabase } = await import('@/lib/mongodb');
 					const { default: User } = await import('@/lib/models/User');
 					const { sendWelcomeEmail } = await import('@/lib/email');
+					const { linkGuestOrdersToUser } = await import('@/lib/link-guest-orders');
+                    const { syncNewsletterStatusForEmail } = await import('@/lib/sync-newsletter');
 					await connectToDatabase();
 					
 					// Ensure user exists in DB with full upsert (like /api/auth/me does)
@@ -149,6 +151,28 @@ export const auth0 = new Auth0Client({
 						},
 						{ upsert: true, new: true }
 					);
+					
+					// Link guest orders to this user if email matches guest orders
+					if (dbUser && user.email) {
+						try {
+							const linkedCount = await linkGuestOrdersToUser(dbUser._id.toString(), user.email);
+							if (linkedCount > 0) {
+								console.log(`Linked ${linkedCount} guest orders to user ${dbUser._id} for email ${user.email}`);
+							}
+						} catch (error) {
+							console.error('Error linking guest orders to user:', error);
+							// Don't fail the user creation if order linking fails
+						}
+					}
+                    
+                    // Sync newsletter subscription if user had subscribed as guest
+                    if (dbUser && user.email) {
+                        try {
+                            await syncNewsletterStatusForEmail(dbUser._id.toString(), user.email);
+                        } catch (e) {
+                            console.warn('Failed to sync newsletter status on callback:', e);
+                        }
+                    }
 					
 					// Send welcome email if not sent yet
 					if (!dbUser.welcomeEmailSent) {

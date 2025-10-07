@@ -2,6 +2,7 @@
 
 import { useCartValidation } from "@/lib/hooks/useCartValidation";
 import { useCartSync } from "@/lib/hooks/useCartSync";
+import { useDiscountValidation } from "@/lib/hooks/useDiscountValidation";
 
 export default function CartValidationProvider({
   children,
@@ -10,6 +11,7 @@ export default function CartValidationProvider({
 }) {
   useCartValidation();
   useCartSync();
+  useDiscountValidation();
   
   return <>{children}</>;
 }

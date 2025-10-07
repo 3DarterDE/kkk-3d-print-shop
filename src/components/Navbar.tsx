@@ -320,6 +320,16 @@ export default function Navbar() {
                       Benutzer
                     </Link>
                     <Link
+                      href="/admin/discounts"
+                      onClick={closeAdminMenu}
+                      className="flex items-center px-4 py-2 text-sm text-gray-700 hover:bg-blue-50 hover:text-blue-600 transition-colors"
+                    >
+                      <svg className="w-4 h-4 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 7h.01M7 3h5a2 2 0 011.414.586l6 6a2 2 0 010 2.828l-6 6A2 2 0 0112 19H7a2 2 0 01-2-2V5a2 2 0 012-2z" />
+                      </svg>
+                      Rabattcodes
+                    </Link>
+                    <Link
                       href="/admin/filters"
                       onClick={closeAdminMenu}
                       className="flex items-center px-4 py-2 text-sm text-gray-700 hover:bg-blue-50 hover:text-blue-600 transition-colors"

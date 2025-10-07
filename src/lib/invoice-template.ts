@@ -1,7 +1,11 @@
 import jsPDF from 'jspdf';
 import { LOGO_BASE64 } from './logo-base64';
 
-export async function generateInvoicePDF(order: any, doc: jsPDF, logoBase64?: string) {
+export async function generateInvoicePDF(
+  order: any,
+  doc: jsPDF,
+  options?: { logoBase64?: string; title?: string; legalNote?: string }
+) {
   const pageWidth = doc.internal.pageSize.getWidth();
   const pageHeight = doc.internal.pageSize.getHeight();
   const leftMargin = 20;
@@ -55,11 +59,16 @@ export async function generateInvoicePDF(order: any, doc: jsPDF, logoBase64?: st
 
   let cursorY = topMargin;
 
+  // Resolve options
+  const providedLogoBase64 = options?.logoBase64;
+  const titleText = options?.title || 'Rechnung';
+  const legalNoteOverride = options?.legalNote;
+
   // Header: Logo and Company name
   try {
-    if (logoBase64) {
+    if (providedLogoBase64) {
       // Option 1: Base64 als Parameter übergeben
-      const dataUrl = `data:image/png;base64,${logoBase64}`;
+      const dataUrl = `data:image/png;base64,${providedLogoBase64}`;
       doc.addImage(dataUrl, 'PNG', leftMargin, cursorY - 5, 20, 20);
     } else if (LOGO_BASE64 && LOGO_BASE64 !== 'IHR_BASE64_STRING_HIER_EINFÜGEN') {
       // Option 2: Logo aus separater Datei laden
@@ -114,7 +123,7 @@ export async function generateInvoicePDF(order: any, doc: jsPDF, logoBase64?: st
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(18);
   doc.setTextColor(20, 20, 20);
-  doc.text('Rechnung', metaBoxX, metaTop);
+  doc.text(titleText, metaBoxX, metaTop);
 
   // Meta box
   doc.setDrawColor(220, 220, 220);
@@ -304,6 +313,8 @@ export async function generateInvoicePDF(order: any, doc: jsPDF, logoBase64?: st
   });
 
   const orderTotal = Number(order.total) || computedSubtotal;
+  const discountCents = Number(order.discountCents) || 0;
+  const discountCode = order.discountCode ? String(order.discountCode) : '';
   
   // Use actual shipping costs from order or calculate them
   const shippingCosts = (order.shippingCosts || 0) / 100; // Convert from cents to euros
@@ -331,7 +342,10 @@ export async function generateInvoicePDF(order: any, doc: jsPDF, logoBase64?: st
 
   doc.setDrawColor(220, 220, 220);
   doc.setFillColor(250, 250, 250);
-  doc.rect(totalsX, totalsY, totalsBoxWidth, 40, 'FD');
+  // Adjust box height based on optional discount and bonus points lines
+  const extraLinesCount = (discountCents > 0 ? 1 : 0) + ((order.bonusPointsRedeemed || 0) > 0 ? 1 : 0);
+  const totalsBoxHeight = 40 + (extraLinesCount * 6);
+  doc.rect(totalsX, totalsY, totalsBoxWidth, totalsBoxHeight, 'FD');
 
   let lineY = totalsY + 8;
   doc.setFont('helvetica', 'normal');
@@ -340,16 +354,27 @@ export async function generateInvoicePDF(order: any, doc: jsPDF, logoBase64?: st
   doc.text(formatCurrency(subtotal), totalsX + totalsBoxWidth - 6, lineY, { align: 'right' });
   lineY += 6;
   
-  // Shipping costs
-  if (shippingCosts > 0) {
+  // Discount line when present
+  if (discountCents > 0) {
+    const label = discountCode ? `Rabatt (${discountCode})` : 'Rabatt';
+    doc.text(label, totalsX + 6, lineY);
+    doc.setTextColor(0, 150, 0);
+    doc.text(`-${formatCurrency(discountCents / 100)}`, totalsX + totalsBoxWidth - 6, lineY, { align: 'right' });
+    doc.setTextColor(0, 0, 0);
+    lineY += 6;
+  }
+  
+  // Shipping costs - only show if shippingCosts is not null and > 0
+  if (order.shippingCosts !== null && shippingCosts > 0) {
     doc.text('Versandkosten', totalsX + 6, lineY);
     doc.text(formatCurrency(shippingCosts), totalsX + totalsBoxWidth - 6, lineY, { align: 'right' });
     lineY += 6;
-  } else {
+  } else if (order.shippingCosts !== null) {
     doc.text('Versandkosten', totalsX + 6, lineY);
     doc.text('kostenlos', totalsX + totalsBoxWidth - 6, lineY, { align: 'right' });
     lineY += 6;
   }
+  // If shippingCosts is null, skip the shipping line entirely
   
   // Bonus points discount
   if (bonusPointsRedeemed > 0) {
@@ -373,7 +398,7 @@ export async function generateInvoicePDF(order: any, doc: jsPDF, logoBase64?: st
   doc.setFont('helvetica', 'normal');
   doc.setFontSize(8);
   doc.setTextColor(80, 80, 80);
-  const legalNote = 'Gemäß § 19 UStG wird keine Umsatzsteuer berechnet (Kleinunternehmerregelung).';
+  const legalNote = legalNoteOverride || 'Gemäß § 19 UStG wird keine Umsatzsteuer berechnet (Kleinunternehmerregelung).';
   const legalLines = doc.splitTextToSize(legalNote, totalsBoxWidth - 12);
   doc.text(legalLines, totalsX + 6, lineY);
   doc.setTextColor(0, 0, 0);

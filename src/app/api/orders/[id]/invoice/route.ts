@@ -63,9 +63,9 @@ export async function GET(
       return NextResponse.json({ error: 'Keine Berechtigung' }, { status: 403 });
     }
 
-    // Only allow invoice download for delivered orders or completed returns
-    if (order.status !== 'delivered' && order.status !== 'return_completed') {
-      return NextResponse.json({ error: 'Rechnung nur für gelieferte Bestellungen verfügbar' }, { status: 400 });
+    // Only allow invoice download for delivered orders, completed returns, or requested returns
+    if (order.status !== 'delivered' && order.status !== 'return_completed' && order.status !== 'return_requested') {
+      return NextResponse.json({ error: 'Rechnung nur für gelieferte Bestellungen oder Rücksendungen verfügbar' }, { status: 400 });
     }
 
     // Check if PDF already exists in cache

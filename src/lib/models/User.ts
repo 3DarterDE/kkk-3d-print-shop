@@ -8,7 +8,6 @@ export interface IUser {
   firstName?: string;
   lastName?: string;
   salutation?: 'Herr' | 'Frau' | 'Divers';
-  phone?: string;
   address?: {
     firstName?: string;
     lastName?: string;
@@ -38,6 +37,25 @@ export interface IUser {
   isAdmin: boolean;
   isVerified?: boolean;
   bonusPoints: number; // Bonuspunkte-Guthaben des Users
+  savedCart?: {
+    items: Array<{
+      slug: string;
+      title: string;
+      price: number;
+      quantity: number;
+      variations?: Record<string, string>;
+      image?: string;
+      imageSizes?: {
+        main: string;
+        thumb: string;
+        small: string;
+      }[];
+      stockQuantity?: number;
+    }>;
+    discountCode?: string | null;
+    discountCents?: number;
+    updatedAt?: Date;
+  };
   welcomeEmailSent?: boolean;
   createdAt?: Date;
   updatedAt?: Date;
@@ -66,7 +84,6 @@ const UserSchema = new Schema<IUser>({
     enum: ['Herr', 'Frau', 'Divers'],
     default: null
   },
-  phone: { type: String },
   address: AddressSchema,
   billingAddress: AddressSchema,
   useSameAddress: { type: Boolean, default: false },
@@ -80,6 +97,26 @@ const UserSchema = new Schema<IUser>({
   isAdmin: { type: Boolean, default: false, index: true },
   isVerified: { type: Boolean, default: false },
   bonusPoints: { type: Number, default: 0 }, // Bonuspunkte-Guthaben, startet bei 0
+  savedCart: {
+    items: {
+      type: [
+        {
+          slug: { type: String, required: true },
+          title: { type: String, required: true },
+          price: { type: Number, required: true },
+          quantity: { type: Number, required: true },
+          variations: { type: Schema.Types.Mixed },
+          image: { type: String },
+          imageSizes: { type: Schema.Types.Mixed },
+          stockQuantity: { type: Number },
+        },
+      ],
+      default: [],
+    },
+    discountCode: { type: String, default: null },
+    discountCents: { type: Number, default: 0 },
+    updatedAt: { type: Date },
+  },
   welcomeEmailSent: { type: Boolean, default: false },
 }, { timestamps: true });
 

@@ -10,7 +10,6 @@ interface User {
   name?: string;
   firstName?: string;
   lastName?: string;
-  phone?: string;
   isVerified?: boolean;
   isAdmin: boolean;
   createdAt: string;

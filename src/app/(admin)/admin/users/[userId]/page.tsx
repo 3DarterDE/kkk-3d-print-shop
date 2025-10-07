@@ -10,7 +10,6 @@ interface User {
   name?: string;
   firstName?: string;
   lastName?: string;
-  phone?: string;
   address?: {
     street?: string;
     houseNumber?: string;
@@ -330,12 +329,6 @@ export default function UserDetailPage() {
                     <p className="mt-1 text-sm text-gray-900">{getDisplayName(user)}</p>
                   </div>
                   
-                  {user.phone && (
-                    <div>
-                      <label className="text-sm font-medium text-gray-500">Telefon</label>
-                      <p className="mt-1 text-sm text-gray-900">{user.phone}</p>
-                    </div>
-                  )}
                   
                   
                   <div>
@@ -588,6 +581,12 @@ export default function UserDetailPage() {
                                         <span className="font-medium text-green-600">Kostenlos</span>
                                       </div>
                                     )}
+                                    {(order as any).discountCents > 0 && (
+                                      <div className="flex justify-between">
+                                        <span className="text-gray-600">Rabatt{(order as any).discountCode ? ` (${(order as any).discountCode})` : ''}:</span>
+                                        <span className="font-medium text-green-600">-{formatCurrency(((order as any).discountCents || 0) / 100)}</span>
+                                      </div>
+                                    )}
                                     {(order as any).bonusPointsRedeemed > 0 && (
                                       <div className="flex justify-between">
                                         <span className="text-gray-600">Bonuspunkte-Rabatt:</span>
@@ -601,10 +600,32 @@ export default function UserDetailPage() {
                                       </div>
                                     )}
                                     <div className="border-t border-gray-300 pt-1">
-                                      <div className="flex justify-between font-semibold">
-                                        <span className="text-gray-800">Gesamtbetrag:</span>
-                                        <span className="text-gray-800">{formatCurrency(order.total)}</span>
-                                      </div>
+                                      {(() => {
+                                        const hasDiscount = ((order as any).discountCents || 0) > 0;
+                                        const hasPoints = ((order as any).bonusPointsRedeemed || 0) > 0;
+                                        const showSplitTotals = hasDiscount || hasPoints;
+                                        const subtotalPlusShipping = (((order as any).subtotal || order.total) + ((((order as any).shippingCosts || 0)) / 100));
+                                        if (showSplitTotals) {
+                                          return (
+                                            <>
+                                              <div className="flex justify-between font-semibold">
+                                                <span className="text-gray-800">Gesamtbetrag (vor Rabatt):</span>
+                                                <span className="text-gray-800">{formatCurrency(subtotalPlusShipping)}</span>
+                                              </div>
+                                              <div className="flex justify-between font-semibold text-green-700 mt-1">
+                                                <span>Endbetrag (nach Rabatt):</span>
+                                                <span>{formatCurrency(order.total)}</span>
+                                              </div>
+                                            </>
+                                          );
+                                        }
+                                        return (
+                                          <div className="flex justify-between font-semibold">
+                                            <span className="text-gray-800">Gesamtbetrag:</span>
+                                            <span className="text-gray-800">{formatCurrency(order.total)}</span>
+                                          </div>
+                                        );
+                                      })()}
                                     </div>
                                     {(order as any).bonusPointsEarned > 0 && (
                                       <div className="text-xs text-yellow-600 mt-2">

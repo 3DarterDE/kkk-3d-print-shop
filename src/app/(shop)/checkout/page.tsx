@@ -46,7 +46,6 @@ export default async function CheckoutPage() {
     lastName: user?.lastName || '',
     salutation: user?.salutation || 'Herr',
     email: user?.email || '',
-    phone: user?.phone || '',
     shippingAddress,
     billingAddress,
     paymentMethod: user?.paymentMethod || 'card',

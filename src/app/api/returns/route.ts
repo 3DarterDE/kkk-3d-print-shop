@@ -35,16 +35,18 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Bestellung nicht gefunden' }, { status: 404 });
     }
 
-    if (order.status !== 'shipped') {
-      return NextResponse.json({ error: 'Rücksendeanfrage ist nur für versandte Bestellungen möglich' }, { status: 400 });
+    if (order.status !== 'delivered') {
+      return NextResponse.json({ error: 'Rücksendeanfrage ist nur für gelieferte Bestellungen möglich' }, { status: 400 });
     }
 
-    // 30-tage nach Versand (wir nutzen createdAt als Fallback, falls shippedAt fehlt)
-    const shippedAt: Date = (order.updatedAt && order.status === 'shipped') ? new Date(order.updatedAt) : new Date(order.createdAt);
+    // 30-tage nach Lieferung
+    const deliveredAt: Date = (order.updatedAt && order.status === 'delivered') 
+      ? new Date(order.updatedAt) 
+      : new Date(order.createdAt);
     const now = new Date();
-    const daysSinceShipped = Math.floor((now.getTime() - shippedAt.getTime()) / (1000 * 60 * 60 * 24));
-    if (daysSinceShipped > 30) {
-      return NextResponse.json({ error: 'Rücksendung nur innerhalb von 30 Tagen nach Versand' }, { status: 400 });
+    const daysSinceDelivered = Math.floor((now.getTime() - deliveredAt.getTime()) / (1000 * 60 * 60 * 24));
+    if (daysSinceDelivered > 30) {
+      return NextResponse.json({ error: 'Rücksendung nur innerhalb von 30 Tagen nach Lieferung' }, { status: 400 });
     }
 
     // Map requested items to order items to capture full data (name, image, price, variations)

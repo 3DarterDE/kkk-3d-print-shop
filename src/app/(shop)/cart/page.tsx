@@ -6,9 +6,14 @@ import { useCartStore } from "@/lib/store/cart";
 import { getOptimizedImageUrl, getContextualImageSize } from "@/lib/image-utils";
 import { useUserData } from "@/lib/contexts/UserDataContext";
 import ProductCard from "@/components/ProductCard";
+import ApplyDiscountInput from "../../../components/ApplyDiscountInput";
 
 export default function CartPage() {
   const items = useCartStore((state) => state.items);
+  const discountCode = useCartStore((s) => s.discountCode);
+  const discountCents = useCartStore((s) => s.discountCents);
+  const setDiscount = useCartStore((s) => s.setDiscount);
+  const clearDiscount = useCartStore((s) => s.clearDiscount);
   const removeItem = useCartStore((state) => state.removeItem);
   const updateQuantity = useCartStore((state) => state.updateQuantity);
   const clear = useCartStore((state) => state.clear);
@@ -22,7 +27,7 @@ export default function CartPage() {
   const [productsLoaded, setProductsLoaded] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
 
-  const { user } = useUserData();
+  const { user, loading: userLoading } = useUserData();
   const total = items.reduce((sum, i) => sum + i.price * i.quantity, 0);
   const totalQuantity = items.reduce((sum, i) => sum + i.quantity, 0);
 
@@ -451,24 +456,125 @@ export default function CartPage() {
                     </div>
                     
                     {/* Bonuspunkte Hinweis */}
-                    <div className="bg-blue-50 rounded-lg p-3 mb-4">
-                      <div className="flex items-center">
-                        <span className="text-sm text-blue-800 font-medium">
-                          Du erhältst {Math.floor(total / 100 * 3.5)} Bonuspunkte für diese Bestellung
-                        </span>
-                        <div className="relative group ml-2">
-                    <svg className="w-4 h-4 text-blue-600 cursor-help" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                    </svg>
-                    {/* Tooltip */}
-                    <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-3 py-2 bg-gray-900 text-white text-xs rounded-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 whitespace-nowrap z-10">
-                      Du erhältst weitere Bonuspunkte für das Bewerten der Produkte nach der Lieferung
-                      {/* Tooltip arrow */}
-                      <div className="absolute top-full left-1/2 transform -translate-x-1/2 border-4 border-transparent border-t-gray-900"></div>
-                    </div>
-                  </div>
+                    {user ? (
+                      <div className="bg-blue-50 rounded-lg p-3 mb-4">
+                        <div className="flex items-center">
+                          <span className="text-sm text-blue-800 font-medium">
+                            Du erhältst {Math.floor(total / 100 * 3.5)} Bonuspunkte für diese Bestellung
+                          </span>
+                          <div className="relative group ml-2">
+                            <svg className="w-4 h-4 text-blue-600 cursor-help" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                            </svg>
+                            {/* Tooltip */}
+                            <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-3 py-2 bg-gray-900 text-white text-xs rounded-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 whitespace-nowrap z-10">
+                              Du erhältst weitere Bonuspunkte für das Bewerten der Produkte nach der Lieferung
+                              {/* Tooltip arrow */}
+                              <div className="absolute top-full left-1/2 transform -translate-x-1/2 border-4 border-transparent border-t-gray-900"></div>
+                            </div>
+                          </div>
+                        </div>
                       </div>
-                    </div>
+                    ) : userLoading ? null : (
+                      <div className="bg-amber-50 rounded-lg p-3 mb-4">
+                        <div className="flex items-center">
+                          <span className="text-sm text-amber-800 font-medium">
+                            <button
+                              onClick={() => {
+                                // Open Auth0 login in popup
+                                const w = 500;
+                                const h = 650;
+                                const dualScreenLeft = window.screenLeft !== undefined ? window.screenLeft : (window as any).screenX;
+                                const dualScreenTop = window.screenTop !== undefined ? window.screenTop : (window as any).screenY;
+                                const width = window.innerWidth ? window.innerWidth : document.documentElement.clientWidth ? document.documentElement.clientWidth : screen.width;
+                                const height = window.innerHeight ? window.innerHeight : document.documentElement.clientHeight ? document.documentElement.clientHeight : screen.height;
+                                const systemZoom = width / window.screen.availWidth;
+                                const left = (width - w) / 2 / systemZoom + dualScreenLeft;
+                                const top = (height - h) / 2 / systemZoom + dualScreenTop;
+
+                                // Get current page path for returnTo
+                                const currentPath = encodeURIComponent(window.location.pathname + window.location.search);
+                                const returnTo = encodeURIComponent('/auth/popup-complete?next=' + currentPath);
+
+                                const popup = window.open(
+                                  `/api/auth/login?prompt=login&max_age=0&returnTo=${returnTo}`,
+                                  '_blank',
+                                  `scrollbars=yes, width=${w}, height=${h}, top=${top}, left=${left}`
+                                );
+
+                                // Fallback if popup was blocked
+                                if (!popup || popup.closed) {
+                                  window.location.assign(`/api/auth/login?prompt=login&max_age=0&returnTo=${returnTo}`);
+                                  return;
+                                }
+
+                                if (popup) {
+                                  // Listen for completion message
+                                  const onMessage = async (event: MessageEvent) => {
+                                    if (event.origin !== window.location.origin) return;
+                                    if (event.data.type === 'auth:popup-complete') {
+                                      window.removeEventListener('message', onMessage);
+                                      // Refresh user data
+                                      window.location.reload();
+                                    }
+                                  };
+                                  window.addEventListener('message', onMessage);
+                                }
+                              }}
+                              className="text-blue-600 hover:text-blue-800 underline bg-transparent border-none p-0 cursor-pointer"
+                            >
+                              Melde dich an
+                            </button> oder 
+                            <button
+                              onClick={() => {
+                                // Open Auth0 signup in popup
+                                const w = 500;
+                                const h = 650;
+                                const dualScreenLeft = window.screenLeft !== undefined ? window.screenLeft : (window as any).screenX;
+                                const dualScreenTop = window.screenTop !== undefined ? window.screenTop : (window as any).screenY;
+                                const width = window.innerWidth ? window.innerWidth : document.documentElement.clientWidth ? document.documentElement.clientWidth : screen.width;
+                                const height = window.innerHeight ? window.innerHeight : document.documentElement.clientHeight ? document.documentElement.clientHeight : screen.height;
+                                const systemZoom = width / window.screen.availWidth;
+                                const left = (width - w) / 2 / systemZoom + dualScreenLeft;
+                                const top = (height - h) / 2 / systemZoom + dualScreenTop;
+
+                                // Get current page path for returnTo
+                                const currentPath = encodeURIComponent(window.location.pathname + window.location.search);
+                                const returnTo = encodeURIComponent('/auth/popup-complete?next=' + currentPath);
+
+                                const popup = window.open(
+                                  `/api/auth/login?screen_hint=signup&prompt=login&max_age=0&returnTo=${returnTo}`,
+                                  '_blank',
+                                  `scrollbars=yes, width=${w}, height=${h}, top=${top}, left=${left}`
+                                );
+
+                                // Fallback if popup was blocked
+                                if (!popup || popup.closed) {
+                                  window.location.assign(`/api/auth/login?screen_hint=signup&prompt=login&max_age=0&returnTo=${returnTo}`);
+                                  return;
+                                }
+
+                                if (popup) {
+                                  // Listen for completion message
+                                  const onMessage = async (event: MessageEvent) => {
+                                    if (event.origin !== window.location.origin) return;
+                                    if (event.data.type === 'auth:popup-complete') {
+                                      window.removeEventListener('message', onMessage);
+                                      // Refresh user data
+                                      window.location.reload();
+                                    }
+                                  };
+                                  window.addEventListener('message', onMessage);
+                                }
+                              }}
+                              className="text-blue-600 hover:text-blue-800 underline bg-transparent border-none p-0 cursor-pointer ml-1"
+                            >
+                              erstelle ein Konto
+                            </button> um Bonuspunkte für diese Bestellung zu erhalten
+                          </span>
+                        </div>
+                      </div>
+                    )}
 
                     {/* Bonuspunkte Einlösen */}
                     {availablePoints >= 1000 && (
@@ -548,16 +654,37 @@ export default function CartPage() {
                       <label className="block text-sm font-medium text-gray-700 mb-2">
                         Rabattcode
                       </label>
-                      <div className="flex space-x-2">
-                        <input
-                          type="text"
-                          placeholder="Code eingeben..."
-                          className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm"
+                      {user ? (
+                        <ApplyDiscountInput
+                          items={items}
+                          discountCode={discountCode}
+                          discountCents={discountCents}
+                          onApplied={async (code: string, cents: number) => {
+                            setDiscount(code, cents);
+                            try {
+                              await fetch('/api/cart', {
+                                method: 'PUT',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({ items, discountCode: code, discountCents: cents })
+                              });
+                            } catch {}
+                          }}
+                          onCleared={async () => {
+                            clearDiscount();
+                            try {
+                              await fetch('/api/cart', {
+                                method: 'PUT',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({ items, discountCode: null, discountCents: 0 })
+                              });
+                            } catch {}
+                          }}
                         />
-                        <button className="px-4 py-2 bg-gray-600 text-white text-sm font-medium rounded-lg hover:bg-gray-700 transition-colors">
-                          Einlösen
-                        </button>
-                      </div>
+                      ) : userLoading ? null : (
+                        <div className="text-sm text-gray-600 bg-gray-50 border border-gray-200 rounded-md p-3">
+                          Rabattcodes sind nur für angemeldete Kunden verfügbar. Bitte melden Sie sich an, um einen Rabattcode einzulösen.
+                        </div>
+                      )}
                     </div>
                     
                     <div className="flex justify-between text-gray-600">
@@ -574,6 +701,14 @@ export default function CartPage() {
                       </div>
                     )}
                     
+                    {/* Rabattcode Anzeige */}
+                    {discountCents > 0 && (
+                      <div className="flex justify-between text-green-600">
+                        <span>Rabatt{discountCode ? ` (${discountCode})` : ''}</span>
+                        <span className="font-medium">-{(discountCents / 100).toFixed(2)} €</span>
+                      </div>
+                    )}
+
                     {/* Bonuspunkte-Rabatt */}
                     {redeemPoints && selectedPointsToRedeem > 0 && (
                       <div className="flex justify-between text-green-600">
@@ -598,7 +733,7 @@ export default function CartPage() {
                             </div>
                           </div>
                         </div>
-                        <span>{(finalTotal / 100).toFixed(2)} €</span>
+                        <span>{(((total + (total < 8000 ? 495 : 0)) - discountCents - pointsDiscountInCents) / 100).toFixed(2)} €</span>
                       </div>
                     </div>
                   </div>

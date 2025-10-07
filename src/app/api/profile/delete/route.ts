@@ -161,7 +161,22 @@ export async function DELETE(request: NextRequest) {
           {
             $set: {
               shippingAddress: anonymizedAddress,
-              billingAddress: anonymizedAddress
+              billingAddress: anonymizedAddress,
+              guestEmail: 'geloescht@geloescht.de',
+              guestName: 'Gelöscht'
+            }
+          }
+        );
+      }
+
+      // Also anonymize any remaining guest orders that were not linked but match the user's email
+      if (user.email) {
+        await Order.updateMany(
+          { userId: null, guestEmail: user.email.toLowerCase() },
+          {
+            $set: {
+              guestEmail: 'geloescht@geloescht.de',
+              guestName: 'Gelöscht'
             }
           }
         );

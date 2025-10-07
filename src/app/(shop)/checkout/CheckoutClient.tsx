@@ -11,7 +11,6 @@ export type CheckoutFormData = {
   lastName: string;
   salutation: 'Herr' | 'Frau' | 'Divers';
   email: string;
-  phone: string;
   shippingAddress: {
     firstName: string;
     lastName: string;
@@ -58,12 +57,14 @@ export default function CheckoutClient({ initialIsLoggedIn, initialFormData, ini
   const [privacyAccepted, setPrivacyAccepted] = useState(false);
   const [newsletterSubscribed, setNewsletterSubscribed] = useState(false);
 
-  const { user, refetchUser } = useUserData();
-  const { user: authUser, isAuthenticated, refresh } = useAuth();
+  const { user, refetchUser, loading: userLoading } = useUserData();
+  const { user: authUser, isAuthenticated, refresh, loading: authLoading } = useAuth();
   const searchParams = useSearchParams();
   const [currentStep, setCurrentStep] = useState(initialStep);
   const [isLoggedIn, setIsLoggedIn] = useState(initialIsLoggedIn);
   const { items, clear, validateItems } = useCartStore();
+  const discountCode = useCartStore((s: any) => s.discountCode);
+  const discountCents = useCartStore((s: any) => s.discountCents);
   
   const [formData, setFormData] = useState<CheckoutFormData>(initialFormData);
   const [useSameAddress, setUseSameAddress] = useState(initialFormData.useSameAddress);
@@ -173,7 +174,7 @@ export default function CheckoutClient({ initialIsLoggedIn, initialFormData, ini
   // Versandkosten berechnen: unter 80€ = 4,95€, ab 80€ kostenlos
   const shippingCosts = total < 8000 ? 495 : 0; // 8000 Cent = 80€, 495 Cent = 4,95€
   const subtotalAfterDiscount = Math.max(0, total - pointsDiscount);
-  const finalTotal = Math.max(0, totalWithShipping - pointsDiscount);
+  const finalTotal = Math.max(0, totalWithShipping - discountCents - pointsDiscount);
 
   useEffect(() => {
     const calculatedTotal = items.reduce((sum, item) => sum + (item.price * item.quantity), 0);
@@ -321,7 +322,6 @@ export default function CheckoutClient({ initialIsLoggedIn, initialFormData, ini
         salutation: formData.salutation,
         firstName: formData.firstName,
         lastName: formData.lastName,
-        phone: formData.phone,
         address: formData.shippingAddress,
         billingAddress: useSameAddress ? formData.shippingAddress : formData.billingAddress,
         useSameAddress: useSameAddress,
@@ -379,7 +379,7 @@ export default function CheckoutClient({ initialIsLoggedIn, initialFormData, ini
     setOrderStatus('processing');
 
     try {
-      const orderData = {
+      const orderData: any = {
         items: items.map(item => ({
           productId: item.slug,
           name: item.title,
@@ -395,6 +395,10 @@ export default function CheckoutClient({ initialIsLoggedIn, initialFormData, ini
         pointsToRedeem: pointsToRedeem,
         newsletterSubscribed: newsletterSubscribed,
       };
+
+      if (discountCode) {
+        orderData.discountCode = discountCode;
+      }
 
       // Create order in database (for both logged-in users and guests)
       if (isLoggedIn) {
@@ -754,11 +758,6 @@ export default function CheckoutClient({ initialIsLoggedIn, initialFormData, ini
                     )}
                   </div>
 
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">Telefon</label>
-                    <input type="tel" value={formData.phone} onChange={(e) => handleInputChange('phone', e.target.value)} className="w-full px-4 py-3 border border-gray-300 rounded-lg shadow-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500" />
-                  </div>
-
                   <div className="flex justify-end">
                     <button onClick={async () => { if (validateStep(1)) { await saveProfileData(); setCurrentStep(2); } }} className="px-6 py-3 bg-blue-600 text-white font-medium rounded-lg hover:bg-blue-700 transition-colors">Weiter</button>
                   </div>
@@ -1084,12 +1083,6 @@ export default function CheckoutClient({ initialIsLoggedIn, initialFormData, ini
                         <span className="text-slate-600">E-Mail:</span>
                         <p className="font-medium text-slate-800">{formData.email}</p>
                       </div>
-                      {formData.phone && (
-                        <div>
-                          <span className="text-slate-600">Telefon:</span>
-                          <p className="font-medium text-slate-800">{formData.phone}</p>
-                        </div>
-                      )}
                     </div>
                     <button onClick={() => setCurrentStep(1)} className="mt-3 text-sm text-blue-600 hover:text-blue-700 font-medium">Bearbeiten</button>
                   </div>
@@ -1268,24 +1261,125 @@ export default function CheckoutClient({ initialIsLoggedIn, initialFormData, ini
               </div>
 
               {/* Bonuspunkte: Anzeige der verdienten Punkte */}
-              <div className="mt-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
-                <div className="flex items-center">
-                  <span className="text-sm text-blue-800 font-medium">
-                    Du erhältst {Math.floor(total / 100 * 3.5)} Bonuspunkte für diese Bestellung
-                  </span>
-                  <div className="relative group ml-2">
-                    <svg className="w-4 h-4 text-blue-600 cursor-help" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                    </svg>
-                    {/* Tooltip */}
-                    <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-3 py-2 bg-gray-900 text-white text-xs rounded-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 whitespace-nowrap z-10">
-                      Du erhältst weitere Bonuspunkte für das Bewerten der Produkte nach der Lieferung
-                      {/* Tooltip arrow */}
-                      <div className="absolute top-full left-1/2 transform -translate-x-1/2 border-4 border-transparent border-t-gray-900"></div>
+              {isLoggedIn ? (
+                <div className="mt-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                  <div className="flex items-center">
+                    <span className="text-sm text-blue-800 font-medium">
+                      Du erhältst {Math.floor(total / 100 * 3.5)} Bonuspunkte für diese Bestellung
+                    </span>
+                    <div className="relative group ml-2">
+                      <svg className="w-4 h-4 text-blue-600 cursor-help" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                      </svg>
+                      {/* Tooltip */}
+                      <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-3 py-2 bg-gray-900 text-white text-xs rounded-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 whitespace-nowrap z-10">
+                        Du erhältst weitere Bonuspunkte für das Bewerten der Produkte nach der Lieferung
+                        {/* Tooltip arrow */}
+                        <div className="absolute top-full left-1/2 transform -translate-x-1/2 border-4 border-transparent border-t-gray-900"></div>
+                      </div>
                     </div>
                   </div>
                 </div>
-              </div>
+              ) : (authLoading || userLoading) ? null : (
+                <div className="mt-4 p-3 bg-amber-50 border border-amber-200 rounded-lg">
+                  <div className="flex items-center">
+                    <span className="text-sm text-amber-800 font-medium">
+                      <button
+                        onClick={() => {
+                          // Open Auth0 login in popup
+                          const w = 500;
+                          const h = 650;
+                          const dualScreenLeft = window.screenLeft !== undefined ? window.screenLeft : (window as any).screenX;
+                          const dualScreenTop = window.screenTop !== undefined ? window.screenTop : (window as any).screenY;
+                          const width = window.innerWidth ? window.innerWidth : document.documentElement.clientWidth ? document.documentElement.clientWidth : screen.width;
+                          const height = window.innerHeight ? window.innerHeight : document.documentElement.clientHeight ? document.documentElement.clientHeight : screen.height;
+                          const systemZoom = width / window.screen.availWidth;
+                          const left = (width - w) / 2 / systemZoom + dualScreenLeft;
+                          const top = (height - h) / 2 / systemZoom + dualScreenTop;
+
+                          // Get current page path for returnTo
+                          const currentPath = encodeURIComponent(window.location.pathname + window.location.search);
+                          const returnTo = encodeURIComponent('/auth/popup-complete?next=' + currentPath);
+
+                          const popup = window.open(
+                            `/api/auth/login?prompt=login&max_age=0&returnTo=${returnTo}`,
+                            '_blank',
+                            `scrollbars=yes, width=${w}, height=${h}, top=${top}, left=${left}`
+                          );
+
+                          // Fallback if popup was blocked
+                          if (!popup || popup.closed) {
+                            window.location.assign(`/api/auth/login?prompt=login&max_age=0&returnTo=${returnTo}`);
+                            return;
+                          }
+
+                          if (popup) {
+                            // Listen for completion message
+                            const onMessage = async (event: MessageEvent) => {
+                              if (event.origin !== window.location.origin) return;
+                              if (event.data.type === 'auth:popup-complete') {
+                                window.removeEventListener('message', onMessage);
+                                // Refresh user data
+                                window.location.reload();
+                              }
+                            };
+                            window.addEventListener('message', onMessage);
+                          }
+                        }}
+                        className="text-blue-600 hover:text-blue-800 underline bg-transparent border-none p-0 cursor-pointer"
+                      >
+                        Melde dich an
+                      </button> oder 
+                      <button
+                        onClick={() => {
+                          // Open Auth0 signup in popup
+                          const w = 500;
+                          const h = 650;
+                          const dualScreenLeft = window.screenLeft !== undefined ? window.screenLeft : (window as any).screenX;
+                          const dualScreenTop = window.screenTop !== undefined ? window.screenTop : (window as any).screenY;
+                          const width = window.innerWidth ? window.innerWidth : document.documentElement.clientWidth ? document.documentElement.clientWidth : screen.width;
+                          const height = window.innerHeight ? window.innerHeight : document.documentElement.clientHeight ? document.documentElement.clientHeight : screen.height;
+                          const systemZoom = width / window.screen.availWidth;
+                          const left = (width - w) / 2 / systemZoom + dualScreenLeft;
+                          const top = (height - h) / 2 / systemZoom + dualScreenTop;
+
+                          // Get current page path for returnTo
+                          const currentPath = encodeURIComponent(window.location.pathname + window.location.search);
+                          const returnTo = encodeURIComponent('/auth/popup-complete?next=' + currentPath);
+
+                          const popup = window.open(
+                            `/api/auth/login?screen_hint=signup&prompt=login&max_age=0&returnTo=${returnTo}`,
+                            '_blank',
+                            `scrollbars=yes, width=${w}, height=${h}, top=${top}, left=${left}`
+                          );
+
+                          // Fallback if popup was blocked
+                          if (!popup || popup.closed) {
+                            window.location.assign(`/api/auth/login?screen_hint=signup&prompt=login&max_age=0&returnTo=${returnTo}`);
+                            return;
+                          }
+
+                          if (popup) {
+                            // Listen for completion message
+                            const onMessage = async (event: MessageEvent) => {
+                              if (event.origin !== window.location.origin) return;
+                              if (event.data.type === 'auth:popup-complete') {
+                                window.removeEventListener('message', onMessage);
+                                // Refresh user data
+                                window.location.reload();
+                              }
+                            };
+                            window.addEventListener('message', onMessage);
+                          }
+                        }}
+                        className="text-blue-600 hover:text-blue-800 underline bg-transparent border-none p-0 cursor-pointer ml-1"
+                      >
+                        erstelle ein Konto
+                      </button> um Bonuspunkte für diese Bestellung zu erhalten
+                    </span>
+                  </div>
+                </div>
+              )}
 
               {/* Bonuspunkte im Checkout einlösen (direkt unter der Anzeige) */}
               {isLoggedIn && availablePoints >= 1000 && (
@@ -1352,6 +1446,13 @@ export default function CheckoutClient({ initialIsLoggedIn, initialFormData, ini
 
               <div className="border-t border-slate-200 pt-4 space-y-2">
                 <div className="flex justify-between text-sm"><span className="text-slate-600">Zwischensumme</span><span className="text-slate-800">€{(total / 100).toFixed(2)}</span></div>
+                {/* Rabattcode-Abzug */}
+                {discountCents > 0 && (
+                  <div className="flex justify-between text-sm text-green-600">
+                    <span>Rabatt{discountCode ? ` (${discountCode})` : ''}</span>
+                    <span>-€{(discountCents / 100).toFixed(2)}</span>
+                  </div>
+                )}
                 
                 {/* Bonuspunkte-Rabatt */}
                 {redeemPoints && pointsToRedeem > 0 && (
@@ -1387,14 +1488,6 @@ export default function CheckoutClient({ initialIsLoggedIn, initialFormData, ini
                 <div className="flex justify-between text-lg font-semibold border-t border-slate-200 pt-2"><span className="text-slate-800">Gesamt</span><span className="text-slate-800">€{(finalTotal / 100).toFixed(2)}</span></div>
               </div>
 
-              
-
-              {!isLoggedIn && (
-                <div className="mt-6 p-4 bg-blue-50 border border-blue-200 rounded-lg">
-                  <p className="text-sm text-blue-800"><strong>Tipp:</strong> Erstellen Sie ein Konto, um Ihre Bestellungen zu verfolgen und schneller zu bestellen.</p>
-                  <a href="/api/auth/login" className="inline-block mt-2 text-sm text-blue-600 hover:text-blue-700 font-medium">Jetzt anmelden →</a>
-                </div>
-              )}
             </div>
           </div>
         </div>

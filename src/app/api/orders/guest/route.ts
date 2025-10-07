@@ -4,6 +4,7 @@ import Order from '@/lib/models/Order';
 import { Product } from '@/lib/models/Product';
 import { sendGuestOrderConfirmationEmail } from '@/lib/email';
 import { User } from '@/lib/models/User';
+import { generateUniqueOrderNumber } from '@/lib/generate-order-number';
 
 // Function to reduce stock for products and variations
 async function reduceStock(items: any[]) {
@@ -66,9 +67,14 @@ export async function POST(request: NextRequest) {
       }, { status: 400 });
     }
 
-    // Generate order number
-    const count = await Order.countDocuments();
-    const orderNumber = `3DS-${new Date().getFullYear().toString().slice(-2)}${String(count + 1).padStart(3, '0')}`;
+    // Generate unique order number
+    let orderNumber: string;
+    try {
+      orderNumber = await generateUniqueOrderNumber();
+    } catch (error) {
+      console.error('Error generating order number:', error);
+      return NextResponse.json({ error: 'Fehler beim Generieren der Bestellnummer. Bitte versuchen Sie es erneut.' }, { status: 500 });
+    }
 
     // Calculate total (all in cents)
     const subtotalCents = items.reduce((sum: number, item: any) => sum + (item.price * item.quantity), 0);
@@ -100,7 +106,22 @@ export async function POST(request: NextRequest) {
       status: 'pending'
     });
 
-    await order.save();
+    try {
+      await order.save();
+    } catch (error: any) {
+      console.error('Error saving guest order:', error);
+      
+      // Check if it's a duplicate key error
+      if (error.code === 11000 && error.keyPattern?.orderNumber) {
+        return NextResponse.json({ 
+          error: 'Bestellnummer bereits vergeben. Bitte versuchen Sie es erneut.' 
+        }, { status: 409 });
+      }
+      
+      return NextResponse.json({ 
+        error: 'Fehler beim Speichern der Bestellung. Bitte versuchen Sie es erneut.' 
+      }, { status: 500 });
+    }
 
     // Reduce stock for all items in the order
     await reduceStock(items);
