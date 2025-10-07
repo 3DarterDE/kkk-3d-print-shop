@@ -104,6 +104,14 @@ export default function Footer() {
                 </svg>
               </a>
             </div>
+            
+            {/* Kontakt unter Social Media Icons */}
+            <div className="mt-4">
+              <h4 className="font-medium text-white mb-2">Kontakt</h4>
+              <div className="text-sm text-gray-300">
+                <p>📧 info@3darterde.de</p>
+              </div>
+            </div>
           </div>
           </ScrollAnimation>
 
@@ -166,35 +174,30 @@ export default function Footer() {
             </p>
             
             <form onSubmit={handleNewsletterSubmit} className="space-y-3 mb-4">
-              <div className="flex gap-2">
+              <div>
                 <input 
                   type="text" 
                   placeholder="Vorname (optional)" 
                   value={firstName}
                   onChange={(e) => setFirstName(e.target.value)}
-                  className="flex-1 px-3 py-2 bg-gray-700 border border-gray-600 rounded-md text-sm text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                />
-                <input 
-                  type="text" 
-                  placeholder="Nachname (optional)" 
-                  value={lastName}
-                  onChange={(e) => setLastName(e.target.value)}
-                  className="flex-1 px-3 py-2 bg-gray-700 border border-gray-600 rounded-md text-sm text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-md text-sm text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                 />
               </div>
-              <div className="flex">
+              <div>
                 <input 
                   type="email" 
                   placeholder="Ihre E-Mail" 
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   required
-                  className="flex-1 px-3 py-2 bg-gray-700 border border-gray-600 rounded-l-md text-sm text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-md text-sm text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                 />
+              </div>
+              <div>
                 <button 
                   type="submit"
                   disabled={status === 'loading'}
-                  className="px-4 py-2 bg-gradient-to-r from-blue-600 to-blue-700 text-white rounded-r-md text-sm hover:from-blue-700 hover:to-blue-800 transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="w-full px-3 py-2 bg-gradient-to-r from-blue-600 to-blue-700 text-white rounded-md text-sm hover:from-blue-700 hover:to-blue-800 transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   {status === 'loading' ? 'Wird verarbeitet...' : 'Anmelden'}
                 </button>
@@ -219,13 +222,6 @@ export default function Footer() {
               </Link>
               .
             </p>
-            
-            <div className="border-t border-gray-700 pt-4">
-              <h4 className="font-medium text-white mb-2">Kontakt</h4>
-              <div className="text-sm text-gray-300 space-y-1">
-                <p>📧 info@3darterde.de</p>
-              </div>
-            </div>
           </div>
           </ScrollAnimation>
         </div>

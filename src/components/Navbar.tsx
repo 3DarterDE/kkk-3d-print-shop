@@ -433,10 +433,6 @@ export default function Navbar() {
                           </div>
                         </button>
                         
-                        {/* Mobile Auth Button - nach der Navigation */}
-                        <div className="mt-4 pt-4 border-t border-gray-200">
-                          <CustomerButton />
-                        </div>
                       </>
                     )}
                     
@@ -488,7 +484,7 @@ export default function Navbar() {
                           <button
                             key={subcategory._id}
                             onClick={() => {
-                              router.push(`/shop/${subcategory.slug}`);
+                              router.push(`/shop/${selectedCategory.slug}/${subcategory.slug}`);
                               closeMobileMenu();
                             }}
                             className="w-full text-left px-4 py-3 text-gray-700 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-all duration-300 font-medium"

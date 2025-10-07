@@ -233,9 +233,9 @@ export default function CheckoutClient({ initialIsLoggedIn, initialFormData, ini
       }));
     }
     
-    // Check email existence for guest users
-    if (field === 'email' && !isLoggedIn && typeof value === 'string' && value.includes('@')) {
-      checkEmailExists(value);
+    // Reset email warning when user changes email
+    if (field === 'email' && emailExistsWarning) {
+      setEmailExistsWarning(false);
     }
   };
 
@@ -248,14 +248,14 @@ export default function CheckoutClient({ initialIsLoggedIn, initialFormData, ini
       });
       
       const result = await response.json();
-      setEmailExistsWarning(result.exists);
+      return result.exists;
     } catch (error) {
       console.error('Error checking email:', error);
-      setEmailExistsWarning(false);
+      return false;
     }
   };
 
-  const validateStep = (step: number) => {
+  const validateStep = async (step: number) => {
     const errors: Record<string, boolean> = {};
     let isValid = true;
 
@@ -264,7 +264,18 @@ export default function CheckoutClient({ initialIsLoggedIn, initialFormData, ini
         if (!formData.firstName) { errors.firstName = true; isValid = false; }
         if (!formData.lastName) { errors.lastName = true; isValid = false; }
         if (!formData.email) { errors.email = true; isValid = false; }
-        if (!isLoggedIn && emailExistsWarning) { errors.email = true; isValid = false; }
+        
+        // Check if email exists for guest users
+        if (!isLoggedIn && formData.email && isValid) {
+          const emailExists = await checkEmailExists(formData.email);
+          if (emailExists) {
+            setEmailExistsWarning(true);
+            errors.email = true;
+            isValid = false;
+          } else {
+            setEmailExistsWarning(false);
+          }
+        }
         break;
       case 2:
         if (!formData.shippingAddress.firstName) { errors['shippingAddress.firstName'] = true; isValid = false; }
@@ -643,7 +654,7 @@ export default function CheckoutClient({ initialIsLoggedIn, initialFormData, ini
                       readOnly={isLoggedIn} 
                       required 
                     />
-                    {fieldErrors.email && (<p className="mt-1 text-sm text-red-600">Dieses Feld ist erforderlich</p>)}
+                    {fieldErrors.email && !emailExistsWarning && (<p className="mt-1 text-sm text-red-600">Dieses Feld ist erforderlich</p>)}
                     {emailExistsWarning && !isLoggedIn && (
                       <p className="mt-1 text-sm text-orange-600">
                         Diese E-Mail-Adresse ist bereits registriert.{' '}
@@ -759,7 +770,7 @@ export default function CheckoutClient({ initialIsLoggedIn, initialFormData, ini
                   </div>
 
                   <div className="flex justify-end">
-                    <button onClick={async () => { if (validateStep(1)) { await saveProfileData(); setCurrentStep(2); } }} className="px-6 py-3 bg-blue-600 text-white font-medium rounded-lg hover:bg-blue-700 transition-colors">Weiter</button>
+                    <button onClick={async () => { if (await validateStep(1)) { await saveProfileData(); setCurrentStep(2); } }} className="px-6 py-3 bg-blue-600 text-white font-medium rounded-lg hover:bg-blue-700 transition-colors">Weiter</button>
                   </div>
                 </div>
               )}
@@ -852,7 +863,7 @@ export default function CheckoutClient({ initialIsLoggedIn, initialFormData, ini
 
                   <div className="flex justify-between">
                     <button onClick={() => setCurrentStep(1)} className="px-6 py-3 bg-gray-600 text-white font-medium rounded-lg hover:bg-gray-700 transition-colors">Zurück</button>
-                    <button onClick={async () => { if (validateStep(2)) { await saveProfileData(); setCurrentStep(3); } }} className="px-6 py-3 bg-blue-600 text-white font-medium rounded-lg hover:bg-blue-700 transition-colors">Weiter</button>
+                    <button onClick={async () => { if (await validateStep(2)) { await saveProfileData(); setCurrentStep(3); } }} className="px-6 py-3 bg-blue-600 text-white font-medium rounded-lg hover:bg-blue-700 transition-colors">Weiter</button>
                   </div>
                 </div>
               )}
@@ -998,7 +1009,7 @@ export default function CheckoutClient({ initialIsLoggedIn, initialFormData, ini
 
                   <div className="flex justify-between">
                     <button onClick={() => setCurrentStep(2)} className="px-6 py-3 bg-gray-600 text-white font-medium rounded-lg hover:bg-gray-700 transition-colors">Zurück</button>
-                    <button onClick={async () => { if (validateStep(3)) { await saveProfileData(); setCurrentStep(4); } }} className="px-6 py-3 bg-blue-600 text-white font-medium rounded-lg hover:bg-blue-700 transition-colors">Weiter</button>
+                    <button onClick={async () => { if (await validateStep(3)) { await saveProfileData(); setCurrentStep(4); } }} className="px-6 py-3 bg-blue-600 text-white font-medium rounded-lg hover:bg-blue-700 transition-colors">Weiter</button>
                   </div>
                 </div>
               )}
@@ -1056,7 +1067,7 @@ export default function CheckoutClient({ initialIsLoggedIn, initialFormData, ini
                   <div className="flex justify-between">
                     <button onClick={() => setCurrentStep(3)} className="px-6 py-3 bg-gray-600 text-white font-medium rounded-lg hover:bg-gray-700 transition-colors">Zurück</button>
                     <button 
-                      onClick={async () => { if (validateStep(4)) { await saveProfileData(); setCurrentStep(5); } }}
+                      onClick={async () => { if (await validateStep(4)) { await saveProfileData(); setCurrentStep(5); } }}
                       className="px-8 py-3 bg-blue-600 text-white font-medium rounded-lg hover:bg-blue-700 transition-colors"
                     >
                       Zur Zusammenfassung
@@ -1155,7 +1166,7 @@ export default function CheckoutClient({ initialIsLoggedIn, initialFormData, ini
                         {formData.paymentMethod === 'bank' && 'Banküberweisung'}
                       </p>
                     </div>
-                    <button onClick={() => setCurrentStep(3)} className="mt-3 text-sm text-blue-600 hover:text-blue-700 font-medium">Bearbeiten</button>
+                    <button onClick={() => setCurrentStep(4)} className="mt-3 text-sm text-blue-600 hover:text-blue-700 font-medium">Bearbeiten</button>
                   </div>
 
                   {orderStatus === 'error' && (<div className="p-4 bg-red-50 border border-red-200 rounded-lg text-red-700">{errorMessage}</div>)}
@@ -1272,7 +1283,7 @@ export default function CheckoutClient({ initialIsLoggedIn, initialFormData, ini
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                       </svg>
                       {/* Tooltip */}
-                      <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-3 py-2 bg-gray-900 text-white text-xs rounded-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 whitespace-nowrap z-10">
+                            <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-3 py-2 bg-gray-900 text-white text-xs rounded-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 z-10 max-w-[80vw] sm:max-w-xs whitespace-normal break-words text-center">
                         Du erhältst weitere Bonuspunkte für das Bewerten der Produkte nach der Lieferung
                         {/* Tooltip arrow */}
                         <div className="absolute top-full left-1/2 transform -translate-x-1/2 border-4 border-transparent border-t-gray-900"></div>
@@ -1475,7 +1486,7 @@ export default function CheckoutClient({ initialIsLoggedIn, initialFormData, ini
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                       </svg>
                       {/* Tooltip */}
-                      <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-3 py-2 bg-gray-900 text-white text-xs rounded-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 whitespace-nowrap z-10">
+                            <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-3 py-2 bg-gray-900 text-white text-xs rounded-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 z-10 max-w-[80vw] sm:max-w-xs whitespace-normal break-words text-center">
                         Alle Preise sind Endpreise zzgl. Versandkosten. Gemäß § 19 UStG wird keine Umsatzsteuer erhoben und ausgewiesen.
                         {/* Tooltip arrow */}
                         <div className="absolute top-full left-1/2 transform -translate-x-1/2 border-4 border-transparent border-t-gray-900"></div>

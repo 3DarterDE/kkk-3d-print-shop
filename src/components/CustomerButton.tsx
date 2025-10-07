@@ -2,6 +2,8 @@
 
 import { useState, useEffect } from 'react';
 import { CgProfile } from 'react-icons/cg';
+import { IoCheckmarkCircleSharp } from 'react-icons/io5';
+import { GoXCircleFill } from 'react-icons/go';
 import useAuth from '@/lib/hooks/useAuth';
 import { useUserData } from '@/lib/contexts/UserDataContext';
 
@@ -153,8 +155,15 @@ export default function CustomerButton() {
           aria-label="Kundenbereich"
           disabled={!isInteractive}
         >
-          <div className="w-8 h-8 flex items-center justify-center group-hover:drop-shadow-[0_0_6px_rgba(173,216,230,0.6)] transition-all duration-300">
+          <div className="w-8 h-8 flex items-center justify-center group-hover:drop-shadow-[0_0_6px_rgba(173,216,230,0.6)] transition-all duration-300 relative">
             <CgProfile className="w-7 h-7 transition-transform duration-300 group-hover:scale-110" />
+            {mounted && !loading && (
+              authUser ? (
+                <IoCheckmarkCircleSharp className="absolute -top-1 -right-1 w-4 h-4 text-green-500 bg-white rounded-full" />
+              ) : (
+                <GoXCircleFill className="absolute -top-1 -right-1 w-4 h-4 text-red-500 bg-white rounded-full" />
+              )
+            )}
           </div>
         </button>
 

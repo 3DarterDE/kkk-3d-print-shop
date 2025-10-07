@@ -269,13 +269,13 @@ export default function AdminOrdersPage() {
         // Also refresh the orders list
         await fetchOrders();
         
-        alert('E-Mail wurde erfolgreich versendet und Status auf "Versandt" gesetzt!');
+        showToast('E-Mail wurde erfolgreich versendet und Status auf "Versandt" gesetzt!');
       } else {
         const data = await response.json();
-        alert(data.error || 'Fehler beim Versenden der E-Mail');
+        showToast(data.error || 'Fehler beim Versenden der E-Mail', 'error');
       }
     } catch (err) {
-      alert('Fehler beim Versenden der E-Mail');
+      showToast('Fehler beim Versenden der E-Mail', 'error');
       console.error('Send email error:', err);
     } finally {
       setSendingEmail(false);
@@ -313,13 +313,36 @@ export default function AdminOrdersPage() {
     }
   };
 
+  const showToast = (message: string, type: 'success' | 'error' = 'success') => {
+    const toast = document.createElement('div');
+    const bgColor = type === 'success' ? 'bg-green-500' : 'bg-red-500';
+    const icon = type === 'success' ? '✅' : '❌';
+    
+    toast.className = `fixed top-4 right-4 ${bgColor} text-white px-4 py-2 rounded-lg shadow-lg z-50 transform transition-all duration-300 ease-in-out`;
+    toast.textContent = `${icon} ${message}`;
+    
+    // Toast zur Seite hinzufügen
+    document.body.appendChild(toast);
+    
+    // Toast nach 3 Sekunden automatisch entfernen
+    setTimeout(() => {
+      toast.style.transform = 'translateX(100%)';
+      toast.style.opacity = '0';
+      setTimeout(() => {
+        if (document.body.contains(toast)) {
+          document.body.removeChild(toast);
+        }
+      }, 300);
+    }, 3000);
+  };
+
   const copyToClipboard = async (text: string, label: string) => {
     try {
       await navigator.clipboard.writeText(text);
-      alert(`${label} wurde in die Zwischenablage kopiert!`);
+      showToast(`${label} kopiert!`);
     } catch (err) {
       console.error('Failed to copy:', err);
-      alert('Fehler beim Kopieren in die Zwischenablage');
+      showToast('Fehler beim Kopieren', 'error');
     }
   };
 
@@ -490,18 +513,18 @@ export default function AdminOrdersPage() {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 max-w-full overflow-hidden">
         {/* Header mit verbessertem Design */}
-        <div className="mb-8">
-          <div className="flex items-center justify-between">
+        <div className="mb-6">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
             <div>
               <div className="flex items-center space-x-3 mb-2">
-                <svg className="w-8 h-8 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <svg className="w-6 h-6 sm:w-8 sm:h-8 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                 </svg>
-                <h1 className="text-3xl font-bold text-gray-900">Bestellverwaltung</h1>
+                <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">Bestellverwaltung</h1>
               </div>
-              <div className="flex items-center space-x-4 text-sm text-gray-600">
+              <div className="flex flex-col sm:flex-row sm:items-center sm:space-x-4 text-sm text-gray-600 space-y-1 sm:space-y-0">
                 <div className="flex items-center space-x-1">
                   <span className="font-semibold text-lg text-blue-600">{totalOrders}</span>
                   <span>Bestellungen</span>
@@ -518,7 +541,7 @@ export default function AdminOrdersPage() {
             </div>
             <Link
               href="/admin/dashboard"
-              className="inline-flex items-center px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 transition-colors"
+              className="inline-flex items-center justify-center px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 transition-colors"
             >
               <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
@@ -529,7 +552,7 @@ export default function AdminOrdersPage() {
         </div>
 
         {/* Verbesserte Such- und Filter-Sektion */}
-        <div className="bg-white rounded-lg shadow-md border border-gray-100 p-6 mb-6">
+        <div className="bg-white rounded-lg shadow-md border border-gray-100 p-4 sm:p-6 mb-6">
           <div className="grid grid-cols-1 lg:grid-cols-4 gap-4">
             <form onSubmit={handleSearch} className="lg:col-span-3">
               <div className="relative">
@@ -543,7 +566,7 @@ export default function AdminOrdersPage() {
                   placeholder="Suche nach Bestellnummer, Kunde oder E-Mail..."
                   value={searchTerm}
                   onChange={handleSearchInputChange}
-                  className="block w-full pl-10 pr-3 py-3 border border-gray-300 rounded-lg leading-5 bg-white placeholder-gray-500 focus:outline-none focus:placeholder-gray-400 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  className="block w-full pl-10 pr-3 py-2 sm:py-3 border border-gray-300 rounded-lg leading-5 bg-white placeholder-gray-500 focus:outline-none focus:placeholder-gray-400 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm sm:text-base"
                 />
               </div>
             </form>
@@ -557,7 +580,7 @@ export default function AdminOrdersPage() {
               <select
                 value={statusFilter}
                 onChange={handleStatusFilterChange}
-                className="block w-full pl-10 pr-10 py-3 border border-gray-300 rounded-lg bg-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500 appearance-none"
+                className="block w-full pl-10 pr-10 py-2 sm:py-3 border border-gray-300 rounded-lg bg-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500 appearance-none text-sm sm:text-base"
               >
                 <option value="all">Alle Bestellungen</option>
                 <option value="pending">⏳ Ausstehend</option>
@@ -570,8 +593,8 @@ export default function AdminOrdersPage() {
           </div>
         </div>
 
-        {/* Orders Table */}
-        <div className="bg-white rounded-lg shadow overflow-hidden">
+        {/* Orders Display */}
+        <div className="bg-white rounded-lg shadow overflow-hidden max-w-full">
           {orders.length === 0 ? (
             <div className="text-center py-12">
               <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
@@ -587,8 +610,10 @@ export default function AdminOrdersPage() {
               </p>
             </div>
           ) : (
-            <div className="overflow-x-auto">
-              <table className="min-w-full divide-y divide-gray-200">
+            <>
+              {/* Desktop Table View */}
+              <div className="hidden lg:block overflow-x-auto">
+                <table className="min-w-full divide-y divide-gray-200">
                 <thead className="bg-gradient-to-r from-gray-50 to-gray-100">
                   <tr>
                     <th className="px-6 py-4 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">
@@ -1374,6 +1399,557 @@ export default function AdminOrdersPage() {
                 </tbody>
               </table>
             </div>
+            
+            {/* Mobile Card View */}
+            <div className="lg:hidden">
+              <div className="divide-y divide-gray-200">
+                {orders.map((order) => {
+                  const statusInfo = getStatusInfo(order.status);
+                  const isExpanded = expandedOrder === order._id;
+                  
+                  return (
+                    <div key={order._id} className="p-4 max-w-full overflow-hidden">
+                      {/* Card Header */}
+                      <div className="flex items-start justify-between mb-3">
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center space-x-2 mb-1">
+                            <div className="bg-blue-100 rounded-full p-1.5">
+                              <svg className="w-3 h-3 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                              </svg>
+                            </div>
+                            <button
+                              onClick={() => copyToClipboard(order.orderNumber, 'Bestellnummer')}
+                              className="text-sm font-semibold text-gray-900 hover:text-blue-600 transition-colors truncate"
+                            >
+                              {order.orderNumber}
+                            </button>
+                          </div>
+                          <p className="text-xs text-gray-500">
+                            {order.items.length} Artikel{(order.items.length === 1 ? '' : 's')} • {formatDate(order.createdAt)}
+                          </p>
+                        </div>
+                        <div className="flex items-center space-x-2">
+                          <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${statusInfo.bg} ${statusInfo.color}`}>
+                            {statusInfo.icon} {statusInfo.text}
+                          </span>
+                          <button
+                            onClick={() => setExpandedOrder(isExpanded ? null : order._id)}
+                            className="p-1 text-gray-400 hover:text-gray-600"
+                          >
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d={isExpanded ? "M19 9l-7 7-7-7" : "M9 5l7 7-7 7"} />
+                            </svg>
+                          </button>
+                        </div>
+                      </div>
+                      
+                      {/* Card Content */}
+                      <div className="space-y-2">
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center space-x-2">
+                            <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                            </svg>
+                            <span className="text-sm text-gray-600">Kunde:</span>
+                          </div>
+                          <div className="text-right">
+                            <button
+                              onClick={() => copyToClipboard(order.userName || 'Unbekannt', 'Kundenname')}
+                              className="text-sm font-medium text-gray-900 hover:text-blue-600 transition-colors"
+                            >
+                              {order.userName || 'Unbekannt'}
+                            </button>
+                            <button
+                              onClick={() => copyToClipboard(order.userEmail || 'Keine E-Mail', 'E-Mail-Adresse')}
+                              className="text-xs text-gray-500 hover:text-blue-600 transition-colors block"
+                            >
+                              {order.userEmail || 'Keine E-Mail'}
+                            </button>
+                          </div>
+                        </div>
+                        
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center space-x-2">
+                            <svg className="w-4 h-4 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1" />
+                            </svg>
+                            <span className="text-sm text-gray-600">Betrag:</span>
+                          </div>
+                          <div className="text-sm font-semibold text-gray-900">
+                            {formatCurrency(order.total)}
+                          </div>
+                        </div>
+                        
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center space-x-2">
+                            <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
+                            </svg>
+                            <span className="text-sm text-gray-600">Sendung:</span>
+                          </div>
+                          <div className="text-sm text-gray-900">
+                            {order.trackingInfo && order.trackingInfo.length > 0 ? (
+                              <div className="text-right">
+                                <div className="text-xs font-medium">
+                                  {order.trackingInfo.length} Sendung{order.trackingInfo.length > 1 ? 'en' : ''}
+                                </div>
+                                {(order.isEmailSent || order.trackingInfo.some(t => t.emailSent)) && (
+                                  <span className="inline-flex items-center px-1.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800 mt-1">
+                                    <svg className="w-3 h-3 mr-1" fill="currentColor" viewBox="0 0 20 20">
+                                      <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                                    </svg>
+                                    E-Mail
+                                  </span>
+                                )}
+                              </div>
+                            ) : (
+                              <span className="text-xs text-gray-400">Keine Sendungen</span>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                      
+                      {/* Mobile Actions */}
+                      <div className="mt-4 flex flex-col space-y-2">
+                        <div className="flex space-x-2">
+                          {order.status === 'delivered' ? (
+                            <button
+                              onClick={() => downloadInvoice(order.orderNumber)}
+                              className="flex-1 inline-flex items-center justify-center px-3 py-2 text-xs font-medium text-green-600 bg-green-50 rounded-lg hover:bg-green-100 transition-colors duration-200"
+                            >
+                              <svg className="w-3 h-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                              </svg>
+                              Rechnung
+                            </button>
+                          ) : (
+                            <div className="flex-1 text-xs text-gray-500 px-3 py-2 text-center bg-gray-50 rounded-lg">
+                              Rechnung nach Lieferung
+                            </div>
+                          )}
+                          <button
+                            onClick={() => setExpandedOrder(isExpanded ? null : order._id)}
+                            className="flex-1 inline-flex items-center justify-center px-3 py-2 text-xs font-medium text-blue-600 bg-blue-50 rounded-lg hover:bg-blue-100 transition-colors duration-200"
+                          >
+                            <svg className="w-3 h-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d={isExpanded ? "M19 9l-7 7-7-7" : "M9 5l7 7-7 7"} />
+                            </svg>
+                            {isExpanded ? 'Weniger' : 'Details'}
+                          </button>
+                        </div>
+                        
+                        <div className="w-full">
+                          <select
+                            value={order.status}
+                            onChange={(e) => handleStatusUpdate(order._id, e.target.value)}
+                            className="w-full text-xs border border-gray-300 rounded px-2 py-2"
+                            style={{ maxWidth: '200px' }}
+                          >
+                            <option value="pending">Ausstehend</option>
+                            <option value="processing">In Bearbeitung</option>
+                            <option value="shipped">Versandt</option>
+                            <option value="delivered">Geliefert</option>
+                            <option value="cancelled">Storniert</option>
+                          </select>
+                        </div>
+                      </div>
+                      
+                      {/* Expanded Details - Same as Desktop */}
+                      {isExpanded && (
+                        <div className="mt-4 pt-4 border-t border-gray-200">
+                          {/* Same expanded content as desktop version */}
+                          <div className="space-y-4">
+                            {/* Order Items */}
+                            <div>
+                              <h4 className="font-medium text-gray-900 mb-3">Bestellte Artikel</h4>
+                              <div className="space-y-3">
+                                {order.items.map((item, index) => (
+                                  <div key={index} className="flex items-center space-x-3 p-3 bg-gray-50 rounded-lg">
+                                    {item.image && (
+                                      <img
+                                        src={item.image}
+                                        alt={item.name}
+                                        className="w-12 h-12 object-cover rounded-lg"
+                                      />
+                                    )}
+                                    <div className="flex-1 min-w-0">
+                                      <button
+                                        onClick={() => copyToClipboard(item.name, 'Produktname')}
+                                        className="text-sm font-medium text-gray-900 hover:text-blue-600 transition-colors truncate block"
+                                      >
+                                        {item.name}
+                                      </button>
+                                      <div className="text-xs text-gray-500">
+                                        Menge: {item.quantity} • {formatCurrency(item.price / 100)}
+                                      </div>
+                                      {item.variations && Object.keys(item.variations).length > 0 && (
+                                        <div className="text-xs text-gray-500 mt-1">
+                                          {Object.entries(item.variations).map(([key, value]) => (
+                                            <span key={key}>
+                                              {key}: {value}
+                                              {Object.keys(item.variations || {}).indexOf(key) < Object.keys(item.variations || {}).length - 1 && ', '}
+                                            </span>
+                                          ))}
+                                        </div>
+                                      )}
+                                    </div>
+                                    <div className="text-sm font-semibold text-gray-900">
+                                      {formatCurrency((item.price * item.quantity) / 100)}
+                                    </div>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                            
+                            {/* Order Summary */}
+                            <div className="bg-white p-4 rounded-lg border">
+                              <h4 className="font-medium text-gray-900 mb-3">Bestellübersicht</h4>
+                              <div className="space-y-2">
+                                <div className="flex justify-between text-sm">
+                                  <span>Zwischensumme ({order.items.length} Artikel):</span>
+                                  <span>{formatCurrency((order as any).subtotal || order.total)}</span>
+                                </div>
+                                {(order as any).shippingCosts > 0 && (
+                                  <div className="flex justify-between text-sm">
+                                    <span>Versandkosten:</span>
+                                    <span>{formatCurrency((order as any).shippingCosts / 100)}</span>
+                                  </div>
+                                )}
+                                {(order as any).shippingCosts === 0 && (
+                                  <div className="flex justify-between text-sm">
+                                    <span>Versandkosten:</span>
+                                    <span className="text-green-600">Kostenlos</span>
+                                  </div>
+                                )}
+                                {order.discountCents && order.discountCents > 0 && (
+                                  <div className="flex justify-between text-sm text-green-600">
+                                    <span>Rabatt{order.discountCode ? ` (${order.discountCode})` : ''}:</span>
+                                    <span>-{formatCurrency(order.discountCents / 100)}</span>
+                                  </div>
+                                )}
+                                {(order as any).bonusPointsRedeemed > 0 && (
+                                  <div className="flex justify-between text-sm text-green-600">
+                                    <span>Bonuspunkte-Rabatt ({(order as any).bonusPointsRedeemed} Punkte):</span>
+                                    <span>-{formatCurrency(getPointsDiscountAmount((order as any).bonusPointsRedeemed))}</span>
+                                  </div>
+                                )}
+                                <div className="flex justify-between text-sm font-semibold border-t pt-2">
+                                  <span>Gesamtbetrag:</span>
+                                  <span>{formatCurrency(order.total)}</span>
+                                </div>
+                                {order.bonusPointsEarned > 0 && (
+                                  <div className="mt-3 p-2 bg-blue-50 rounded-lg">
+                                    <div className="text-xs text-blue-800">
+                                      <span className="font-medium">Kunde hat {order.bonusPointsEarned} Bonuspunkte für diese Bestellung erhalten</span>
+                                      {(order as any).bonusPointsRedeemed > 0 && (
+                                        <span className="block mt-1">
+                                          und {((order as any).bonusPointsRedeemed)} Punkte eingelöst
+                                        </span>
+                                      )}
+                                    </div>
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                            
+                            {/* Shipping Address */}
+                            <div className="bg-white p-4 rounded-lg border">
+                              <h4 className="font-medium text-gray-900 mb-3">Lieferadresse</h4>
+                              <div className="text-sm text-gray-600 space-y-1">
+                                <div className="flex space-x-2">
+                                  <button
+                                    onClick={() => copyToClipboard(order.shippingAddress.firstName!, 'Vorname')}
+                                    className="hover:text-blue-600 transition-colors"
+                                  >
+                                    {order.shippingAddress.firstName}
+                                  </button>
+                                  <button
+                                    onClick={() => copyToClipboard(order.shippingAddress.lastName!, 'Nachname')}
+                                    className="hover:text-blue-600 transition-colors"
+                                  >
+                                    {order.shippingAddress.lastName}
+                                  </button>
+                                </div>
+                                {order.shippingAddress.company && (
+                                  <button
+                                    onClick={() => copyToClipboard(order.shippingAddress.company!, 'Firma')}
+                                    className="hover:text-blue-600 transition-colors block"
+                                  >
+                                    {order.shippingAddress.company}
+                                  </button>
+                                )}
+                                <div className="flex space-x-2">
+                                  <button
+                                    onClick={() => copyToClipboard(order.shippingAddress.street, 'Straße')}
+                                    className="hover:text-blue-600 transition-colors"
+                                  >
+                                    {order.shippingAddress.street}
+                                  </button>
+                                  <button
+                                    onClick={() => copyToClipboard(order.shippingAddress.houseNumber, 'Hausnummer')}
+                                    className="hover:text-blue-600 transition-colors"
+                                  >
+                                    {order.shippingAddress.houseNumber}
+                                  </button>
+                                </div>
+                                {order.shippingAddress.addressLine2 && (
+                                  <button
+                                    onClick={() => copyToClipboard(order.shippingAddress.addressLine2!, 'Adresszusatz')}
+                                    className="hover:text-blue-600 transition-colors block"
+                                  >
+                                    {order.shippingAddress.addressLine2}
+                                  </button>
+                                )}
+                                <div className="flex space-x-2">
+                                  <button
+                                    onClick={() => copyToClipboard(order.shippingAddress.postalCode, 'PLZ')}
+                                    className="hover:text-blue-600 transition-colors"
+                                  >
+                                    {order.shippingAddress.postalCode}
+                                  </button>
+                                  <button
+                                    onClick={() => copyToClipboard(order.shippingAddress.city, 'Stadt')}
+                                    className="hover:text-blue-600 transition-colors"
+                                  >
+                                    {order.shippingAddress.city}
+                                  </button>
+                                </div>
+                                <button
+                                  onClick={() => copyToClipboard(order.shippingAddress.country, 'Land')}
+                                  className="hover:text-blue-600 transition-colors block"
+                                >
+                                  {order.shippingAddress.country}
+                                </button>
+                                <button
+                                  onClick={() => copyToClipboard(
+                                    `${order.shippingAddress.firstName} ${order.shippingAddress.lastName}\n${order.shippingAddress.company ? order.shippingAddress.company + '\n' : ''}${order.shippingAddress.street} ${order.shippingAddress.houseNumber}\n${order.shippingAddress.addressLine2 ? order.shippingAddress.addressLine2 + '\n' : ''}${order.shippingAddress.postalCode} ${order.shippingAddress.city}\n${order.shippingAddress.country}`,
+                                    'Komplette Lieferadresse'
+                                  )}
+                                  className="mt-3 text-xs text-blue-600 hover:text-blue-800 transition-colors"
+                                >
+                                  📋 Komplette Adresse kopieren
+                                </button>
+                              </div>
+                            </div>
+                            
+                            {/* Billing Address */}
+                            {order.billingAddress && (
+                              <div className="bg-white p-4 rounded-lg border">
+                                <h4 className="font-medium text-gray-900 mb-3">Rechnungsadresse</h4>
+                                <div className="text-sm text-gray-600 space-y-1">
+                                  <div className="flex space-x-2">
+                                    <button
+                                      onClick={() => copyToClipboard(order.billingAddress!.firstName!, 'Vorname')}
+                                      className="hover:text-blue-600 transition-colors"
+                                    >
+                                      {order.billingAddress!.firstName}
+                                    </button>
+                                    <button
+                                      onClick={() => copyToClipboard(order.billingAddress!.lastName!, 'Nachname')}
+                                      className="hover:text-blue-600 transition-colors"
+                                    >
+                                      {order.billingAddress!.lastName}
+                                    </button>
+                                  </div>
+                                  {order.billingAddress.company && (
+                                    <button
+                                      onClick={() => copyToClipboard(order.billingAddress!.company!, 'Firma')}
+                                      className="hover:text-blue-600 transition-colors block"
+                                    >
+                                      {order.billingAddress.company}
+                                    </button>
+                                  )}
+                                  <div className="flex space-x-2">
+                                    <button
+                                      onClick={() => copyToClipboard(order.billingAddress!.street!, 'Straße')}
+                                      className="hover:text-blue-600 transition-colors"
+                                    >
+                                      {order.billingAddress!.street}
+                                    </button>
+                                    <button
+                                      onClick={() => copyToClipboard(order.billingAddress!.houseNumber!, 'Hausnummer')}
+                                      className="hover:text-blue-600 transition-colors"
+                                    >
+                                      {order.billingAddress!.houseNumber}
+                                    </button>
+                                  </div>
+                                  {order.billingAddress.addressLine2 && (
+                                    <button
+                                      onClick={() => copyToClipboard(order.billingAddress!.addressLine2!, 'Adresszusatz')}
+                                      className="hover:text-blue-600 transition-colors block"
+                                    >
+                                      {order.billingAddress!.addressLine2}
+                                    </button>
+                                  )}
+                                  <div className="flex space-x-2">
+                                    <button
+                                      onClick={() => copyToClipboard(order.billingAddress!.postalCode!, 'PLZ')}
+                                      className="hover:text-blue-600 transition-colors"
+                                    >
+                                      {order.billingAddress!.postalCode}
+                                    </button>
+                                    <button
+                                      onClick={() => copyToClipboard(order.billingAddress!.city!, 'Stadt')}
+                                      className="hover:text-blue-600 transition-colors"
+                                    >
+                                      {order.billingAddress!.city}
+                                    </button>
+                                  </div>
+                                  <button
+                                    onClick={() => copyToClipboard(order.billingAddress!.country!, 'Land')}
+                                    className="hover:text-blue-600 transition-colors block"
+                                  >
+                                    {order.billingAddress.country}
+                                  </button>
+                                  <button
+                                    onClick={() => copyToClipboard(
+                                      `${order.billingAddress!.firstName} ${order.billingAddress!.lastName}\n${order.billingAddress!.company ? order.billingAddress!.company + '\n' : ''}${order.billingAddress!.street} ${order.billingAddress!.houseNumber}\n${order.billingAddress!.addressLine2 ? order.billingAddress!.addressLine2 + '\n' : ''}${order.billingAddress!.postalCode} ${order.billingAddress!.city}\n${order.billingAddress!.country}`,
+                                      'Komplette Rechnungsadresse'
+                                    )}
+                                    className="mt-3 text-xs text-blue-600 hover:text-blue-800 transition-colors"
+                                  >
+                                    📋 Komplette Adresse kopieren
+                                  </button>
+                                </div>
+                              </div>
+                            )}
+                            
+                            {/* Payment Information */}
+                            <div className="bg-white p-4 rounded-lg border">
+                              <h4 className="font-medium text-gray-900 mb-3">Zahlung</h4>
+                              <div className="text-sm text-gray-600">
+                                <div className="flex justify-between items-center">
+                                  <span>Zahlungsart:</span>
+                                  <span>{order.paymentMethod || 'Banküberweisung'}</span>
+                                </div>
+                                <div className="flex justify-between items-center mt-2">
+                                  <span>Status:</span>
+                                  <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${
+                                    order.paymentStatus === 'paid' ? 'bg-green-100 text-green-800' :
+                                    order.paymentStatus === 'pending' ? 'bg-yellow-100 text-yellow-800' :
+                                    order.paymentStatus === 'failed' ? 'bg-red-100 text-red-800' :
+                                    'bg-gray-100 text-gray-800'
+                                  }`}>
+                                    {order.paymentStatus === 'paid' ? '✅ Bezahlt' :
+                                     order.paymentStatus === 'pending' ? '⏳ Ausstehend' :
+                                     order.paymentStatus === 'failed' ? '❌ Fehlgeschlagen' :
+                                     'Ausstehend'}
+                                  </span>
+                                </div>
+                              </div>
+                            </div>
+                            
+                            {/* Bonus Points */}
+                            {order.bonusPointsEarned > 0 && (
+                              <div className="bg-white p-4 rounded-lg border">
+                                <h4 className="font-medium text-gray-900 mb-3">Bonuspunkte</h4>
+                                <div className="text-sm text-gray-600">
+                                  <div className="flex justify-between items-center">
+                                    <span>Verdiente Punkte:</span>
+                                    <span className="font-medium">{order.bonusPointsEarned}</span>
+                                  </div>
+                                  <div className="flex justify-between items-center mt-2">
+                                    <span>Status:</span>
+                                    <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${
+                                      order.bonusPointsCredited ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800'
+                                    }`}>
+                                      {order.bonusPointsCredited ? '✅ Gutgeschrieben' : '⏳ Ausstehend'}
+                                    </span>
+                                  </div>
+                                </div>
+                              </div>
+                            )}
+                            
+                            {/* Tracking Info */}
+                            <div className="bg-white p-4 rounded-lg border">
+                              <h4 className="font-medium text-gray-900 mb-3">Sendungsverfolgung</h4>
+                              {order.trackingInfo && order.trackingInfo.length > 0 ? (
+                                <div className="space-y-3">
+                                  {order.trackingInfo.map((tracking, index) => (
+                                    <div key={index} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                                      <div>
+                                        <button
+                                          onClick={() => copyToClipboard(tracking.trackingNumber, 'Tracking-Nummer')}
+                                          className="text-sm font-medium text-gray-900 hover:text-blue-600 transition-colors"
+                                        >
+                                          {getTrackingProviderName(tracking.shippingProvider)} - {tracking.trackingNumber}
+                                        </button>
+                                        <div className="text-xs text-gray-500">
+                                          Hinzugefügt: {formatDate(tracking.addedAt)}
+                                        </div>
+                                        {tracking.notes && (
+                                          <button
+                                            onClick={() => copyToClipboard(tracking.notes!, 'Tracking-Notiz')}
+                                            className="text-xs text-gray-600 mt-1 hover:text-blue-600 transition-colors block"
+                                          >
+                                            Notiz: {tracking.notes}
+                                          </button>
+                                        )}
+                                      </div>
+                                      <div className="flex items-center space-x-2">
+                                        {tracking.emailSent && (
+                                          <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                                            <svg className="w-3 h-3 mr-1" fill="currentColor" viewBox="0 0 20 20">
+                                              <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                                            </svg>
+                                            E-Mail
+                                          </span>
+                                        )}
+                                        {(() => {
+                                          const trackingUrl = getTrackingUrl(tracking.shippingProvider || 'other', tracking.trackingNumber);
+                                          return trackingUrl ? (
+                                            <a
+                                              href={trackingUrl}
+                                              target="_blank"
+                                              rel="noopener noreferrer"
+                                              className="text-blue-600 hover:text-blue-800 text-xs"
+                                            >
+                                              Verfolgen
+                                            </a>
+                                          ) : (
+                                            <span className="text-gray-400 text-xs">
+                                              Kein Link verfügbar
+                                            </span>
+                                          );
+                                        })()}
+                                      </div>
+                                    </div>
+                                  ))}
+                                </div>
+                              ) : (
+                                <div className="text-center py-4">
+                                  <div className="text-sm text-gray-500 mb-3">
+                                    Keine Sendungsnummern hinterlegt
+                                  </div>
+                                </div>
+                              )}
+                              
+                              {/* Button zum Hinzufügen von Sendungsnummern - immer sichtbar */}
+                              <div className="mt-4">
+                                <button
+                                  onClick={() => {
+                                    setSelectedOrder(order);
+                                    setTrackingModalOpen(true);
+                                  }}
+                                  className="w-full inline-flex items-center justify-center px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 transition-colors duration-200"
+                                >
+                                  <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+                                  </svg>
+                                  {order.trackingInfo && order.trackingInfo.length > 0 ? 'Sendung hinzufügen' : 'Sendungsnummer hinzufügen'}
+                                </button>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+            </>
           )}
         </div>
 
