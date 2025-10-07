@@ -513,7 +513,7 @@ export default function AdminOrdersPage() {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 max-w-full overflow-hidden">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {/* Header mit verbessertem Design */}
         <div className="mb-6">
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
@@ -594,7 +594,7 @@ export default function AdminOrdersPage() {
         </div>
 
         {/* Orders Display */}
-        <div className="bg-white rounded-lg shadow overflow-hidden max-w-full">
+        <div className="bg-white rounded-lg shadow overflow-hidden">
           {orders.length === 0 ? (
             <div className="text-center py-12">
               <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
@@ -1408,7 +1408,7 @@ export default function AdminOrdersPage() {
                   const isExpanded = expandedOrder === order._id;
                   
                   return (
-                    <div key={order._id} className="p-4 max-w-full overflow-hidden">
+                    <div key={order._id} className="p-4">
                       {/* Card Header */}
                       <div className="flex items-start justify-between mb-3">
                         <div className="flex-1 min-w-0">
@@ -1539,20 +1539,17 @@ export default function AdminOrdersPage() {
                           </button>
                         </div>
                         
-                        <div className="w-full">
-                          <select
-                            value={order.status}
-                            onChange={(e) => handleStatusUpdate(order._id, e.target.value)}
-                            className="w-full text-xs border border-gray-300 rounded px-2 py-2"
-                            style={{ maxWidth: '200px' }}
-                          >
-                            <option value="pending">Ausstehend</option>
-                            <option value="processing">In Bearbeitung</option>
-                            <option value="shipped">Versandt</option>
-                            <option value="delivered">Geliefert</option>
-                            <option value="cancelled">Storniert</option>
-                          </select>
-                        </div>
+                        <select
+                          value={order.status}
+                          onChange={(e) => handleStatusUpdate(order._id, e.target.value)}
+                          className="w-full max-w-[200px] text-xs border border-gray-300 rounded px-2 py-2"
+                        >
+                          <option value="pending">Ausstehend</option>
+                          <option value="processing">In Bearbeitung</option>
+                          <option value="shipped">Versandt</option>
+                          <option value="delivered">Geliefert</option>
+                          <option value="cancelled">Storniert</option>
+                        </select>
                       </div>
                       
                       {/* Expanded Details - Same as Desktop */}
