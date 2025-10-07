@@ -1849,11 +1849,30 @@ export default function AdminOrdersPage() {
                                   <div className="flex justify-between items-center mt-2">
                                     <span>Status:</span>
                                     <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${
-                                      order.bonusPointsCredited ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800'
+                                      order.bonusPointsCredited 
+                                        ? 'bg-green-100 text-green-800' 
+                                        : order.bonusPointsScheduledAt
+                                          ? 'bg-blue-100 text-blue-800'
+                                          : 'bg-amber-100 text-amber-800'
                                     }`}>
-                                      {order.bonusPointsCredited ? '✅ Gutgeschrieben' : '⏳ Ausstehend'}
+                                      {order.bonusPointsCredited 
+                                        ? '✅ Gutgeschrieben' 
+                                        : order.bonusPointsScheduledAt
+                                          ? '⏰ Eingeplant'
+                                          : '⏳ Ausstehend'
+                                      }
                                     </span>
                                   </div>
+                                  {order.bonusPointsCreditedAt && (
+                                    <div className="text-xs text-gray-500">
+                                      Gutgeschrieben: {formatDate(order.bonusPointsCreditedAt)}
+                                    </div>
+                                  )}
+                                  {order.bonusPointsScheduledAt && !order.bonusPointsCredited && (
+                                    <div className="text-xs text-blue-600">
+                                      Geplant für: {formatDate(order.bonusPointsScheduledAt)}
+                                    </div>
+                                  )}
                                 </div>
                               </div>
                             )}
