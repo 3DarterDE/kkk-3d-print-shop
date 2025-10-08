@@ -71,36 +71,14 @@ export function useDiscountValidation() {
         });
         if (!res.ok) {
           clearDiscount();
-          // Persist removal server-side
-          try {
-            await fetch('/api/cart', {
-              method: 'PUT',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ items, discountCode: null, discountCents: 0 })
-            });
-          } catch {}
           return;
         }
         const data = await res.json();
         if (data?.valid && typeof data.discountCents === 'number') {
           setDiscount(String(data.code || discountCode), Number(data.discountCents));
-          // Persist validated discount server-side
-          try {
-            await fetch('/api/cart', {
-              method: 'PUT',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ items, discountCode: String(data.code || discountCode), discountCents: Number(data.discountCents) })
-            });
-          } catch {}
+          
         } else {
           clearDiscount();
-          try {
-            await fetch('/api/cart', {
-              method: 'PUT',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ items, discountCode: null, discountCents: 0 })
-            });
-          } catch {}
         }
       } catch {
         // On error, don't clear silently; leave current discount as UI state

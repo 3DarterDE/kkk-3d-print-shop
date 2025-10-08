@@ -25,6 +25,25 @@ type ReturnRequest = {
   refund?: { method?: string; reference?: string; amount?: number };
 };
 
+// Status badge component
+const StatusBadge = ({ status }: { status: string }) => {
+  const statusConfig = {
+    received: { color: 'bg-blue-100 text-blue-800', icon: '📦', label: 'Eingegangen' },
+    processing: { color: 'bg-yellow-100 text-yellow-800', icon: '⚙️', label: 'In Bearbeitung' },
+    completed: { color: 'bg-green-100 text-green-800', icon: '✅', label: 'Abgeschlossen' },
+    rejected: { color: 'bg-red-100 text-red-800', icon: '❌', label: 'Abgelehnt' }
+  };
+  
+  const config = statusConfig[status as keyof typeof statusConfig] || statusConfig.received;
+  
+  return (
+    <span className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium ${config.color}`}>
+      <span>{config.icon}</span>
+      {config.label}
+    </span>
+  );
+};
+
 export default function AdminReturnsPage() {
   const [returns, setReturns] = useState<ReturnRequest[]>([]);
   const [loading, setLoading] = useState(true);
@@ -143,9 +162,9 @@ export default function AdminReturnsPage() {
     if (!orig || orderSubtotalCents <= 0) return Number(retItem.price) || 0;
     const origLineTotal = Number(orig.price) * Number(orig.quantity);
     const share = Math.min(1, Math.max(0, origLineTotal / orderSubtotalCents));
-    const proratedDiscount = Math.floor(orderDiscountCents * share);
-    const proratedPoints = Math.floor(pointsDiscountCents * share);
-    const perUnitDeduction = Math.floor(proratedDiscount / Number(orig.quantity)) + Math.floor(proratedPoints / Number(orig.quantity));
+    const proratedDiscount = Math.round(orderDiscountCents * share);
+    const proratedPoints = Math.round(pointsDiscountCents * share);
+    const perUnitDeduction = Math.round(proratedDiscount / Number(orig.quantity)) + Math.round(proratedPoints / Number(orig.quantity));
     const unitPrice = Number(retItem.price) || 0;
     return Math.max(0, unitPrice - perUnitDeduction);
   };
@@ -162,141 +181,351 @@ export default function AdminReturnsPage() {
 
   if (loading && returns.length === 0) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="text-gray-600">Lade Rücksendungen...</div>
+      <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+          <div className="text-gray-600 text-lg">Lade Rücksendungen...</div>
+        </div>
       </div>
     );
   }
 
   if (error) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="text-center">
-          <div className="text-red-500 text-6xl mb-3">⚠️</div>
-          <div className="text-gray-700">{error}</div>
+      <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 flex items-center justify-center">
+        <div className="text-center bg-white p-8 rounded-xl shadow-lg">
+          <div className="text-red-500 text-6xl mb-4">⚠️</div>
+          <div className="text-gray-700 text-lg">{error}</div>
+          <button 
+            onClick={fetchList}
+            className="mt-4 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+          >
+            Erneut versuchen
+          </button>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <div className="flex items-center justify-between mb-6">
-          <h1 className="text-2xl font-bold text-gray-900">Rücksendungen verwalten</h1>
-          <select
-            value={statusFilter}
-            onChange={(e) => setStatusFilter(e.target.value)}
-            className="border rounded-md px-2 py-1"
-          >
-            <option value="all">Alle</option>
-            <option value="received">Eingegangen</option>
-            <option value="processing">In Bearbeitung</option>
-            <option value="completed">Abgeschlossen</option>
-            <option value="rejected">Abgelehnt</option>
-          </select>
+        {/* Header Section */}
+        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 sm:p-6 mb-6">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+            <div className="flex items-center gap-3">
+              <div className="p-2 bg-blue-100 rounded-lg">
+                <span className="text-blue-600 text-xl">📦</span>
+              </div>
+              <div>
+                <h1 className="text-xl sm:text-2xl font-bold text-gray-900">Rücksendungen verwalten</h1>
+                <p className="text-gray-600 text-sm mt-1">Verwalten Sie alle Rücksendungsanfragen</p>
+              </div>
+            </div>
+            <div className="flex flex-col sm:flex-row sm:items-center gap-3">
+              <div className="text-sm text-gray-500">
+                {returns.length} Rücksendung{returns.length !== 1 ? 'en' : ''} gefunden
+              </div>
+              <select
+                value={statusFilter}
+                onChange={(e) => setStatusFilter(e.target.value)}
+                className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent w-full sm:w-auto"
+              >
+                <option value="all">Alle Status</option>
+                <option value="received">Eingegangen</option>
+                <option value="processing">In Bearbeitung</option>
+                <option value="completed">Abgeschlossen</option>
+                <option value="rejected">Abgelehnt</option>
+              </select>
+            </div>
+          </div>
         </div>
 
-        <div className="bg-white rounded-lg shadow overflow-hidden">
+        {/* Returns Table */}
+        <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
           {returns.length === 0 ? (
-            <div className="p-8 text-center text-gray-500">Keine Rücksendungen gefunden.</div>
+            <div className="p-8 sm:p-12 text-center">
+              <div className="text-gray-400 text-4xl sm:text-6xl mb-4">📦</div>
+              <div className="text-gray-500 text-base sm:text-lg mb-2">Keine Rücksendungen gefunden</div>
+              <div className="text-gray-400 text-sm">Es wurden keine Rücksendungen für den gewählten Filter gefunden.</div>
+            </div>
           ) : (
-            <table className="min-w-full divide-y divide-gray-200">
-              <thead className="bg-gray-50">
-                <tr>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Bestellung</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Kunde</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Artikel</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
-                  <th className="px-6 py-3"></th>
-                </tr>
-              </thead>
-              <tbody className="bg-white divide-y divide-gray-200">
-                {returns.map((r) => (
-                  <tr key={r._id} className="hover:bg-gray-50">
-                    <td className="px-6 py-4 whitespace-nowrap font-medium">{r.orderNumber}</td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="text-sm text-gray-900">{r.customer?.name || 'Unbekannt'}</div>
-                      <div className="text-xs text-gray-500">{r.customer?.email || ''}</div>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700">{r.items.length}</td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm">{r.status}</td>
-                    <td className="px-6 py-4 whitespace-nowrap text-right">
-                      <button
-                        onClick={() => openDetail(r._id)}
-                        className="text-blue-600 hover:text-blue-800"
-                      >
-                        Details
-                      </button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+            <>
+              {/* Desktop Table */}
+              <div className="hidden lg:block overflow-x-auto">
+                <table className="min-w-full divide-y divide-gray-200">
+                  <thead className="bg-gray-50">
+                    <tr>
+                      <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
+                        <div className="flex items-center gap-2">
+                          <span>📋</span>
+                          Bestellung
+                        </div>
+                      </th>
+                      <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
+                        <div className="flex items-center gap-2">
+                          <span>👤</span>
+                          Kunde
+                        </div>
+                      </th>
+                      <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
+                        <div className="flex items-center gap-2">
+                          <span>📦</span>
+                          Artikel
+                        </div>
+                      </th>
+                      <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
+                        <div className="flex items-center gap-2">
+                          <span>🏷️</span>
+                          Status
+                        </div>
+                      </th>
+                      <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
+                        <div className="flex items-center gap-2">
+                          <span>📅</span>
+                          Datum
+                        </div>
+                      </th>
+                      <th className="px-6 py-4 text-right text-xs font-semibold text-gray-600 uppercase tracking-wider">
+                        Aktionen
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody className="bg-white divide-y divide-gray-200">
+                    {returns.map((r) => (
+                      <tr key={r._id} className="hover:bg-gray-50 transition-colors">
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <div className="flex items-center gap-2">
+                            <div className="p-1 bg-blue-100 rounded text-blue-600 text-xs font-medium">
+                              #{r.orderNumber}
+                            </div>
+                          </div>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <div className="flex items-center gap-3">
+                            <div className="w-8 h-8 bg-gray-200 rounded-full flex items-center justify-center">
+                              <span className="text-gray-600 text-sm">👤</span>
+                            </div>
+                            <div>
+                              <div className="text-sm font-medium text-gray-900">{r.customer?.name || 'Unbekannt'}</div>
+                              <div className="text-xs text-gray-500">{r.customer?.email || ''}</div>
+                            </div>
+                          </div>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <div className="flex items-center gap-2">
+                            <span className="text-sm text-gray-700">{r.items.length}</span>
+                            <span className="text-xs text-gray-500">Artikel</span>
+                          </div>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <StatusBadge status={r.status} />
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                          {new Date(r.createdAt).toLocaleDateString('de-DE')}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-right">
+                          <button
+                            onClick={() => openDetail(r._id)}
+                            className="inline-flex items-center gap-2 px-3 py-2 text-sm font-medium text-blue-600 bg-blue-50 rounded-lg hover:bg-blue-100 transition-colors"
+                          >
+                            <span>👁️</span>
+                            Details
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+
+              {/* Mobile Cards */}
+              <div className="lg:hidden">
+                <div className="divide-y divide-gray-200">
+                  {returns.map((r) => (
+                    <div key={r._id} className="p-4 hover:bg-gray-50 transition-colors">
+                      <div className="flex items-start justify-between mb-3">
+                        <div className="flex items-center gap-3">
+                          <div className="w-10 h-10 bg-gray-200 rounded-full flex items-center justify-center">
+                            <span className="text-gray-600">👤</span>
+                          </div>
+                          <div>
+                            <div className="font-medium text-gray-900">{r.customer?.name || 'Unbekannt'}</div>
+                            <div className="text-xs text-gray-500">{r.customer?.email || ''}</div>
+                          </div>
+                        </div>
+                        <StatusBadge status={r.status} />
+                      </div>
+                      
+                      <div className="flex items-center justify-between mb-3">
+                        <div className="flex items-center gap-2">
+                          <span className="text-sm text-gray-600">📋</span>
+                          <div className="p-1 bg-blue-100 rounded text-blue-600 text-xs font-medium">
+                            #{r.orderNumber}
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <span className="text-sm text-gray-600">📦</span>
+                          <span className="text-sm text-gray-700">{r.items.length} Artikel</span>
+                        </div>
+                      </div>
+                      
+                      <div className="flex items-center justify-between">
+                        <div className="text-xs text-gray-500">
+                          📅 {new Date(r.createdAt).toLocaleDateString('de-DE')}
+                        </div>
+                        <button
+                          onClick={() => openDetail(r._id)}
+                          className="inline-flex items-center gap-2 px-3 py-2 text-sm font-medium text-blue-600 bg-blue-50 rounded-lg hover:bg-blue-100 transition-colors"
+                        >
+                          <span>👁️</span>
+                          Details
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </>
           )}
         </div>
       </div>
 
       {/* Detail Modal */}
       {selected && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-          <div className="bg-white rounded-2xl w-full max-w-3xl shadow-xl overflow-hidden">
-            <div className="flex items-center justify-between p-4 border-b">
-              <div>
-                <h3 className="text-lg font-semibold text-gray-900">Rücksendung {selected.orderNumber}</h3>
-                <div className="text-xs text-gray-500">{selected.customer?.name} • {selected.customer?.email}</div>
-              </div>
-              <button onClick={() => setSelected(null)} className="text-gray-500 hover:text-gray-700">✕</button>
-            </div>
-            <div className="p-4 space-y-4 max-h-[70vh] overflow-y-auto">
-              {selected.items.map((it) => (
-                <div key={it.productId} className="flex items-center gap-4 border rounded-xl p-3">
-                  {it.image && <img src={it.image} alt={it.name} className="w-14 h-14 object-cover rounded-lg" />}
-                  <div className="flex-1">
-                    <div className="font-medium text-gray-900">{it.name}</div>
-                    {it.variations && (
-                      <div className="text-xs text-gray-500">
-                        {Object.entries(it.variations).map(([k,v]) => (
-                          <span key={k} className="mr-2">{k}: {v}</span>
-                        ))}
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-2 sm:p-4">
+          <div className="bg-white rounded-xl sm:rounded-2xl w-full max-w-4xl shadow-2xl overflow-hidden max-h-[95vh] sm:max-h-[90vh]">
+            {/* Modal Header */}
+            <div className="bg-gradient-to-r from-blue-50 to-indigo-50 p-4 sm:p-6 border-b border-gray-200">
+              <div className="flex items-start sm:items-center justify-between gap-3">
+                <div className="flex items-center gap-3 sm:gap-4 min-w-0 flex-1">
+                  <div className="p-2 sm:p-3 bg-blue-100 rounded-lg sm:rounded-xl flex-shrink-0">
+                    <span className="text-blue-600 text-xl sm:text-2xl">📦</span>
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <h3 className="text-lg sm:text-xl font-bold text-gray-900 truncate">Rücksendung #{selected.orderNumber}</h3>
+                    <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4 mt-1">
+                      <div className="text-sm text-gray-600 truncate">
+                        <span className="font-medium">{selected.customer?.name}</span>
+                        <span className="hidden sm:inline mx-2">•</span>
+                        <span className="block sm:inline">{selected.customer?.email}</span>
                       </div>
-                    )}
-                    <div className="text-xs text-gray-500">Menge: {it.quantity}</div>
-                    <div className="mt-1 text-xs">
-                      {orderForReturn ? (
-                        <>
-                          <div className="text-gray-600">
-                            Erstattung/Stück: <span className="font-medium text-green-700">€{(computeEffectiveUnitCents(it) / 100).toFixed(2)}</span>
-                          </div>
-                          {!!it.accepted && (
-                            <div className="text-gray-600">
-                              Erstattung gesamt: <span className="font-medium text-green-700">€{((computeEffectiveUnitCents(it) * (Number(it.quantity) || 0)) / 100).toFixed(2)}</span>
-                            </div>
-                          )}
-                        </>
-                      ) : (
-                        <div className="text-gray-400">Bestellinformationen werden geladen…</div>
-                      )}
+                      <StatusBadge status={selected.status} />
                     </div>
                   </div>
-                  <label className="inline-flex items-center gap-2 text-sm text-gray-700">
-                    <input type="checkbox" checked={!!it.accepted} onChange={() => toggleAccepted(it.productId)} />
-                    Akzeptieren
-                  </label>
                 </div>
-              ))}
+                <button 
+                  onClick={() => setSelected(null)} 
+                  className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition-colors flex-shrink-0"
+                >
+                  <span className="text-xl">✕</span>
+                </button>
+              </div>
+            </div>
+            {/* Modal Content */}
+            <div className="p-4 sm:p-6 space-y-4 sm:space-y-6 max-h-[60vh] sm:max-h-[70vh] overflow-y-auto">
+              {/* Items Section */}
+              <div>
+                <h4 className="text-base sm:text-lg font-semibold text-gray-900 mb-3 sm:mb-4 flex items-center gap-2">
+                  <span>📦</span>
+                  Zurückgesendete Artikel
+                </h4>
+                <div className="space-y-3">
+                  {selected.items.map((it) => (
+                    <div key={it.productId} className={`flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-4 border-2 rounded-xl p-3 sm:p-4 transition-all ${
+                      it.accepted ? 'border-green-200 bg-green-50' : 'border-gray-200 bg-white'
+                    }`}>
+                      <div className="flex items-center gap-3 sm:flex-shrink-0">
+                        <div className="flex-shrink-0">
+                          {it.image ? (
+                            <img src={it.image} alt={it.name} className="w-12 h-12 sm:w-16 sm:h-16 object-cover rounded-lg border border-gray-200" />
+                          ) : (
+                            <div className="w-12 h-12 sm:w-16 sm:h-16 bg-gray-100 rounded-lg flex items-center justify-center">
+                              <span className="text-gray-400 text-lg sm:text-2xl">📦</span>
+                            </div>
+                          )}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="font-semibold text-gray-900 text-base sm:text-lg">{it.name}</div>
+                          {it.variations && (
+                            <div className="flex flex-wrap gap-1 sm:gap-2 mt-1">
+                              {Object.entries(it.variations).map(([k,v]) => (
+                                <span key={k} className="inline-flex items-center px-2 py-1 rounded-md text-xs font-medium bg-gray-100 text-gray-800">
+                                  {k}: {v}
+                                </span>
+                              ))}
+                            </div>
+                          )}
+                          <div className="flex items-center gap-2 sm:gap-4 mt-1 sm:mt-2 text-sm text-gray-600">
+                            <span className="flex items-center gap-1">
+                              <span>📊</span>
+                              Menge: <span className="font-medium">{it.quantity}</span>
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+                      
+                      <div className="flex flex-col sm:flex-row sm:items-center gap-3">
+                        <div className="flex-1 min-w-0">
+                          <div className="text-sm">
+                            {orderForReturn ? (
+                              <div className="space-y-1">
+                                <div className="text-gray-600">
+                                  Erstattung/Stück: <span className="font-semibold text-green-700">€{(computeEffectiveUnitCents(it) / 100).toFixed(2)}</span>
+                                </div>
+                                {!!it.accepted && (
+                                  <div className="text-gray-600">
+                                    Erstattung gesamt: <span className="font-semibold text-green-700">€{((computeEffectiveUnitCents(it) * (Number(it.quantity) || 0)) / 100).toFixed(2)}</span>
+                                  </div>
+                                )}
+                              </div>
+                            ) : (
+                              <div className="text-gray-400 flex items-center gap-2">
+                                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600"></div>
+                                Bestellinformationen werden geladen…
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                        <div className="flex-shrink-0">
+                          <label className={`inline-flex items-center gap-2 sm:gap-3 px-3 sm:px-4 py-2 sm:py-3 rounded-lg border-2 cursor-pointer transition-all ${
+                            it.accepted 
+                              ? 'bg-green-100 border-green-300 text-green-800' 
+                              : 'bg-gray-50 border-gray-300 text-gray-700 hover:bg-gray-100'
+                          }`}>
+                            <input 
+                              type="checkbox" 
+                              checked={!!it.accepted} 
+                              onChange={() => toggleAccepted(it.productId)}
+                              className="w-4 h-4 text-green-600 border-gray-300 rounded focus:ring-green-500"
+                            />
+                            <span className="font-medium text-sm sm:text-base">
+                              {it.accepted ? '✅ Akzeptiert' : '⏳ Akzeptieren'}
+                            </span>
+                          </label>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+              {/* Refund Summary */}
               {orderForReturn && (
-                <div className="bg-green-50 border border-green-200 rounded-lg p-3 text-sm">
-                  <div className="flex justify-between">
-                    <span className="text-green-800 font-medium">Voraussichtliche Rückerstattung (rabattiert)</span>
-                    <span className="text-green-800 font-semibold">€{(computeAcceptedRefundTotalCents() / 100).toFixed(2)}</span>
+                <div className="bg-gradient-to-r from-green-50 to-emerald-50 border-2 border-green-200 rounded-xl p-4">
+                  <div className="flex items-center justify-between mb-2">
+                    <div className="flex items-center gap-2">
+                      <span className="text-green-600 text-lg">💰</span>
+                      <span className="text-green-800 font-semibold text-lg">Voraussichtliche Rückerstattung</span>
+                    </div>
+                    <span className="text-green-800 font-bold text-xl">€{(computeAcceptedRefundTotalCents() / 100).toFixed(2)}</span>
                   </div>
                   {(() => {
                     const hasDiscount = Number(orderForReturn.discountCents || 0) > 0;
                     const hasPoints = Number(orderForReturn.bonusPointsRedeemed || 0) > 0;
                     if (hasDiscount || hasPoints) {
                       return (
-                        <div className="mt-1 text-xs text-green-700">
+                        <div className="text-sm text-green-700 flex items-center gap-1">
+                          <span>ℹ️</span>
                           inkl. anteiligem {hasDiscount ? 'Rabatt' : ''}{hasDiscount && hasPoints ? ' und ' : ''}{hasPoints ? 'Bonuspunkte-Rabatt' : ''}
                         </div>
                       );
@@ -305,24 +534,71 @@ export default function AdminReturnsPage() {
                   })()}
                 </div>
               )}
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                <div>
-                  <label className="block text-xs text-gray-600 mb-1">Rückerstattungsmethode</label>
-                  <input value={selected.refund?.method || ''} onChange={(e) => setSelected({ ...selected, refund: { ...(selected.refund || {}), method: e.target.value } })} className="w-full border rounded-md px-2 py-1 text-sm" placeholder="paypal/klarna/bank" />
-                </div>
-                <div>
-                  <label className="block text-xs text-gray-600 mb-1">Referenz</label>
-                  <input value={selected.refund?.reference || ''} onChange={(e) => setSelected({ ...selected, refund: { ...(selected.refund || {}), reference: e.target.value } })} className="w-full border rounded-md px-2 py-1 text-sm" placeholder="Transaktions-ID oder Notiz" />
-                </div>
-                <div>
-                  <label className="block text-xs text-gray-600 mb-1">Betrag (Cent)</label>
-                  <input type="number" value={selected.refund?.amount ?? ''} onChange={(e) => setSelected({ ...selected, refund: { ...(selected.refund || {}), amount: Number(e.target.value) || 0 } })} className="w-full border rounded-md px-2 py-1 text-sm" placeholder="z. B. 2599" />
+
+              {/* Refund Details */}
+              <div>
+                <h4 className="text-base sm:text-lg font-semibold text-gray-900 mb-3 sm:mb-4 flex items-center gap-2">
+                  <span>💳</span>
+                  Rückerstattungsdetails
+                </h4>
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Rückerstattungsmethode</label>
+                    <input 
+                      value={selected.refund?.method || ''} 
+                      onChange={(e) => setSelected({ ...selected, refund: { ...(selected.refund || {}), method: e.target.value } })} 
+                      className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent" 
+                      placeholder="PayPal, Klarna, Bank..." 
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Referenz/Transaktions-ID</label>
+                    <input 
+                      value={selected.refund?.reference || ''} 
+                      onChange={(e) => setSelected({ ...selected, refund: { ...(selected.refund || {}), reference: e.target.value } })} 
+                      className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent" 
+                      placeholder="z.B. PAY-123456789" 
+                    />
+                  </div>
+                  <div className="sm:col-span-2 lg:col-span-1">
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Betrag (Cent)</label>
+                    <input 
+                      type="number" 
+                      value={selected.refund?.amount ?? ''} 
+                      onChange={(e) => setSelected({ ...selected, refund: { ...(selected.refund || {}), amount: Number(e.target.value) || 0 } })} 
+                      className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent" 
+                      placeholder="z. B. 2599" 
+                    />
+                  </div>
                 </div>
               </div>
-              <div className="flex justify-end gap-2">
-                <button onClick={() => setSelected(null)} className="px-4 py-2 text-sm rounded-lg bg-gray-100 text-gray-700 hover:bg-gray-200">Abbrechen</button>
-                <button disabled={updating} onClick={completeReturn} className="px-4 py-2 text-sm rounded-lg bg-green-600 text-white hover:bg-green-700 disabled:opacity-50">Abschließen</button>
-              </div>
+            </div>
+
+            {/* Modal Footer */}
+            <div className="bg-gray-50 px-4 sm:px-6 py-3 sm:py-4 border-t border-gray-200 flex flex-col sm:flex-row justify-end gap-2 sm:gap-3">
+              <button 
+                onClick={() => setSelected(null)} 
+                className="w-full sm:w-auto px-4 sm:px-6 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+              >
+                Abbrechen
+              </button>
+              <button 
+                disabled={updating} 
+                onClick={completeReturn} 
+                className="w-full sm:w-auto px-4 sm:px-6 py-2 text-sm font-medium text-white bg-green-600 rounded-lg hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center justify-center gap-2"
+              >
+                {updating ? (
+                  <>
+                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                    Wird verarbeitet...
+                  </>
+                ) : (
+                  <>
+                    <span>✅</span>
+                    Rücksendung abschließen
+                  </>
+                )}
+              </button>
             </div>
           </div>
         </div>

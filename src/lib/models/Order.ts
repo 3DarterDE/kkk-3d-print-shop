@@ -60,6 +60,8 @@ export interface IOrder extends Document {
   bonusPointsRedeemed?: number; // Bonuspunkte die bei dieser Bestellung eingelöst wurden
   bonusPointsDeducted?: number; // Bonuspunkte die bei Rücksendungen abgezogen wurden
   bonusPointsDeductedAt?: Date; // Wann die Bonuspunkte abgezogen wurden
+  bonusPointsCreditedReturn?: number; // Bonuspunkte die bei Rücksendungen gutgeschrieben wurden
+  bonusPointsCreditedReturnAt?: Date; // Wann die Bonuspunkte gutgeschrieben wurden
   createdAt: Date;
   updatedAt: Date;
 }
@@ -168,7 +170,9 @@ const OrderSchema = new Schema<IOrder>({
   bonusPointsScheduledAt: { type: Date }, // Wann die Bonuspunkte geplant sind (für Timer)
   bonusPointsRedeemed: { type: Number, default: 0 }, // Bonuspunkte die bei dieser Bestellung eingelöst wurden
   bonusPointsDeducted: { type: Number, default: 0 }, // Bonuspunkte die bei Rücksendungen abgezogen wurden
-  bonusPointsDeductedAt: { type: Date } // Wann die Bonuspunkte abgezogen wurden
+  bonusPointsDeductedAt: { type: Date }, // Wann die Bonuspunkte abgezogen wurden
+  bonusPointsCreditedReturn: { type: Number, default: 0 }, // Bonuspunkte die bei Rücksendungen gutgeschrieben wurden
+  bonusPointsCreditedReturnAt: { type: Date } // Wann die Bonuspunkte gutgeschrieben wurden
 }, {
   timestamps: true
 });

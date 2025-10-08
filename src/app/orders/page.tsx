@@ -70,6 +70,7 @@ export default function OrdersPage() {
   const [reviewError, setReviewError] = useState<string | null>(null);
   const [reviews, setReviews] = useState<Record<string, { rating: number; title: string; comment: string; isAnonymous: boolean; selected: boolean }>>({});
   const [existingReviews, setExistingReviews] = useState<Record<string, any>>({});
+  const [returnedItems, setReturnedItems] = useState<Record<string, any[]>>({});
 
   // Load existing reviews for orders
   useEffect(() => {
@@ -95,6 +96,23 @@ export default function OrdersPage() {
 
     loadExistingReviews();
   }, [orders]);
+
+  // Load returned items for orders
+  useEffect(() => {
+    const loadReturnedItems = async () => {
+      try {
+        const response = await fetch('/api/returns/user');
+        if (response.ok) {
+          const data = await response.json();
+          setReturnedItems(data.returnedItemsByOrder || {});
+        }
+      } catch (error) {
+        console.error('Error loading returned items:', error);
+      }
+    };
+
+    loadReturnedItems();
+  }, []);
 
   // Initialize reviews when review modal opens
   useEffect(() => {
@@ -216,6 +234,15 @@ export default function OrdersPage() {
           description: 'Unbekannter Status'
         };
     }
+  };
+
+  // Helper function to check if an item was returned
+  const isItemReturned = (orderId: string, item: any) => {
+    const orderReturnedItems = returnedItems[orderId] || [];
+    return orderReturnedItems.some(returnedItem => 
+      returnedItem.productId === item.productId &&
+      JSON.stringify(returnedItem.variations || {}) === JSON.stringify(item.variations || {})
+    );
   };
 
   // Check if return is still possible (within 14 days of delivery)
@@ -474,69 +501,71 @@ export default function OrdersPage() {
                   </Link>
                 </div>
               ) : (
-                <div className="bg-white/70 backdrop-blur-sm border border-white/30 rounded-2xl overflow-hidden shadow-lg">
-                  <div className="overflow-x-auto">
-                    <table className="w-full table-fixed divide-y divide-slate-200">
-                      <thead className="bg-gradient-to-r from-slate-50 to-blue-50">
-                        <tr>
-                          <th className="w-28 px-3 sm:px-6 py-4 text-center text-xs font-semibold text-slate-600 uppercase tracking-wider">Bestellung #</th>
-                          <th className="w-20 px-3 sm:px-6 py-4 text-center text-xs font-semibold text-slate-600 uppercase tracking-wider hidden sm:table-cell">Datum</th>
-                          <th className="w-32 px-3 sm:px-6 py-4 text-center text-xs font-semibold text-slate-600 uppercase tracking-wider hidden md:table-cell">Senden an</th>
-                          <th className="w-20 px-3 sm:px-6 py-4 text-center text-xs font-semibold text-slate-600 uppercase tracking-wider">Bestellwert</th>
-                          <th className="w-28 px-3 sm:px-6 py-4 text-center text-xs font-semibold text-slate-600 uppercase tracking-wider">Status</th>
-                          <th className="w-24 px-3 sm:px-6 py-4 text-center text-xs font-semibold text-slate-600 uppercase tracking-wider">Aktionen</th>
-                        </tr>
-                      </thead>
-                      <tbody className="bg-white/50 divide-y divide-slate-200">
-                        {orders.map((order) => {
-                          const statusInfo = getStatusInfo(order.status);
-                          const isExpanded = expandedOrder === order._id;
-                          
-                          return (
-                            <React.Fragment key={order._id}>
-                              <tr className="hover:bg-blue-50/50 transition-colors">
-                                <td className="px-3 sm:px-6 py-4 text-center">
-                                  <span className="text-xs sm:text-sm font-semibold text-slate-800 bg-slate-100 px-2 sm:px-3 py-1 rounded-full">
-                                    {order.orderNumber}
-                                  </span>
-                                </td>
-                                <td className="px-3 sm:px-6 py-4 text-xs sm:text-sm text-slate-600 hidden sm:table-cell text-center">
-                                  {formatDate(order.createdAt)}
-                                </td>
-                                <td className="px-3 sm:px-6 py-4 text-xs sm:text-sm text-slate-600 hidden md:table-cell text-center">
-                                  <div className="truncate" title={`${order.shippingAddress.street} ${order.shippingAddress.houseNumber}`}>
-                                    {order.shippingAddress.street} {order.shippingAddress.houseNumber}
-                                  </div>
-                                </td>
-                                <td className="px-3 sm:px-6 py-4 text-xs sm:text-sm font-semibold text-slate-800 text-center">
-                                  €{(order.total).toFixed(2)}
-                                </td>
-                                <td className="px-3 sm:px-6 py-4">
-                                  <div className="whitespace-pre-line text-center">
-                                    <span className={`inline-flex items-center px-2 sm:px-3 py-1 rounded-full text-xs font-medium ${statusInfo.bg} ${statusInfo.color}`} title={statusInfo.text}>
-                                      {statusInfo.text}
+                <>
+                  {/* Desktop Table View */}
+                  <div className="hidden lg:block bg-white/70 backdrop-blur-sm border border-white/30 rounded-2xl overflow-hidden shadow-lg">
+                    <div className="overflow-x-auto">
+                      <table className="w-full table-fixed divide-y divide-slate-200">
+                        <thead className="bg-gradient-to-r from-slate-50 to-blue-50">
+                          <tr>
+                            <th className="w-28 px-3 sm:px-6 py-4 text-center text-xs font-semibold text-slate-600 uppercase tracking-wider">Bestellung #</th>
+                            <th className="w-20 px-3 sm:px-6 py-4 text-center text-xs font-semibold text-slate-600 uppercase tracking-wider hidden sm:table-cell">Datum</th>
+                            <th className="w-32 px-3 sm:px-6 py-4 text-center text-xs font-semibold text-slate-600 uppercase tracking-wider hidden md:table-cell">Senden an</th>
+                            <th className="w-20 px-3 sm:px-6 py-4 text-center text-xs font-semibold text-slate-600 uppercase tracking-wider">Bestellwert</th>
+                            <th className="w-28 px-3 sm:px-6 py-4 text-center text-xs font-semibold text-slate-600 uppercase tracking-wider">Status</th>
+                            <th className="w-24 px-3 sm:px-6 py-4 text-center text-xs font-semibold text-slate-600 uppercase tracking-wider">Aktionen</th>
+                          </tr>
+                        </thead>
+                        <tbody className="bg-white/50 divide-y divide-slate-200">
+                          {orders.map((order) => {
+                            const statusInfo = getStatusInfo(order.status);
+                            const isExpanded = expandedOrder === order._id;
+                            
+                            return (
+                              <React.Fragment key={order._id}>
+                                <tr className="hover:bg-blue-50/50 transition-colors">
+                                  <td className="px-3 sm:px-6 py-4 text-center">
+                                    <span className="text-xs sm:text-sm font-semibold text-slate-800 bg-slate-100 px-2 sm:px-3 py-1 rounded-full">
+                                      {order.orderNumber}
                                     </span>
-                                  </div>
-                                </td>
-                                <td className="px-3 sm:px-6 py-4 text-center">
-                                  <button
-                                    onClick={() => setExpandedOrder(isExpanded ? null : order._id)}
-                                    className="text-blue-600 hover:text-blue-700 text-xs sm:text-sm font-medium hover:underline flex items-center mx-auto"
-                                  >
-                                    <span className="truncate">
-                                      {isExpanded ? 'Weniger' : 'Details'}
-                                    </span>
-                                    <svg 
-                                      className={`w-4 h-4 ml-1 transition-transform ${isExpanded ? 'rotate-180' : ''}`}
-                                      fill="none" 
-                                      stroke="currentColor" 
-                                      viewBox="0 0 24 24"
+                                  </td>
+                                  <td className="px-3 sm:px-6 py-4 text-xs sm:text-sm text-slate-600 hidden sm:table-cell text-center">
+                                    {formatDate(order.createdAt)}
+                                  </td>
+                                  <td className="px-3 sm:px-6 py-4 text-xs sm:text-sm text-slate-600 hidden md:table-cell text-center">
+                                    <div className="truncate" title={`${order.shippingAddress.street} ${order.shippingAddress.houseNumber}`}>
+                                      {order.shippingAddress.street} {order.shippingAddress.houseNumber}
+                                    </div>
+                                  </td>
+                                  <td className="px-3 sm:px-6 py-4 text-xs sm:text-sm font-semibold text-slate-800 text-center">
+                                    €{(order.total).toFixed(2)}
+                                  </td>
+                                  <td className="px-3 sm:px-6 py-4">
+                                    <div className="whitespace-pre-line text-center">
+                                      <span className={`inline-flex items-center px-2 sm:px-3 py-1 rounded-full text-xs font-medium ${statusInfo.bg} ${statusInfo.color}`} title={statusInfo.text}>
+                                        {statusInfo.text}
+                                      </span>
+                                    </div>
+                                  </td>
+                                  <td className="px-3 sm:px-6 py-4 text-center">
+                                    <button
+                                      onClick={() => setExpandedOrder(isExpanded ? null : order._id)}
+                                      className="text-blue-600 hover:text-blue-700 text-xs sm:text-sm font-medium hover:underline flex items-center mx-auto"
                                     >
-                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                                    </svg>
-                                  </button>
-                                </td>
-                              </tr>
+                                      <span className="truncate">
+                                        {isExpanded ? 'Weniger' : 'Details'}
+                                      </span>
+                                      <svg 
+                                        className={`w-4 h-4 ml-1 transition-transform ${isExpanded ? 'rotate-180' : ''}`}
+                                        fill="none" 
+                                        stroke="currentColor" 
+                                        viewBox="0 0 24 24"
+                                      >
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                                      </svg>
+                                    </button>
+                                  </td>
+                                </tr>
                               
                               {/* Expanded Details Row */}
                               {isExpanded && (
@@ -666,6 +695,11 @@ export default function OrdersPage() {
                                                   <tr key={`${item.productId}-${index}`} className="hover:bg-slate-50">
                                                     <td className="px-4 py-3 w-2/5">
                                                       <div className="text-sm font-medium text-slate-800">{item.name}</div>
+                                                      {isItemReturned(order._id, item) && (
+                                                        <div className="text-xs text-red-600 mt-1 font-medium">
+                                                          ↩️ Zurückgegeben
+                                                        </div>
+                                                      )}
                                                     </td>
                                                     <td className="px-4 py-3 w-1/5">
                                                       <div className="text-sm text-slate-600">
@@ -861,6 +895,336 @@ export default function OrdersPage() {
                     </table>
                   </div>
                 </div>
+
+                {/* Mobile Card View */}
+                <div className="lg:hidden">
+                  <div className="divide-y divide-slate-200">
+                    {orders.map((order) => {
+                      const statusInfo = getStatusInfo(order.status);
+                      const isExpanded = expandedOrder === order._id;
+                      
+                      return (
+                        <div key={order._id} className="p-4 bg-white/70 backdrop-blur-sm border border-white/30 rounded-2xl mb-4 shadow-lg">
+                          {/* Card Header - Always visible */}
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center space-x-3">
+                              <div className="bg-blue-100 rounded-full p-1.5">
+                                <svg className="w-3 h-3 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                                </svg>
+                              </div>
+                              <span className="text-sm font-semibold text-slate-800">
+                                {order.orderNumber}
+                              </span>
+                            </div>
+                            <div className="flex items-center space-x-3">
+                              <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${statusInfo.bg} ${statusInfo.color}`}>
+                                {statusInfo.icon} {statusInfo.text}
+                              </span>
+                              <button
+                                onClick={() => setExpandedOrder(isExpanded ? null : order._id)}
+                                className="p-1 text-slate-400 hover:text-slate-600"
+                              >
+                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d={isExpanded ? "M19 9l-7 7-7-7" : "M9 5l7 7-7 7"} />
+                                </svg>
+                              </button>
+                            </div>
+                          </div>
+                          
+                          {/* Expanded Details - Only shown when expanded */}
+                          {isExpanded && (
+                            <div className="mt-4 pt-4 border-t border-slate-200">
+                              {/* Mobile Actions */}
+                              <div className="mb-4 flex flex-col space-y-2">
+                                <div className="flex space-x-2">
+                                  {/* Invoice Download Button */}
+                                  {order.status === 'delivered' || (order as any).status === 'return_completed' || order.status === 'return_requested' ? (
+                                    <button
+                                      onClick={() => downloadInvoice(order.orderNumber)}
+                                      className="flex-1 inline-flex items-center justify-center px-3 py-2 text-xs font-medium text-green-600 bg-green-50 rounded-lg hover:bg-green-100 transition-colors duration-200"
+                                    >
+                                      <svg className="w-3 h-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                                      </svg>
+                                      Rechnung
+                                    </button>
+                                  ) : (
+                                    <div className="flex-1 text-xs text-slate-500 px-3 py-2 text-center bg-slate-50 rounded-lg">
+                                      Rechnung nach Lieferung
+                                    </div>
+                                  )}
+                                  
+                                  {/* Credit Note Download Button - Only for completed returns */}
+                                  {order.status === 'return_completed' && (
+                                    <button
+                                      onClick={() => downloadCreditNote(order.orderNumber)}
+                                      className="flex-1 inline-flex items-center justify-center px-3 py-2 text-xs font-medium text-red-600 bg-red-50 rounded-lg hover:bg-red-100 transition-colors duration-200"
+                                    >
+                                      <svg className="w-3 h-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                                      </svg>
+                                      Storno-Rechnung
+                                    </button>
+                                  )}
+                                </div>
+                                
+                                <div className="flex space-x-2">
+                                  {/* Review Button */}
+                                  <button
+                                    onClick={() => {
+                                      if (order.status === 'delivered' || (order as any).status === 'return_completed' || order.status === 'return_requested') {
+                                        const reviewStatus = getReviewStatus(order._id);
+                                        if (!reviewStatus.allReviewed) {
+                                          setReviewModalOrderId(order._id);
+                                        }
+                                      }
+                                    }}
+                                    disabled={order.status !== 'delivered' && (order as any).status !== 'return_completed' && order.status !== 'return_requested'}
+                                    className={`flex-1 inline-flex items-center justify-center px-3 py-2 text-xs font-medium rounded-lg transition-colors duration-200 ${
+                                      order.status === 'delivered' || (order as any).status === 'return_completed' || order.status === 'return_requested'
+                                        ? getReviewStatus(order._id).allReviewed 
+                                          ? 'text-green-600 bg-green-50 cursor-default' 
+                                          : 'text-yellow-600 bg-yellow-50 hover:bg-yellow-100'
+                                        : 'text-slate-500 bg-slate-50 cursor-not-allowed'
+                                    }`}
+                                  >
+                                    <svg className="w-3 h-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.197-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.784-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z" />
+                                    </svg>
+                                    {(() => {
+                                      if (order.status !== 'delivered' && (order as any).status !== 'return_completed') {
+                                        return 'Bewertung (nach Lieferung)';
+                                      }
+                                      const reviewStatus = getReviewStatus(order._id);
+                                      if (reviewStatus.allReviewed) {
+                                        return `Alle bewertet`;
+                                      } else if (reviewStatus.reviewedCount > 0) {
+                                        return `Weiter bewerten`;
+                                      } else {
+                                        return 'Bewertung abgeben';
+                                      }
+                                    })()}
+                                  </button>
+
+                                  {/* Return Button */}
+                                  <button
+                                    onClick={() => {
+                                      if (canReturnOrder(order)) {
+                                        setReturnModalOrderId(order._id);
+                                        const init: Record<string, number> = {};
+                                        order.items.forEach((_, idx) => { init[String(idx)] = 0; });
+                                        setReturnSelections(init);
+                                      }
+                                    }}
+                                    disabled={!canReturnOrder(order)}
+                                    className={`flex-1 inline-flex items-center justify-center px-3 py-2 text-xs font-medium rounded-lg transition-colors duration-200 ${
+                                      canReturnOrder(order)
+                                        ? 'text-purple-700 bg-purple-50 hover:bg-purple-100'
+                                        : 'text-slate-500 bg-slate-50 cursor-not-allowed'
+                                    }`}
+                                  >
+                                    {getReturnStatusText(order)}
+                                  </button>
+                                </div>
+                              </div>
+
+                              {/* Order Items */}
+                              <div className="mb-6">
+                                <h4 className="font-semibold text-slate-800 mb-4">Bestellte Artikel</h4>
+                                <div className="space-y-3">
+                                  {order.items.map((item, index) => (
+                                    <div key={`${item.productId}-${index}`} className="flex items-center space-x-3 p-3 bg-slate-50 rounded-lg">
+                                      {item.image && (
+                                        <img
+                                          src={item.image}
+                                          alt={item.name}
+                                          className="w-12 h-12 object-cover rounded-lg"
+                                        />
+                                      )}
+                                      <div className="flex-1 min-w-0">
+                                        <div className="text-sm font-medium text-slate-800 mb-1">{item.name}</div>
+                                        {isItemReturned(order._id, item) && (
+                                          <div className="text-xs text-red-600 mb-1 font-medium">
+                                            ↩️ Zurückgegeben
+                                          </div>
+                                        )}
+                                        <div className="text-xs text-slate-500">
+                                          Menge: {item.quantity} • €{(item.price / 100).toFixed(2)}
+                                        </div>
+                                        {item.variations && Object.keys(item.variations).length > 0 && (
+                                          <div className="text-xs text-slate-500 mt-1">
+                                            {Object.entries(item.variations).map(([key, value]) => (
+                                              <span key={key}>
+                                                {key}: {value}
+                                                {Object.keys(item.variations || {}).indexOf(key) < Object.keys(item.variations || {}).length - 1 && ', '}
+                                              </span>
+                                            ))}
+                                          </div>
+                                        )}
+                                      </div>
+                                      <div className="text-sm font-semibold text-slate-800">
+                                        €{((item.price * item.quantity) / 100).toFixed(2)}
+                                      </div>
+                                    </div>
+                                  ))}
+                                </div>
+                              </div>
+
+                              {/* Order Summary */}
+                              <div className="mb-6">
+                                <h4 className="font-semibold text-slate-800 mb-4">Bestellübersicht</h4>
+                                <div className="space-y-2">
+                                  <div className="flex justify-between text-sm">
+                                    <span className="text-slate-600">Zwischensumme ({order.items.length} Artikel)</span>
+                                    <span className="font-medium">€{((order as any).subtotal || order.total).toFixed(2)}</span>
+                                  </div>
+                                  {(order as any).shippingCosts > 0 && (
+                                    <div className="flex justify-between text-sm">
+                                      <span className="text-slate-600">Versandkosten</span>
+                                      <span className="font-medium">€{(((order as any).shippingCosts || 0) / 100).toFixed(2)}</span>
+                                    </div>
+                                  )}
+                                  {(order as any).shippingCosts === 0 && (
+                                    <div className="flex justify-between text-sm">
+                                      <span className="text-slate-600">Versandkosten</span>
+                                      <span className="font-medium text-green-600">Kostenlos</span>
+                                    </div>
+                                  )}
+                                  {(order as any).discountCents > 0 && (
+                                    <div className="flex justify-between text-sm">
+                                      <span className="text-slate-600">Rabatt{(order as any).discountCode ? ` (${(order as any).discountCode})` : ''}</span>
+                                      <span className="font-medium text-green-600">-€{(((order as any).discountCents || 0) / 100).toFixed(2)}</span>
+                                    </div>
+                                  )}
+                                  {(order as any).bonusPointsRedeemed > 0 && (
+                                    <div className="flex justify-between text-sm">
+                                      <span className="text-slate-600">Bonuspunkte-Rabatt ({(order as any).bonusPointsRedeemed} Punkte)</span>
+                                      <span className="font-medium text-green-600">
+                                        -€{getPointsDiscountAmount((order as any).bonusPointsRedeemed).toFixed(2)}
+                                      </span>
+                                    </div>
+                                  )}
+                                  <div className="border-t border-slate-200 pt-2">
+                                    {(() => {
+                                      const hasDiscount = ((order as any).discountCents || 0) > 0;
+                                      const hasPoints = ((order as any).bonusPointsRedeemed || 0) > 0;
+                                      const showSplitTotals = hasDiscount || hasPoints;
+                                      const subtotalPlusShipping = (((order as any).subtotal || order.total) + ((((order as any).shippingCosts || 0)) / 100));
+                                      if (showSplitTotals) {
+                                        return (
+                                          <>
+                                            <div className="flex justify-between text-base font-semibold">
+                                              <span className="text-slate-800">Gesamtbetrag (vor Rabatt)</span>
+                                              <span className="text-slate-800">€{subtotalPlusShipping.toFixed(2)}</span>
+                                            </div>
+                                            <div className="flex justify-between text-base font-semibold text-green-700 mt-2">
+                                              <span>Endbetrag (nach Rabatt)</span>
+                                              <span>€{(order.total as number).toFixed(2)}</span>
+                                            </div>
+                                          </>
+                                        );
+                                      }
+                                      return (
+                                        <div className="flex justify-between text-base font-semibold">
+                                          <span className="text-slate-800">Gesamtbetrag</span>
+                                          <span className="text-slate-800">€{(order.total as number).toFixed(2)}</span>
+                                        </div>
+                                      );
+                                    })()}
+                                  </div>
+                                  <div className="text-sm text-slate-600 bg-blue-50 rounded p-2">
+                                    <span className="font-medium">
+                                      {(order as any).bonusPointsEarned > 0
+                                        ? `Du hast ${order.bonusPointsEarned} Bonuspunkte für diese Bestellung erhalten`
+                                        : (order.status === 'return_completed'
+                                            ? 'Keine Bonuspunkte, da alle Artikel zurückgesendet wurden.'
+                                            : 'Für diese Bestellung erhältst du keine Bonuspunkte.')}
+                                    </span>
+                                    {(order as any).bonusPointsRedeemed > 0 && (
+                                      <span className="block mt-1">
+                                        und {((order as any).bonusPointsRedeemed)} Punkte eingelöst
+                                      </span>
+                                    )}
+                                    {(order.status === 'delivered' || order.status === 'return_requested' || (order as any).status === 'return_completed')
+                                      && (order as any).bonusPointsScheduledAt
+                                      && !(order as any).bonusPointsCredited
+                                      && (order as any).bonusPointsEarned > 0 && (
+                                      <span className="block mt-1 text-blue-700">
+                                        Geplante Gutschrift: {new Date((order as any).bonusPointsScheduledAt).toLocaleDateString('de-DE', { year: '2-digit', month: '2-digit', day: '2-digit' })}
+                                      </span>
+                                    )}
+                                    {(order as any).bonusPointsCredited && (order as any).bonusPointsCreditedAt && (
+                                      <span className="block mt-1 text-green-700">
+                                        Gutgeschrieben am: {new Date((order as any).bonusPointsCreditedAt).toLocaleDateString('de-DE', { year: '2-digit', month: '2-digit', day: '2-digit' })}
+                                      </span>
+                                    )}
+                                    {!(order as any).bonusPointsScheduledAt && order.status !== 'cancelled' && !(order as any).bonusPointsCredited && (order as any).bonusPointsEarned > 0 && (
+                                      <span className="block mt-1 text-slate-600">
+                                        Bonuspunkte werden 14 Tage nach der Lieferung gutgeschrieben.
+                                      </span>
+                                    )}
+                                  </div>
+                                </div>
+                              </div>
+
+                              {/* Order Details */}
+                              <div className="space-y-4">
+                                <div className="bg-white rounded-lg p-4">
+                                  <h4 className="font-semibold text-slate-800 mb-3">Lieferadresse</h4>
+                                  <div className="text-sm text-slate-600 space-y-1">
+                                    {(order.shippingAddress as any).company && (
+                                      <p className="font-medium text-slate-800">
+                                        {(order.shippingAddress as any).company}
+                                      </p>
+                                    )}
+                                    <p className="font-medium text-slate-800">
+                                      {(order.shippingAddress as any).firstName || ''} {(order.shippingAddress as any).lastName || ''}
+                                    </p>
+                                    <p>{order.shippingAddress.street} {order.shippingAddress.houseNumber}</p>
+                                    {(order.shippingAddress as any).addressLine2 && (
+                                      <p>{(order.shippingAddress as any).addressLine2}</p>
+                                    )}
+                                    <p>{order.shippingAddress.postalCode} {order.shippingAddress.city}</p>
+                                    <p>{order.shippingAddress.country}</p>
+                                  </div>
+                                </div>
+
+                                {(order as any).billingAddress && (
+                                  <div className="bg-white rounded-lg p-4">
+                                    <h4 className="font-semibold text-slate-800 mb-3">Rechnungsadresse</h4>
+                                    <div className="text-sm text-slate-600 space-y-1">
+                                      {((order as any).billingAddress as any).company && (
+                                        <p className="font-medium text-slate-800">
+                                          {((order as any).billingAddress as any).company}
+                                        </p>
+                                      )}
+                                      <p className="font-medium text-slate-800">
+                                        {((order as any).billingAddress as any).firstName || ''} {((order as any).billingAddress as any).lastName || ''}
+                                      </p>
+                                      <p>{(order as any).billingAddress.street} {(order as any).billingAddress.houseNumber}</p>
+                                      {((order as any).billingAddress as any).addressLine2 && (
+                                        <p>{((order as any).billingAddress as any).addressLine2}</p>
+                                      )}
+                                      <p>{(order as any).billingAddress.postalCode} {(order as any).billingAddress.city}</p>
+                                      <p>{(order as any).billingAddress.country}</p>
+                                    </div>
+                                  </div>
+                                )}
+                                
+                                <div className="bg-white rounded-lg p-4">
+                                  <h4 className="font-semibold text-slate-800 mb-3">Zahlungsmethode</h4>
+                                  <p className="text-sm text-slate-600">{getPaymentMethodText(order.paymentMethod)}</p>
+                                </div>
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+                </>
               )}
             </div>
 
@@ -945,6 +1309,11 @@ export default function OrdersPage() {
                           <div className="flex items-start gap-4">
                             <div className="flex-1 min-w-0">
                               <div className="font-medium text-slate-800 mb-1">{item.name}</div>
+                              {isItemReturned(order._id, item) && (
+                                <div className="text-xs text-red-600 mb-1 font-medium">
+                                  ↩️ Zurückgegeben
+                                </div>
+                              )}
                               {item.variations && Object.keys(item.variations).length > 0 && (
                                 <div className="text-sm text-slate-600 mb-2">
                                   {Object.entries(item.variations).map(([k,v]) => (
@@ -963,9 +1332,9 @@ export default function OrdersPage() {
                                   const pointsDiscountCents = ((order as any).bonusPointsRedeemed ? getPointsDiscountAmount((order as any).bonusPointsRedeemed) * 100 : 0);
                                   const origLineTotal = item.price * item.quantity;
                                   const share = orderSubtotalCents > 0 ? Math.min(1, Math.max(0, origLineTotal / orderSubtotalCents)) : 0;
-                                  const proratedDiscount = Math.floor(discountCents * share);
-                                  const proratedPoints = Math.floor(pointsDiscountCents * share);
-                                  const perUnitDeduction = Math.floor(proratedDiscount / item.quantity) + Math.floor(proratedPoints / item.quantity);
+                                  const proratedDiscount = Math.round(discountCents * share);
+                                  const proratedPoints = Math.round(pointsDiscountCents * share);
+                                  const perUnitDeduction = Math.round(proratedDiscount / item.quantity) + Math.round(proratedPoints / item.quantity);
                                   const effectiveUnitCents = Math.max(0, item.price - perUnitDeduction);
                                   if (effectiveUnitCents !== item.price) {
                                     return (
@@ -1050,9 +1419,9 @@ export default function OrdersPage() {
                             const pointsDiscountCents = ((order as any).bonusPointsRedeemed ? getPointsDiscountAmount((order as any).bonusPointsRedeemed) * 100 : 0);
                             const origLineTotal = item.price * item.quantity;
                             const share = orderSubtotalCents > 0 ? Math.min(1, Math.max(0, origLineTotal / orderSubtotalCents)) : 0;
-                            const proratedDiscount = Math.floor(discountCents * share);
-                            const proratedPoints = Math.floor(pointsDiscountCents * share);
-                            const perUnitDeduction = Math.floor(proratedDiscount / item.quantity) + Math.floor(proratedPoints / item.quantity);
+                            const proratedDiscount = Math.round(discountCents * share);
+                            const proratedPoints = Math.round(pointsDiscountCents * share);
+                            const perUnitDeduction = Math.round(proratedDiscount / item.quantity) + Math.round(proratedPoints / item.quantity);
                             const effectiveUnitCents = Math.max(0, item.price - perUnitDeduction);
                             const lineRefundCents = effectiveUnitCents * item.returnQty;
                             return (
@@ -1075,9 +1444,9 @@ export default function OrdersPage() {
                                   const totalRefundCents = selectedItems.reduce((sum, item) => {
                                     const origLineTotal = item.price * item.quantity;
                                     const share = orderSubtotalCents > 0 ? Math.min(1, Math.max(0, origLineTotal / orderSubtotalCents)) : 0;
-                                    const proratedDiscount = Math.floor(discountCents * share);
-                                    const proratedPoints = Math.floor(pointsDiscountCents * share);
-                                    const perUnitDeduction = Math.floor(proratedDiscount / item.quantity) + Math.floor(proratedPoints / item.quantity);
+                                    const proratedDiscount = Math.round(discountCents * share);
+                                    const proratedPoints = Math.round(pointsDiscountCents * share);
+                                    const perUnitDeduction = Math.round(proratedDiscount / item.quantity) + Math.round(proratedPoints / item.quantity);
                                     const effectiveUnitCents = Math.max(0, item.price - perUnitDeduction);
                                     return sum + (effectiveUnitCents * item.returnQty);
                                   }, 0);

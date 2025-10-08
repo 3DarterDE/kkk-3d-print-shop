@@ -8,7 +8,7 @@ import User from '@/lib/models/User';
 import { sendReturnCompletedEmail } from '@/lib/email';
 import { generateCreditNotePDF } from '@/lib/credit-note-template';
 import AdminBonusPoints from '@/lib/models/AdminBonusPoints';
-import { calculateReturnBonusPointsDeduction, deductReturnBonusPoints } from '@/lib/return-bonus-points';
+import { calculateReturnBonusPointsDeduction, calculateReturnBonusPointsCredit, creditReturnBonusPoints, deductReturnBonusPoints } from '@/lib/return-bonus-points';
 import fs from 'fs/promises';
 import path from 'path';
 
@@ -104,52 +104,84 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
       try {
         const acceptedItems = returnDoc.items.filter((item: any) => item.accepted);
         if (acceptedItems.length > 0) {
-          const pointsToDeduct = await calculateReturnBonusPointsDeduction(
+          // Load order doc to get original order data
+          const orderDoc = await Order.findById(returnDoc.orderId);
+          if (!orderDoc) {
+            console.error('Bestellung nicht gefunden für Rücksendung');
+            return;
+          }
+
+          // Calculate the ratio of returned items to total order
+          const orderSubtotalCents = orderDoc.items.reduce((s: number, it: any) => s + (Number(it.price) * Number(it.quantity)), 0);
+          let returnedItemsValueCents = 0;
+          
+          for (const returnedItem of acceptedItems) {
+            const originalItem = orderDoc.items.find((oi: any) => 
+              oi.name === returnedItem.name && 
+              JSON.stringify(oi.variations || {}) === JSON.stringify(returnedItem.variations || {})
+            );
+            
+            if (originalItem) {
+              returnedItemsValueCents += Number(originalItem.price) * Number(returnedItem.quantity);
+            }
+          }
+          
+          const returnRatio = orderSubtotalCents > 0 ? returnedItemsValueCents / orderSubtotalCents : 0;
+          
+          // Handle scheduled bonus points (not yet credited)
+          if (!orderDoc.bonusPointsCredited) {
+            try {
+              const timer = await AdminBonusPoints.findOne({
+                orderId: (orderDoc._id as any).toString(),
+                bonusPointsCredited: false
+              });
+
+              if (timer) {
+                const originalPoints = timer.pointsAwarded || 0;
+                const pointsToDeduct = Math.round(originalPoints * returnRatio);
+                const newPoints = Math.max(0, originalPoints - pointsToDeduct);
+
+                if (newPoints <= 0) {
+                  // Full return - delete the timer completely
+                  await AdminBonusPoints.deleteOne({ _id: timer._id });
+                  orderDoc.bonusPointsEarned = 0;
+                  orderDoc.bonusPointsScheduledAt = undefined;
+                  console.log(`Vollständige Rücksendung: Alle geplanten Bonuspunkte (${originalPoints}) storniert für Bestellung ${orderDoc.orderNumber}`);
+                } else {
+                  // Partial return - reduce points proportionally
+                  timer.pointsAwarded = newPoints;
+                  await timer.save();
+                  orderDoc.bonusPointsEarned = newPoints;
+                  console.log(`Teilweise Rücksendung: Bonuspunkte reduziert von ${originalPoints} auf ${newPoints} für Bestellung ${orderDoc.orderNumber}`);
+                }
+                
+                await orderDoc.save();
+              }
+            } catch (timerErr) {
+              console.error('Fehler beim Anpassen der geplanten Bonuspunkte:', timerErr);
+            }
+          } else {
+            // Points were already credited → deduct from user balance proportionally
+            const pointsToDeduct = await calculateReturnBonusPointsDeduction(
+              returnDoc.orderId,
+              acceptedItems
+            );
+            
+            if (pointsToDeduct > 0) {
+              await deductReturnBonusPoints(returnDoc.userId, returnDoc.orderId, pointsToDeduct);
+              console.log(`Bonuspunkte-Abzug bei Rücksendung: ${pointsToDeduct} Punkte von Benutzer ${returnDoc.userId} abgezogen`);
+            }
+          }
+
+          // Calculate and credit bonus points that were redeemed for this order
+          const pointsToCredit = await calculateReturnBonusPointsCredit(
             returnDoc.orderId,
             acceptedItems
           );
 
-          if (pointsToDeduct > 0) {
-            // Load order doc (not lean) to inspect credited state
-            const orderDoc = await Order.findById(returnDoc.orderId);
-            if (orderDoc) {
-              if (!orderDoc.bonusPointsCredited) {
-                // Points are not credited yet → adjust scheduled timer and order values
-                try {
-                  const timer = await AdminBonusPoints.findOne({
-                    orderId: (orderDoc._id as any).toString(),
-                    bonusPointsCredited: false
-                  });
-
-                  const previousPoints = timer ? (timer.pointsAwarded || 0) : (orderDoc.bonusPointsEarned || 0);
-                  const newPoints = Math.max(0, previousPoints - pointsToDeduct);
-
-                  if (timer) {
-                    if (newPoints <= 0) {
-                      await AdminBonusPoints.deleteOne({ _id: timer._id });
-                    } else {
-                      timer.pointsAwarded = newPoints;
-                      await timer.save();
-                    }
-                  }
-
-                  orderDoc.bonusPointsEarned = newPoints;
-                  if (newPoints <= 0) {
-                    // Clear scheduled date so UI no longer shows planned credit
-                    (orderDoc as any).bonusPointsScheduledAt = undefined;
-                  }
-                  await orderDoc.save();
-
-                  console.log(`Geplante Bonuspunkte angepasst: -${pointsToDeduct} Punkte für Bestellung ${orderDoc.orderNumber}. Neu geplant: ${newPoints}`);
-                } catch (timerErr) {
-                  console.error('Fehler beim Anpassen der geplanten Bonuspunkte:', timerErr);
-                }
-              } else {
-                // Points were already credited → deduct from user balance and mark on order
-                await deductReturnBonusPoints(returnDoc.userId, returnDoc.orderId, pointsToDeduct);
-                console.log(`Bonuspunkte-Abzug bei Rücksendung: ${pointsToDeduct} Punkte von Benutzer ${returnDoc.userId} abgezogen`);
-              }
-            }
+          if (pointsToCredit > 0) {
+            await creditReturnBonusPoints(returnDoc.userId, returnDoc.orderId, pointsToCredit);
+            console.log(`Bonuspunkte-Gutschrift: ${pointsToCredit} Punkte für Rücksendung von Bestellung ${returnDoc.orderNumber}`);
           }
         }
       } catch (bonusPointsError) {
@@ -198,22 +230,46 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
 
           const creditNoteItems = acceptedItems.map((item: any) => {
             const orig = findOriginalLine(item.name, item.variations);
-            const unitPrice = Number(returnDoc.items.find((it: any) => it.name === item.name)?.price || 0);
-            let lineTotal = unitPrice * item.quantity;
-            let effectiveUnit = unitPrice;
+            const originalUnitPrice = orig ? Number(orig.price) : Number(returnDoc.items.find((it: any) => it.name === item.name)?.price || 0);
+            const originalLineTotal = originalUnitPrice * item.quantity;
+            
+            // Calculate discount per unit for display purposes
+            let discountPerUnit = 0;
+            let bonusPointsDiscountPerUnit = 0;
+            
             if (orderDiscountCents > 0 && orderSubtotalCents > 0 && orig) {
               const origLineTotal = Number(orig.price) * Number(orig.quantity);
               const share = Math.min(1, Math.max(0, origLineTotal / orderSubtotalCents));
-              const proratedDiscount = Math.floor(orderDiscountCents * share);
-              const proratedPerUnit = Math.floor(proratedDiscount / Number(orig.quantity));
-              effectiveUnit = Math.max(0, unitPrice - proratedPerUnit);
-              lineTotal = effectiveUnit * item.quantity;
+              const proratedDiscount = Math.round(orderDiscountCents * share);
+              discountPerUnit = Math.round(proratedDiscount / Number(orig.quantity));
             }
+            
+            // Calculate bonus points discount per unit
+            const bonusPointsRedeemed = Number(order?.bonusPointsRedeemed || 0);
+            if (bonusPointsRedeemed > 0 && orderSubtotalCents > 0 && orig) {
+              const getPointsDiscountAmount = (points: number) => {
+                if (points >= 5000) return 50; // 50€
+                if (points >= 4000) return 35; // 35€
+                if (points >= 3000) return 20; // 20€
+                if (points >= 2000) return 10; // 10€
+                if (points >= 1000) return 5;  // 5€
+                return 0;
+              };
+              
+              const totalPointsDiscountCents = getPointsDiscountAmount(bonusPointsRedeemed) * 100;
+              const origLineTotal = Number(orig.price) * Number(orig.quantity);
+              const share = Math.min(1, Math.max(0, origLineTotal / orderSubtotalCents));
+              const proratedPointsDiscount = Math.round(totalPointsDiscountCents * share);
+              bonusPointsDiscountPerUnit = Math.round(proratedPointsDiscount / Number(orig.quantity));
+            }
+            
             return {
               name: item.name,
               quantity: item.quantity,
-              price: effectiveUnit,
-              total: lineTotal,
+              price: originalUnitPrice, // Show original price in table
+              total: originalLineTotal, // Show original line total in table
+              discountPerUnit: discountPerUnit, // Store discount for later calculation
+              bonusPointsDiscountPerUnit: bonusPointsDiscountPerUnit, // Store bonus points discount
               variations: item.variations || undefined,
             };
           });

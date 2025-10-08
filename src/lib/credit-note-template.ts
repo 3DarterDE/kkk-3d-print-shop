@@ -6,6 +6,8 @@ export interface CreditNoteItem {
   quantity: number;
   price: number; // in cents
   total: number; // in cents
+  discountPerUnit?: number; // in cents
+  bonusPointsDiscountPerUnit?: number; // in cents
   variations?: Record<string, string>;
 }
 
@@ -15,6 +17,20 @@ export async function generateCreditNotePDF(
   acceptedItems: CreditNoteItem[]
 ): Promise<jsPDF> {
   const doc = new jsPDF();
+
+  // Calculate total discount for credit note
+  const totalDiscountCents = acceptedItems.reduce((sum, it) => {
+    return sum + ((it.discountPerUnit || 0) * it.quantity);
+  }, 0);
+  
+  // Calculate total bonus points discount for credit note
+  const totalBonusPointsDiscountCents = acceptedItems.reduce((sum, it) => {
+    return sum + ((it.bonusPointsDiscountPerUnit || 0) * it.quantity);
+  }, 0);
+  
+  // Calculate final total after all discounts
+  const originalSubtotal = acceptedItems.reduce((sum, it) => sum + (it.total / 100), 0);
+  const finalTotal = originalSubtotal - (totalDiscountCents / 100) - (totalBonusPointsDiscountCents / 100);
 
   // Clone order and override fields to reflect a credit note using the same layout
   const creditOrder = {
@@ -26,8 +42,11 @@ export async function generateCreditNotePDF(
       variations: it.variations || undefined,
     })),
     // Subtotal and total are expressed in euros within invoice template computations
-    subtotal: acceptedItems.reduce((sum, it) => sum + (it.total / 100), 0),
-    total: acceptedItems.reduce((sum, it) => sum + (it.total / 100), 0),
+    subtotal: originalSubtotal, // Show original subtotal
+    total: finalTotal, // Show final total after discount
+    discountCents: totalDiscountCents, // Pass discount for display
+    bonusPointsRedeemed: order.bonusPointsRedeemed, // Pass bonus points for display
+    pointsDiscountOverrideCents: totalBonusPointsDiscountCents, // Prorated bonus points discount for display
     shippingCosts: null, // Remove shipping costs from credit note
   } as any;
 

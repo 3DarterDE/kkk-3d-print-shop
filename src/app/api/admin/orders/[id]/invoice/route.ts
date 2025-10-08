@@ -56,9 +56,9 @@ export async function GET(
       return NextResponse.json({ error: 'Bestellung nicht gefunden' }, { status: 404 });
     }
 
-    // Only allow invoice download for delivered orders
-    if (order.status !== 'delivered') {
-      return NextResponse.json({ error: 'Rechnung nur für gelieferte Bestellungen verfügbar' }, { status: 400 });
+    // Only allow invoice download for delivered orders or completed returns
+    if (order.status !== 'delivered' && order.status !== 'return_completed') {
+      return NextResponse.json({ error: 'Rechnung nur für gelieferte Bestellungen oder abgeschlossene Rücksendungen verfügbar' }, { status: 400 });
     }
 
     // Check if PDF already exists in cache

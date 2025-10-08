@@ -181,12 +181,7 @@ export default function CartPage() {
     return () => clearTimeout(timer);
   }, []);
 
-  // Silent validation on mount (no UI feedback)
-  useEffect(() => {
-    if (items.length > 0) {
-      validateItems();
-    }
-  }, []); // Only run once on mount
+  // Validation is handled globally by CartValidationProvider/useCartSync
 
   // Load random products after cart is initialized (only once)
   useEffect(() => {
@@ -661,23 +656,9 @@ export default function CartPage() {
                           discountCents={discountCents}
                           onApplied={async (code: string, cents: number) => {
                             setDiscount(code, cents);
-                            try {
-                              await fetch('/api/cart', {
-                                method: 'PUT',
-                                headers: { 'Content-Type': 'application/json' },
-                                body: JSON.stringify({ items, discountCode: code, discountCents: cents })
-                              });
-                            } catch {}
                           }}
                           onCleared={async () => {
                             clearDiscount();
-                            try {
-                              await fetch('/api/cart', {
-                                method: 'PUT',
-                                headers: { 'Content-Type': 'application/json' },
-                                body: JSON.stringify({ items, discountCode: null, discountCents: 0 })
-                              });
-                            } catch {}
                           }}
                         />
                       ) : userLoading ? null : (

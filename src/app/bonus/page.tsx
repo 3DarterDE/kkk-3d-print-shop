@@ -54,29 +54,51 @@ export default function BonusPointsPage() {
   const { user, loading, error, orders, refetchOrders } = useUserData();
   const [showHistory, setShowHistory] = React.useState(false);
   const [entries, setEntries] = React.useState<any[]>([]);
+  const [orderEntries, setOrderEntries] = React.useState<any[]>([]);
+  const [reviewEntries, setReviewEntries] = React.useState<any[]>([]);
+  const [returnEntries, setReturnEntries] = React.useState<any[]>([]);
+  const [activeTab, setActiveTab] = React.useState<'orders' | 'reviews' | 'returns'>('orders');
   const [currentPage, setCurrentPage] = React.useState(1);
   const { loading: authLoading, isAuthenticated } = useAuth();
   
   const ITEMS_PER_PAGE = 25;
 
-  // Build unified bonus entries from orders and reviews (same logic as profile)
+  // Build bonus entries separated by type
   React.useEffect(() => {
     const buildEntries = async () => {
       try {
-        const list: any[] = [];
+        const orderList: any[] = [];
+        const reviewList: any[] = [];
+        const returnList: any[] = [];
+        const allList: any[] = [];
+
+        // Process orders
         (orders || []).forEach((o: any) => {
           const orderNumber = o.orderNumber;
           const points = o.bonusPointsEarned || 0;
           if (points > 0) {
             if (o.bonusPointsScheduledAt && !o.bonusPointsCredited) {
-              list.push({ kind: 'order', orderId: o._id, orderNumber, points, scheduledAt: o.bonusPointsScheduledAt, credited: false });
+              const entry = { kind: 'order', orderId: o._id, orderNumber, points, scheduledAt: o.bonusPointsScheduledAt, credited: false };
+              orderList.push(entry);
+              allList.push(entry);
             }
             if (o.bonusPointsCredited && o.bonusPointsCreditedAt) {
-              list.push({ kind: 'order', orderId: o._id, orderNumber, points, credited: true, creditedAt: o.bonusPointsCreditedAt });
+              const entry = { kind: 'order', orderId: o._id, orderNumber, points, credited: true, creditedAt: o.bonusPointsCreditedAt };
+              orderList.push(entry);
+              allList.push(entry);
             }
+          }
+
+          // Process return bonus points
+          const returnPoints = o.bonusPointsCreditedReturn || 0;
+          if (returnPoints > 0 && o.bonusPointsCreditedReturnAt) {
+            const entry = { kind: 'return', orderId: o._id, orderNumber, points: returnPoints, credited: true, creditedAt: o.bonusPointsCreditedReturnAt };
+            returnList.push(entry);
+            allList.push(entry);
           }
         });
 
+        // Process reviews
         if (orders && orders.length > 0) {
           const orderIds = orders.map((o: any) => o._id);
           const res = await fetch(`/api/reviews?orderId=${orderIds.join(',')}`);
@@ -90,23 +112,36 @@ export default function BonusPointsPage() {
               if (pts <= 0) return;
               const orderNumber = idToNumber[r.orderId] || r.orderId;
               if (r.bonusPointsScheduledAt && !r.bonusPointsCredited) {
-                list.push({ kind: 'review', orderId: r.orderId, reviewId: r._id, orderNumber, points: pts, scheduledAt: r.bonusPointsScheduledAt, credited: false });
+                const entry = { kind: 'review', orderId: r.orderId, reviewId: r._id, orderNumber, points: pts, scheduledAt: r.bonusPointsScheduledAt, credited: false };
+                reviewList.push(entry);
+                allList.push(entry);
               }
               if (r.bonusPointsCredited && r.bonusPointsCreditedAt) {
-                list.push({ kind: 'review', orderId: r.orderId, reviewId: r._id, orderNumber, points: pts, credited: true, creditedAt: r.bonusPointsCreditedAt });
+                const entry = { kind: 'review', orderId: r.orderId, reviewId: r._id, orderNumber, points: pts, credited: true, creditedAt: r.bonusPointsCreditedAt };
+                reviewList.push(entry);
+                allList.push(entry);
               }
             });
           }
         }
 
         // Sort all entries by date (newest first)
-        const allEntries = list.sort((a, b) => {
-          const dateA = a.credited ? new Date(a.creditedAt).getTime() : new Date(a.scheduledAt).getTime();
-          const dateB = b.credited ? new Date(b.creditedAt).getTime() : new Date(b.scheduledAt).getTime();
-          return dateB - dateA; // Newest first
-        });
-        setEntries(allEntries);
+        const sortByDate = (list: any[]) => {
+          return list.sort((a, b) => {
+            const dateA = a.credited ? new Date(a.creditedAt).getTime() : new Date(a.scheduledAt).getTime();
+            const dateB = b.credited ? new Date(b.creditedAt).getTime() : new Date(b.scheduledAt).getTime();
+            return dateB - dateA; // Newest first
+          });
+        };
+
+        setOrderEntries(sortByDate(orderList));
+        setReviewEntries(sortByDate(reviewList));
+        setReturnEntries(sortByDate(returnList));
+        setEntries(sortByDate(allList));
       } catch {
+        setOrderEntries([]);
+        setReviewEntries([]);
+        setReturnEntries([]);
         setEntries([]);
       }
     };
@@ -194,10 +229,20 @@ export default function BonusPointsPage() {
   const completedGoals = getCompletedGoals();
 
   // Pagination logic
-  const totalPages = Math.ceil(entries.length / ITEMS_PER_PAGE);
+  const getCurrentEntries = () => {
+    switch (activeTab) {
+      case 'orders': return orderEntries;
+      case 'reviews': return reviewEntries;
+      case 'returns': return returnEntries;
+      default: return entries;
+    }
+  };
+
+  const currentEntries = getCurrentEntries();
+  const totalPages = Math.ceil(currentEntries.length / ITEMS_PER_PAGE);
   const startIndex = (currentPage - 1) * ITEMS_PER_PAGE;
   const endIndex = startIndex + ITEMS_PER_PAGE;
-  const paginatedEntries = entries.slice(startIndex, endIndex);
+  const paginatedEntries = currentEntries.slice(startIndex, endIndex);
 
   const handlePageChange = (page: number) => {
     setCurrentPage(page);
@@ -205,6 +250,11 @@ export default function BonusPointsPage() {
 
   const resetPagination = () => {
     setCurrentPage(1);
+  };
+
+  const handleTabChange = (tab: 'orders' | 'reviews' | 'returns') => {
+    setActiveTab(tab);
+    resetPagination();
   };
 
   return (
@@ -300,103 +350,262 @@ export default function BonusPointsPage() {
         {/* History Modal */}
         {showHistory && (
     <div 
-      className="fixed inset-0 bg-black/30 backdrop-blur-sm flex items-center justify-center z-50"
+      className="fixed inset-0 bg-black/30 backdrop-blur-sm flex items-center justify-center z-50 p-4"
       onClick={() => setShowHistory(false)}
     >
       <div 
-        className="bg-white rounded-2xl p-4 sm:p-6 w-full max-w-2xl mx-4 max-h-[85vh] overflow-y-auto border border-slate-100 shadow-xl"
+        className="bg-white rounded-2xl w-full max-w-4xl max-h-[90vh] overflow-hidden border border-slate-100 shadow-xl"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="flex items-center justify-between mb-4">
-          <h3 className="text-lg font-semibold text-slate-900">Bonuspunkte-Verlauf</h3>
-          <button onClick={() => setShowHistory(false)} className="text-slate-400 hover:text-slate-600">✕</button>
+        {/* Mobile Header */}
+        <div className="flex items-center justify-between p-4 sm:p-6 border-b border-slate-200 bg-gradient-to-r from-blue-50 to-slate-50">
+          <h3 className="text-lg sm:text-xl font-semibold text-slate-900">Bonuspunkte-Verlauf</h3>
+          <button 
+            onClick={() => setShowHistory(false)} 
+            className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-lg transition-colors"
+          >
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
         </div>
 
-        {entries.length === 0 ? (
-          <div className="p-4 bg-slate-50 rounded-xl text-slate-600 text-sm">
-            Keine Einträge vorhanden.
-          </div>
-        ) : (
-          <>
-            <div className="space-y-3">
-              {paginatedEntries.map((entry, idx) => (
-                <div key={startIndex + idx} className="flex items-start justify-between p-3 rounded-lg border border-slate-100">
-                  <div>
-                    <div className="text-sm text-slate-700">
-                      {entry.kind === 'order' ? 'Bestellung' : 'Bewertung'}
-                      {entry.orderNumber && (
-                        <span className="ml-2 text-slate-500">#{entry.orderNumber}</span>
-                      )}
-                    </div>
-                    <div className="text-xs text-slate-500 mt-1">
-                      {entry.credited ? (
-                        <span className="text-green-700">Gutgeschrieben am {new Date(entry.creditedAt).toLocaleDateString('de-DE', { year: '2-digit', month: '2-digit', day: '2-digit' })}</span>
-                      ) : (
-                        <span className="text-blue-700">Geplante Gutschrift am {new Date(entry.scheduledAt).toLocaleDateString('de-DE', { year: '2-digit', month: '2-digit', day: '2-digit' })}</span>
-                      )}
-                    </div>
-                  </div>
-                  <div className={`text-sm font-semibold ${entry.credited ? 'text-green-700' : 'text-yellow-700'}`}>+{entry.points} Punkte</div>
-                </div>
-              ))}
+        {/* Scrollable Content */}
+        <div className="overflow-y-auto max-h-[calc(90vh-140px)]">
+          <div className="p-4 sm:p-6">
+            {/* Tabs - Mobile Optimized */}
+            <div className="mb-6">
+              <div className="grid grid-cols-3 gap-1 bg-slate-100 p-1 rounded-lg">
+                <button
+                  onClick={() => handleTabChange('orders')}
+                  className={`px-2 sm:px-4 py-2 text-xs sm:text-sm font-medium rounded-md transition-colors ${
+                    activeTab === 'orders'
+                      ? 'bg-white text-blue-600 shadow-sm'
+                      : 'text-slate-600 hover:text-slate-800'
+                  }`}
+                >
+                  <div className="hidden sm:block">Bestellungen ({orderEntries.length})</div>
+                  <div className="sm:hidden">Bestell. ({orderEntries.length})</div>
+                </button>
+                <button
+                  onClick={() => handleTabChange('reviews')}
+                  className={`px-2 sm:px-4 py-2 text-xs sm:text-sm font-medium rounded-md transition-colors ${
+                    activeTab === 'reviews'
+                      ? 'bg-white text-blue-600 shadow-sm'
+                      : 'text-slate-600 hover:text-slate-800'
+                  }`}
+                >
+                  <div className="hidden sm:block">Bewertungen ({reviewEntries.length})</div>
+                  <div className="sm:hidden">Bewert. ({reviewEntries.length})</div>
+                </button>
+                <button
+                  onClick={() => handleTabChange('returns')}
+                  className={`px-2 sm:px-4 py-2 text-xs sm:text-sm font-medium rounded-md transition-colors ${
+                    activeTab === 'returns'
+                      ? 'bg-white text-blue-600 shadow-sm'
+                      : 'text-slate-600 hover:text-slate-800'
+                  }`}
+                >
+                  <div className="hidden sm:block">Rücksendungen ({returnEntries.length})</div>
+                  <div className="sm:hidden">Rück. ({returnEntries.length})</div>
+                </button>
+              </div>
             </div>
-            
-            {/* Pagination */}
-            {totalPages > 1 && (
-              <div className="mt-6 flex items-center justify-between">
-                <div className="text-sm text-slate-600">
-                  Zeige {startIndex + 1}-{Math.min(endIndex, entries.length)} von {entries.length} Einträgen
+
+            {currentEntries.length === 0 ? (
+              <div className="p-6 bg-slate-50 rounded-xl text-slate-600 text-center">
+                <div className="text-4xl mb-2">📊</div>
+                <div className="text-sm">Keine Einträge vorhanden.</div>
+              </div>
+            ) : (
+              <>
+                {/* Mobile Card View for Entries */}
+                <div className="space-y-3">
+                  {paginatedEntries.map((entry, idx) => (
+                    <div key={startIndex + idx} className="bg-white border border-slate-200 rounded-xl p-4 shadow-sm hover:shadow-md transition-shadow">
+                      <div className="flex items-start justify-between">
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center space-x-2 mb-2">
+                            <div className={`w-8 h-8 rounded-full flex items-center justify-center ${
+                              entry.kind === 'order' ? 'bg-blue-100' : 
+                              entry.kind === 'review' ? 'bg-yellow-100' : 'bg-purple-100'
+                            }`}>
+                              {entry.kind === 'order' && (
+                                <svg className="w-4 h-4 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                                </svg>
+                              )}
+                              {entry.kind === 'review' && (
+                                <svg className="w-4 h-4 text-yellow-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.197-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.784-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z" />
+                                </svg>
+                              )}
+                              {entry.kind === 'return' && (
+                                <svg className="w-4 h-4 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 15v-1a4 4 0 00-4-4H8m0 0l3 3m-3-3l-3 3m5-3v6m0 0l3-3m-3 3l-3-3" />
+                                </svg>
+                              )}
+                            </div>
+                            <div>
+                              <div className="text-sm font-medium text-slate-700">
+                                {entry.kind === 'order' ? 'Bestellung' : entry.kind === 'review' ? 'Bewertung' : 'Rücksendung'}
+                                {entry.orderNumber && (
+                                  <span className="ml-2 text-slate-500">#{entry.orderNumber}</span>
+                                )}
+                              </div>
+                              <div className="text-xs text-slate-500 mt-1">
+                                {entry.credited ? (
+                                  <span className="text-green-700 flex items-center">
+                                    <svg className="w-3 h-3 mr-1" fill="currentColor" viewBox="0 0 20 20">
+                                      <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                                    </svg>
+                                    Gutgeschrieben am {new Date(entry.creditedAt).toLocaleDateString('de-DE', { year: '2-digit', month: '2-digit', day: '2-digit' })}
+                                  </span>
+                                ) : (
+                                  <span className="text-blue-700 flex items-center">
+                                    <svg className="w-3 h-3 mr-1" fill="currentColor" viewBox="0 0 20 20">
+                                      <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-12a1 1 0 10-2 0v4a1 1 0 00.293.707l2.828 2.829a1 1 0 101.415-1.415L11 9.586V6z" clipRule="evenodd" />
+                                    </svg>
+                                    Geplante Gutschrift am {new Date(entry.scheduledAt).toLocaleDateString('de-DE', { year: '2-digit', month: '2-digit', day: '2-digit' })}
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                        <div className={`text-lg font-bold ${entry.credited ? 'text-green-600' : 'text-yellow-600'}`}>
+                          +{entry.points}
+                        </div>
+                      </div>
+                    </div>
+                  ))}
                 </div>
-                <div className="flex items-center space-x-2">
-                  <button
-                    onClick={() => handlePageChange(currentPage - 1)}
-                    disabled={currentPage === 1}
-                    className="px-3 py-1 text-sm border border-slate-300 rounded-lg hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    Zurück
-                  </button>
-                  
-                  <div className="flex items-center space-x-1">
-                    {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
-                      let pageNum;
-                      if (totalPages <= 5) {
-                        pageNum = i + 1;
-                      } else if (currentPage <= 3) {
-                        pageNum = i + 1;
-                      } else if (currentPage >= totalPages - 2) {
-                        pageNum = totalPages - 4 + i;
-                      } else {
-                        pageNum = currentPage - 2 + i;
-                      }
-                      
-                      return (
-                        <button
-                          key={pageNum}
-                          onClick={() => handlePageChange(pageNum)}
-                          className={`px-3 py-1 text-sm rounded-lg ${
-                            currentPage === pageNum
-                              ? 'bg-blue-600 text-white'
-                              : 'border border-slate-300 hover:bg-slate-50'
-                          }`}
-                        >
-                          {pageNum}
-                        </button>
-                      );
-                    })}
+            
+            {/* Pagination - Mobile Optimized */}
+            {totalPages > 1 && (
+              <div className="mt-6">
+                {/* Mobile Pagination */}
+                <div className="sm:hidden">
+                  <div className="flex items-center justify-between mb-3">
+                    <div className="text-xs text-slate-600">
+                      {startIndex + 1}-{Math.min(endIndex, currentEntries.length)} von {currentEntries.length}
+                    </div>
+                    <div className="text-xs text-slate-500">
+                      Seite {currentPage} von {totalPages}
+                    </div>
                   </div>
-                  
-                  <button
-                    onClick={() => handlePageChange(currentPage + 1)}
-                    disabled={currentPage === totalPages}
-                    className="px-3 py-1 text-sm border border-slate-300 rounded-lg hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    Weiter
-                  </button>
+                  <div className="flex items-center justify-between">
+                    <button
+                      onClick={() => handlePageChange(currentPage - 1)}
+                      disabled={currentPage === 1}
+                      className="px-4 py-2 text-sm border border-slate-300 rounded-lg hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed flex items-center"
+                    >
+                      <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+                      </svg>
+                      Zurück
+                    </button>
+                    
+                    <div className="flex items-center space-x-1">
+                      {Array.from({ length: Math.min(3, totalPages) }, (_, i) => {
+                        let pageNum;
+                        if (totalPages <= 3) {
+                          pageNum = i + 1;
+                        } else if (currentPage <= 2) {
+                          pageNum = i + 1;
+                        } else if (currentPage >= totalPages - 1) {
+                          pageNum = totalPages - 2 + i;
+                        } else {
+                          pageNum = currentPage - 1 + i;
+                        }
+                        
+                        return (
+                          <button
+                            key={pageNum}
+                            onClick={() => handlePageChange(pageNum)}
+                            className={`px-3 py-1 text-sm rounded-lg ${
+                              currentPage === pageNum
+                                ? 'bg-blue-600 text-white'
+                                : 'border border-slate-300 hover:bg-slate-50'
+                            }`}
+                          >
+                            {pageNum}
+                          </button>
+                        );
+                      })}
+                    </div>
+                    
+                    <button
+                      onClick={() => handlePageChange(currentPage + 1)}
+                      disabled={currentPage === totalPages}
+                      className="px-4 py-2 text-sm border border-slate-300 rounded-lg hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed flex items-center"
+                    >
+                      Weiter
+                      <svg className="w-4 h-4 ml-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                      </svg>
+                    </button>
+                  </div>
+                </div>
+
+                {/* Desktop Pagination */}
+                <div className="hidden sm:flex items-center justify-between">
+                  <div className="text-sm text-slate-600">
+                    Zeige {startIndex + 1}-{Math.min(endIndex, currentEntries.length)} von {currentEntries.length} Einträgen
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <button
+                      onClick={() => handlePageChange(currentPage - 1)}
+                      disabled={currentPage === 1}
+                      className="px-3 py-1 text-sm border border-slate-300 rounded-lg hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      Zurück
+                    </button>
+                    
+                    <div className="flex items-center space-x-1">
+                      {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+                        let pageNum;
+                        if (totalPages <= 5) {
+                          pageNum = i + 1;
+                        } else if (currentPage <= 3) {
+                          pageNum = i + 1;
+                        } else if (currentPage >= totalPages - 2) {
+                          pageNum = totalPages - 4 + i;
+                        } else {
+                          pageNum = currentPage - 2 + i;
+                        }
+                        
+                        return (
+                          <button
+                            key={pageNum}
+                            onClick={() => handlePageChange(pageNum)}
+                            className={`px-3 py-1 text-sm rounded-lg ${
+                              currentPage === pageNum
+                                ? 'bg-blue-600 text-white'
+                                : 'border border-slate-300 hover:bg-slate-50'
+                            }`}
+                          >
+                            {pageNum}
+                          </button>
+                        );
+                      })}
+                    </div>
+                    
+                    <button
+                      onClick={() => handlePageChange(currentPage + 1)}
+                      disabled={currentPage === totalPages}
+                      className="px-3 py-1 text-sm border border-slate-300 rounded-lg hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      Weiter
+                    </button>
+                  </div>
                 </div>
               </div>
             )}
           </>
         )}
+          </div>
+        </div>
       </div>
     </div>
         )}

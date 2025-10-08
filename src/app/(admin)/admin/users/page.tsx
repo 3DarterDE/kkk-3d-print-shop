@@ -125,17 +125,6 @@ export default function UsersPage() {
               <h1 className="text-3xl font-bold text-gray-900">Benutzerverwaltung</h1>
               <p className="mt-2 text-gray-600">Verwalten Sie alle registrierten Benutzer</p>
             </div>
-            <div className="flex space-x-4">
-              <Link
-                href="/admin/dashboard"
-                className="inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
-              >
-                <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
-                </svg>
-                Zurück zum Dashboard
-              </Link>
-            </div>
           </div>
         </div>
 
@@ -143,9 +132,7 @@ export default function UsersPage() {
         <div className="bg-white rounded-lg shadow p-6 mb-6">
           <form onSubmit={handleSearch} className="flex gap-4">
             <div className="flex-1">
-              <label htmlFor="search" className="sr-only">
-                Benutzer suchen
-              </label>
+              <label htmlFor="search" className="sr-only">Benutzer suchen</label>
               <input
                 type="text"
                 id="search"

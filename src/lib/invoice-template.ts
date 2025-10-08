@@ -331,7 +331,14 @@ export async function generateInvoicePDF(
   };
   
   const bonusPointsRedeemed = order.bonusPointsRedeemed || 0;
+  // Prefer explicit cents override (e.g., for credit notes with prorated points)
+  const pointsDiscountCentsOverride = typeof (order as any).pointsDiscountOverrideCents === 'number'
+    ? Number((order as any).pointsDiscountOverrideCents)
+    : null;
   const pointsDiscount = getPointsDiscountAmount(bonusPointsRedeemed);
+  const pointsDiscountCents = pointsDiscountCentsOverride !== null
+    ? pointsDiscountCentsOverride
+    : Math.round(pointsDiscount * 100);
   const finalTotal = orderTotal;
 
   // Totals block (right aligned)
@@ -343,7 +350,7 @@ export async function generateInvoicePDF(
   doc.setDrawColor(220, 220, 220);
   doc.setFillColor(250, 250, 250);
   // Adjust box height based on optional discount and bonus points lines
-  const extraLinesCount = (discountCents > 0 ? 1 : 0) + ((order.bonusPointsRedeemed || 0) > 0 ? 1 : 0);
+  const extraLinesCount = (discountCents > 0 ? 1 : 0) + (bonusPointsRedeemed > 0 && pointsDiscountCents > 0 ? 1 : 0);
   const totalsBoxHeight = 40 + (extraLinesCount * 6);
   doc.rect(totalsX, totalsY, totalsBoxWidth, totalsBoxHeight, 'FD');
 
@@ -377,10 +384,13 @@ export async function generateInvoicePDF(
   // If shippingCosts is null, skip the shipping line entirely
   
   // Bonus points discount
-  if (bonusPointsRedeemed > 0) {
-    doc.text(`Bonuspunkte-Rabatt (${bonusPointsRedeemed} Pkt.)`, totalsX + 6, lineY);
+  if (bonusPointsRedeemed > 0 && pointsDiscountCents > 0) {
+    const bonusLabel = pointsDiscountCentsOverride !== null
+      ? 'Bonuspunkte-Rabatt'
+      : `Bonuspunkte-Rabatt (${bonusPointsRedeemed} Pkt.)`;
+    doc.text(bonusLabel, totalsX + 6, lineY);
     doc.setTextColor(0, 150, 0); // Green color for discount
-    doc.text(`-${formatCurrency(pointsDiscount)}`, totalsX + totalsBoxWidth - 6, lineY, { align: 'right' });
+    doc.text(`-${formatCurrency(pointsDiscountCents / 100)}` , totalsX + totalsBoxWidth - 6, lineY, { align: 'right' });
     doc.setTextColor(0, 0, 0); // Reset to black
     lineY += 6;
   }
