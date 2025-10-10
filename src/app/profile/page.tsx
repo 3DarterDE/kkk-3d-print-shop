@@ -4,6 +4,7 @@ import { useAuth } from '@/lib/hooks/useAuth';
 import Link from "next/link";
 import { useUserData } from "@/lib/contexts/UserDataContext";
 import { IUser } from "@/lib/models/User";
+import { withCursorPointer } from '@/lib/cursor-utils';
 
 type UserProfile = {
   name?: string;
@@ -81,7 +82,9 @@ export default function ProfilePage() {
   const [saveMessage, setSaveMessage] = useState<{ type: 'success' | 'error', text: string } | null>(null);
   const [useSameAddress, setUseSameAddress] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [showAccountSettingsModal, setShowAccountSettingsModal] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [deleteConfirmationText, setDeleteConfirmationText] = useState('');
   const [newsletterLoading, setNewsletterLoading] = useState(false);
   const [bonusSchedule, setBonusSchedule] = useState<any[]>([]);
 
@@ -551,7 +554,7 @@ export default function ProfilePage() {
           <p className="text-gray-600 mb-4">Das Profil konnte nicht geladen werden.</p>
           <button 
             onClick={refetchUser}
-            className="bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700 transition-colors"
+            className={withCursorPointer("bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700 transition-colors")}
           >
             Erneut versuchen
           </button>
@@ -595,10 +598,6 @@ export default function ProfilePage() {
                   <div className="w-2 h-2 bg-slate-300 rounded-full mr-3 group-hover:bg-blue-500 transition-colors"></div>
                   Bonuspunkte
                 </Link>
-                <a href="#" className="flex items-center px-4 py-3 text-sm font-medium text-slate-600 hover:text-blue-600 hover:bg-blue-50 rounded-xl transition-all duration-200 group">
-                  <div className="w-2 h-2 bg-slate-300 rounded-full mr-3 group-hover:bg-blue-500 transition-colors"></div>
-                  Mein Wunschzettel
-                </a>
               </nav>
             </div>
           </div>
@@ -633,9 +632,17 @@ export default function ProfilePage() {
 
           {/* Account Information Cards */}
           <div className="mb-6 lg:mb-10">
-            <div className="flex items-center mb-4 lg:mb-6">
-              <h2 className="text-xl sm:text-2xl font-bold text-slate-800">Kontoinformationen</h2>
-              <div className="ml-2 sm:ml-4 w-8 sm:w-16 h-1 bg-gradient-to-r from-blue-800 to-blue-500 rounded-full"></div>
+            <div className="flex items-center justify-between mb-4 lg:mb-6">
+              <div className="flex items-center">
+                <h2 className="text-xl sm:text-2xl font-bold text-slate-800">Kontoinformationen</h2>
+                <div className="ml-2 sm:ml-4 w-8 sm:w-16 h-1 bg-gradient-to-r from-blue-800 to-blue-500 rounded-full"></div>
+              </div>
+              <button
+                onClick={() => setShowAccountSettingsModal(true)}
+                className={withCursorPointer("px-4 py-2 text-sm font-medium text-blue-600 bg-blue-50 rounded-lg hover:bg-blue-100 transition-colors")}
+              >
+                Kontoeinstellungen
+              </button>
             </div>
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 lg:gap-6">
               {/* Contact Data Card */}
@@ -645,7 +652,7 @@ export default function ProfilePage() {
                     setEditingSection('contact');
                     setIsEditing(true);
                   }}
-                  className="absolute top-2 right-2 sm:top-4 sm:right-4 text-blue-600 text-xs sm:text-sm font-medium hover:text-blue-700 bg-blue-50 px-2 sm:px-3 py-1 rounded-lg hover:bg-blue-100 transition-colors"
+                  className={withCursorPointer("absolute top-2 right-2 sm:top-4 sm:right-4 text-blue-600 text-xs sm:text-sm font-medium hover:text-blue-700 bg-blue-50 px-2 sm:px-3 py-1 rounded-lg hover:bg-blue-100 transition-colors")}
                 >
                   Bearbeiten
                 </button>
@@ -694,7 +701,7 @@ export default function ProfilePage() {
                         user.newsletterSubscribed
                           ? 'text-red-600 bg-red-50 hover:bg-red-100'
                           : 'text-green-600 bg-green-50 hover:bg-green-100'
-                      } disabled:opacity-50 disabled:cursor-not-allowed`}
+                      } ${newsletterLoading ? 'disabled:opacity-50 disabled:cursor-not-allowed' : withCursorPointer('')}`}
                     >
                       {newsletterLoading ? 'Wird verarbeitet...' : user.newsletterSubscribed ? 'Abmelden' : 'Anmelden'}
                     </button>
@@ -715,7 +722,7 @@ export default function ProfilePage() {
                     setEditingSection('shipping');
                     setIsEditing(true);
                   }}
-                  className="absolute top-2 right-2 sm:top-4 sm:right-4 text-blue-600 text-xs sm:text-sm font-medium hover:text-blue-700 bg-blue-50 px-2 sm:px-3 py-1 rounded-lg hover:bg-blue-100 transition-colors"
+                  className={withCursorPointer("absolute top-2 right-2 sm:top-4 sm:right-4 text-blue-600 text-xs sm:text-sm font-medium hover:text-blue-700 bg-blue-50 px-2 sm:px-3 py-1 rounded-lg hover:bg-blue-100 transition-colors")}
                 >
                   Bearbeiten
                 </button>
@@ -750,7 +757,7 @@ export default function ProfilePage() {
                     setEditingSection('billing');
                     setIsEditing(true);
                   }}
-                  className="absolute top-2 right-2 sm:top-4 sm:right-4 text-blue-600 text-xs sm:text-sm font-medium hover:text-blue-700 bg-blue-50 px-2 sm:px-3 py-1 rounded-lg hover:bg-blue-100 transition-colors"
+                  className={withCursorPointer("absolute top-2 right-2 sm:top-4 sm:right-4 text-blue-600 text-xs sm:text-sm font-medium hover:text-blue-700 bg-blue-50 px-2 sm:px-3 py-1 rounded-lg hover:bg-blue-100 transition-colors")}
                 >
                   Bearbeiten
                 </button>
@@ -805,7 +812,7 @@ export default function ProfilePage() {
                     setEditingSection('payment');
                     setIsEditing(true);
                   }}
-                  className="absolute top-2 right-2 sm:top-4 sm:right-4 text-blue-600 text-xs sm:text-sm font-medium hover:text-blue-700 bg-blue-50 px-2 sm:px-3 py-1 rounded-lg hover:bg-blue-100 transition-colors"
+                  className={withCursorPointer("absolute top-2 right-2 sm:top-4 sm:right-4 text-blue-600 text-xs sm:text-sm font-medium hover:text-blue-700 bg-blue-50 px-2 sm:px-3 py-1 rounded-lg hover:bg-blue-100 transition-colors")}
                 >
                   Bearbeiten
                 </button>
@@ -960,7 +967,7 @@ export default function ProfilePage() {
               </h3>
               <button
                 onClick={handleCancel}
-                className="text-gray-400 hover:text-gray-600"
+                className={withCursorPointer("text-gray-400 hover:text-gray-600")}
               >
                 ✕
               </button>
@@ -1323,28 +1330,70 @@ export default function ProfilePage() {
               )}
             </div>
 
-            <div className="flex justify-between items-center mt-6 pt-4 border-t">
+            <div className="flex justify-end space-x-3 mt-6 pt-4 border-t">
               <button
-                onClick={() => setShowDeleteModal(true)}
-                className="px-4 py-2 text-sm font-medium text-red-600 bg-red-50 rounded-md hover:bg-red-100 transition-colors"
+                onClick={handleCancel}
+                className={withCursorPointer('px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 rounded-md hover:bg-gray-200')}
               >
-                Account löschen
+                Abbrechen
               </button>
-              <div className="flex space-x-3">
-                <button
-                  onClick={handleCancel}
-                  className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 rounded-md hover:bg-gray-200"
-                >
-                  Abbrechen
-                </button>
-                <button
-                  onClick={handleSave}
-                  disabled={saving}
-                  className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700 disabled:opacity-50"
-                >
-                  {saving ? 'Speichern...' : 'Speichern'}
-                </button>
+              <button
+                onClick={handleSave}
+                disabled={saving}
+                className={`px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700 disabled:opacity-50 ${saving ? 'cursor-not-allowed' : withCursorPointer('')}`}
+              >
+                {saving ? 'Speichern...' : 'Speichern'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Account Settings Modal */}
+      {showAccountSettingsModal && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-6 w-full max-w-md mx-4">
+            <div className="flex items-center mb-4">
+              <div className="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center mr-3">
+                <svg className="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                </svg>
               </div>
+              <h3 className="text-lg font-semibold text-gray-900">Kontoeinstellungen</h3>
+            </div>
+            
+            <div className="mb-6">
+              <p className="text-gray-600 text-sm mb-4">
+                Hier können Sie verschiedene Kontoeinstellungen verwalten.
+              </p>
+              
+              <div className="space-y-4">
+                <div className="p-4 border border-gray-200 rounded-lg">
+                  <h4 className="text-sm font-medium text-gray-900 mb-2">Gefährliche Aktionen</h4>
+                  <p className="text-gray-600 text-sm mb-3">
+                    Diese Aktionen können nicht rückgängig gemacht werden.
+                  </p>
+                  <button
+                    onClick={() => {
+                      setShowAccountSettingsModal(false);
+                      setShowDeleteModal(true);
+                    }}
+                    className={withCursorPointer("px-4 py-2 text-sm font-medium text-red-600 bg-red-50 rounded-md hover:bg-red-100 transition-colors")}
+                  >
+                    Account löschen
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <div className="flex justify-end space-x-3">
+              <button
+                onClick={() => setShowAccountSettingsModal(false)}
+                className={withCursorPointer("px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 rounded-md hover:bg-gray-200")}
+              >
+                Schließen
+              </button>
             </div>
           </div>
         </div>
@@ -1377,23 +1426,44 @@ export default function ProfilePage() {
                 <li>Deine Bonuspunkte</li>
                 <li>Deine Adressdaten</li>
               </ul>
-              <p className="text-gray-600 text-sm">
+              <p className="text-gray-600 text-sm mb-4">
                 Nach der Löschung wirst du automatisch ausgeloggt und zur Startseite weitergeleitet.
               </p>
+              
+              <div className="mt-4 p-4 bg-red-50 border border-red-200 rounded-lg">
+                <p className="text-red-800 text-sm font-medium mb-2">
+                  Zur Bestätigung geben Sie bitte "WIRKLICH LÖSCHEN" ein:
+                </p>
+                <input
+                  type="text"
+                  value={deleteConfirmationText}
+                  onChange={(e) => setDeleteConfirmationText(e.target.value)}
+                  placeholder="WIRKLICH LÖSCHEN"
+                  className="w-full px-3 py-2 border border-red-300 rounded-md focus:ring-2 focus:ring-red-500 focus:border-red-500 text-sm"
+                />
+                {deleteConfirmationText && deleteConfirmationText !== 'WIRKLICH LÖSCHEN' && (
+                  <p className="text-red-600 text-xs mt-1">
+                    Bitte geben Sie exakt "WIRKLICH LÖSCHEN" ein
+                  </p>
+                )}
+              </div>
             </div>
 
             <div className="flex justify-end space-x-3">
               <button
-                onClick={() => setShowDeleteModal(false)}
+                onClick={() => {
+                  setShowDeleteModal(false);
+                  setDeleteConfirmationText('');
+                }}
                 disabled={deleting}
-                className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 rounded-md hover:bg-gray-200 disabled:opacity-50"
+                className={`px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 rounded-md hover:bg-gray-200 disabled:opacity-50 ${deleting ? 'cursor-not-allowed' : withCursorPointer('')}`}
               >
                 Abbrechen
               </button>
               <button
                 onClick={handleDeleteAccount}
-                disabled={deleting}
-                className="px-4 py-2 text-sm font-medium text-white bg-red-600 rounded-md hover:bg-red-700 disabled:opacity-50"
+                disabled={deleting || deleteConfirmationText !== 'WIRKLICH LÖSCHEN'}
+                className={`px-4 py-2 text-sm font-medium text-white bg-red-600 rounded-md hover:bg-red-700 disabled:opacity-50 ${(deleting || deleteConfirmationText !== 'WIRKLICH LÖSCHEN') ? 'cursor-not-allowed' : withCursorPointer('')}`}
               >
                 {deleting ? 'Lösche...' : 'Account löschen'}
               </button>

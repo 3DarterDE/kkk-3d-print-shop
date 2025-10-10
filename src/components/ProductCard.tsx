@@ -779,7 +779,7 @@ export default function ProductCard({ product, variant = 'default', onProductAdd
                   <select
                     value={selectedVariations[variation.name] || ''}
                     onChange={(e) => handleVariationChange(variation.name, e.target.value)}
-                    className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 cursor-pointer"
                   >
                     {variation.options.map((option) => {
                       const optionStock = option.stockQuantity !== undefined ? option.stockQuantity : (product.stockQuantity || 0);

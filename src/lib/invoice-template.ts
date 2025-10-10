@@ -195,14 +195,14 @@ export async function generateInvoicePDF(
   const shipping = buildAddressLines(shippingAddress);
 
   let tmpY = cursorY;
-  if (billing.nameLine) { doc.setFont('helvetica', 'bold'); doc.text(billing.nameLine, col1X, tmpY); tmpY += 5; }
-  if (billing.companyLine) { doc.setFont('helvetica', 'normal'); doc.text(billing.companyLine, col1X, tmpY); tmpY += 5; }
+  if (billing.companyLine) { doc.setFont('helvetica', 'bold'); doc.text(billing.companyLine, col1X, tmpY); tmpY += 5; }
+  if (billing.nameLine) { doc.setFont('helvetica', 'normal'); doc.text(billing.nameLine, col1X, tmpY); tmpY += 5; }
   doc.setFont('helvetica', 'normal');
   billing.restLines.forEach((line: string) => { doc.text(line, col1X, tmpY); tmpY += 5; });
 
   tmpY = cursorY;
-  if (shipping.nameLine) { doc.setFont('helvetica', 'bold'); doc.text(shipping.nameLine, col2X, tmpY); tmpY += 5; }
-  if (shipping.companyLine) { doc.setFont('helvetica', 'normal'); doc.text(shipping.companyLine, col2X, tmpY); tmpY += 5; }
+  if (shipping.companyLine) { doc.setFont('helvetica', 'bold'); doc.text(shipping.companyLine, col2X, tmpY); tmpY += 5; }
+  if (shipping.nameLine) { doc.setFont('helvetica', 'normal'); doc.text(shipping.nameLine, col2X, tmpY); tmpY += 5; }
   doc.setFont('helvetica', 'normal');
   shipping.restLines.forEach((line: string) => { doc.text(line, col2X, tmpY); tmpY += 5; });
 
@@ -361,16 +361,6 @@ export async function generateInvoicePDF(
   doc.text(formatCurrency(subtotal), totalsX + totalsBoxWidth - 6, lineY, { align: 'right' });
   lineY += 6;
   
-  // Discount line when present
-  if (discountCents > 0) {
-    const label = discountCode ? `Rabatt (${discountCode})` : 'Rabatt';
-    doc.text(label, totalsX + 6, lineY);
-    doc.setTextColor(0, 150, 0);
-    doc.text(`-${formatCurrency(discountCents / 100)}`, totalsX + totalsBoxWidth - 6, lineY, { align: 'right' });
-    doc.setTextColor(0, 0, 0);
-    lineY += 6;
-  }
-  
   // Shipping costs - only show if shippingCosts is not null and > 0
   if (order.shippingCosts !== null && shippingCosts > 0) {
     doc.text('Versandkosten', totalsX + 6, lineY);
@@ -382,6 +372,16 @@ export async function generateInvoicePDF(
     lineY += 6;
   }
   // If shippingCosts is null, skip the shipping line entirely
+  
+  // Discount line when present
+  if (discountCents > 0) {
+    const label = discountCode ? `Rabatt (${discountCode})` : 'Rabatt';
+    doc.text(label, totalsX + 6, lineY);
+    doc.setTextColor(0, 150, 0);
+    doc.text(`-${formatCurrency(discountCents / 100)}`, totalsX + totalsBoxWidth - 6, lineY, { align: 'right' });
+    doc.setTextColor(0, 0, 0);
+    lineY += 6;
+  }
   
   // Bonus points discount
   if (bonusPointsRedeemed > 0 && pointsDiscountCents > 0) {

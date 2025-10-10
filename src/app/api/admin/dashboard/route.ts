@@ -19,9 +19,7 @@ export async function GET(request: NextRequest) {
       categoryCount,
       filterCount,
       totalOrders,
-      totalRevenue,
-      recentProducts,
-      topCategories
+      totalRevenue
     ] = await Promise.all([
       // Product count
       db.collection('products').countDocuments(),
@@ -38,33 +36,8 @@ export async function GET(request: NextRequest) {
       // Total revenue (if you have an orders collection with total field)
       db.collection('orders').aggregate([
         { $group: { _id: null, total: { $sum: '$total' } } }
-      ]).toArray().then(result => result[0]?.total || 0).catch(() => 0),
-      
-      // Recent products (last 5)
-      db.collection('products').find({}, {
-        projection: { name: 1, price: 1, createdAt: 1, isActive: 1 }
-      }).sort({ createdAt: -1 }).limit(5).toArray(),
-      
-      // Top categories by product count
-      db.collection('products').aggregate([
-        { $unwind: '$categories' },
-        { $group: { _id: '$categories', count: { $sum: 1 } } },
-        { $sort: { count: -1 } },
-        { $limit: 5 }
-      ]).toArray()
+      ]).toArray().then(result => result[0]?.total || 0).catch(() => 0)
     ]);
-
-    // Get category names for top categories
-    const categoryIds = topCategories.map(cat => cat._id);
-    const categoryNames = await db.collection('categories').find(
-      { _id: { $in: categoryIds } },
-      { projection: { name: 1 } }
-    ).toArray();
-    
-    const topCategoriesWithNames = topCategories.map(cat => ({
-      ...cat,
-      name: categoryNames.find(c => c._id.toString() === cat._id.toString())?.name || 'Unknown'
-    }));
 
     return NextResponse.json({
       success: true,
@@ -73,9 +46,7 @@ export async function GET(request: NextRequest) {
         categoryCount,
         filterCount,
         totalOrders,
-        totalRevenue,
-        recentProducts,
-        topCategories: topCategoriesWithNames
+        totalRevenue
       }
     });
   } catch (error) {

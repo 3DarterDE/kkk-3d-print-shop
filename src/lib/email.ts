@@ -166,6 +166,8 @@ export interface OrderConfirmationEmailData {
   bonusPointsEarned: number;
   pointsRedeemed?: number;
   pointsDiscount?: number;
+  discountCode?: string;
+  discountCents?: number;
   shippingAddress: {
     firstName?: string;
     lastName?: string;
@@ -331,7 +333,7 @@ export async function sendTrackingEmail({ name, email, orderNumber, trackingInfo
   }
 }
 
-export async function sendGuestOrderConfirmationEmail({ name, email, orderNumber, items, subtotal, shippingCosts, total, shippingAddress, billingAddress, paymentMethod }: Omit<OrderConfirmationEmailData, 'bonusPointsEarned' | 'pointsRedeemed' | 'pointsDiscount'>) {
+export async function sendGuestOrderConfirmationEmail({ name, email, orderNumber, items, subtotal, shippingCosts, total, discountCode, discountCents, shippingAddress, billingAddress, paymentMethod }: Omit<OrderConfirmationEmailData, 'bonusPointsEarned' | 'pointsRedeemed' | 'pointsDiscount'>) {
   const mailOptions: SendMailOptions = {
     from: `"3DarterDE" <${process.env.SMTP_FROM || process.env.SMTP_USER}>`,
     to: email,
@@ -347,7 +349,7 @@ export async function sendGuestOrderConfirmationEmail({ name, email, orderNumber
     text: `Hallo ${name}!\n\nVielen Dank für deine Gastbestellung bei 3DarterDE! 🎯\n\nBestellnummer: ${orderNumber}\n\nBestellte Artikel:\n${items.map((item, index) => {
       const variations = item.variations ? ` (${Object.entries(item.variations).map(([key, value]) => `${key}: ${value}`).join(', ')})` : '';
       return `${index + 1}. ${item.name}${variations}\n   Menge: ${item.quantity}\n   Preis: ${((item.price * item.quantity) / 100).toFixed(2)} €`;
-    }).join('\n\n')}\n\nZwischensumme: ${subtotal.toFixed(2)} €\nVersandkosten: ${shippingCosts > 0 ? `${(shippingCosts / 100).toFixed(2)} €` : 'Kostenlos'}\nGesamtbetrag: ${total.toFixed(2)} €\n\nLieferadresse:\n${shippingAddress.firstName || ''} ${shippingAddress.lastName || ''}\n${shippingAddress.street} ${shippingAddress.houseNumber}\n${shippingAddress.addressLine2 ? shippingAddress.addressLine2 + '\n' : ''}${shippingAddress.postalCode} ${shippingAddress.city}\n${shippingAddress.country}\n\n${billingAddress && billingAddress !== shippingAddress ? `Rechnungsadresse:\n${billingAddress.firstName || ''} ${billingAddress.lastName || ''}\n${billingAddress.street} ${billingAddress.houseNumber}\n${billingAddress.addressLine2 ? billingAddress.addressLine2 + '\n' : ''}${billingAddress.postalCode} ${billingAddress.city}\n${billingAddress.country}\n\n` : ''}Zahlungsmethode: ${paymentMethod === 'card' ? 'Kreditkarte/Debitkarte' : paymentMethod === 'paypal' ? 'PayPal' : paymentMethod === 'bank' ? 'Banküberweisung' : 'Nicht angegeben'}\n\nWir bearbeiten deine Bestellung so schnell wie möglich und informieren dich über den Versand.\n\nDSGVO-Hinweis: Falls du deine Bestelldaten löschen lassen möchtest, kannst du einen Löschungsantrag stellen: ${process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000'}/guest-data-deletion\nWir werden deine Daten innerhalb von 30 Tagen löschen.\n\nMit freundlichen Grüßen\nDein 3DarterDE Team\n\nBei Fragen erreichst du uns unter: service@3darter.de`,
+    }).join('\n\n')}\n\nZwischensumme: ${subtotal.toFixed(2)} €\nVersandkosten: ${shippingCosts > 0 ? `${(shippingCosts / 100).toFixed(2)} €` : 'Kostenlos'}\n${discountCode && discountCents ? `Rabattcode "${discountCode}": -${(discountCents / 100).toFixed(2)} €\n` : ''}Gesamtbetrag: ${total.toFixed(2)} €\n\nLieferadresse:\n${shippingAddress.firstName || ''} ${shippingAddress.lastName || ''}\n${shippingAddress.street} ${shippingAddress.houseNumber}\n${shippingAddress.addressLine2 ? shippingAddress.addressLine2 + '\n' : ''}${shippingAddress.postalCode} ${shippingAddress.city}\n${shippingAddress.country}\n\n${billingAddress && billingAddress !== shippingAddress ? `Rechnungsadresse:\n${billingAddress.firstName || ''} ${billingAddress.lastName || ''}\n${billingAddress.street} ${billingAddress.houseNumber}\n${billingAddress.addressLine2 ? billingAddress.addressLine2 + '\n' : ''}${billingAddress.postalCode} ${billingAddress.city}\n${billingAddress.country}\n\n` : ''}Zahlungsmethode: ${paymentMethod === 'card' ? 'Kreditkarte/Debitkarte' : paymentMethod === 'paypal' ? 'PayPal' : paymentMethod === 'bank' ? 'Banküberweisung' : 'Nicht angegeben'}\n\nWir bearbeiten deine Bestellung so schnell wie möglich und informieren dich über den Versand.\n\nDSGVO-Hinweis: Falls du deine Bestelldaten löschen lassen möchtest, kannst du einen Löschungsantrag stellen: ${process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000'}/guest-data-deletion\nWir werden deine Daten innerhalb von 30 Tagen löschen.\n\nMit freundlichen Grüßen\nDein 3DarterDE Team\n\nBei Fragen erreichst du uns unter: service@3darter.de`,
     html: `
       <!DOCTYPE html>
       <html>
@@ -408,6 +410,12 @@ export async function sendGuestOrderConfirmationEmail({ name, email, orderNumber
                 <span>Versandkosten:</span>
                 <span>${shippingCosts > 0 ? `${(shippingCosts / 100).toFixed(2)} €` : 'Kostenlos'}</span>
               </div>
+              ${discountCode && discountCents ? `
+              <div style="display: flex; justify-content: space-between; margin-bottom: 10px; color: #059669;">
+                <span>Rabattcode "${discountCode}":</span>
+                <span>-${(discountCents / 100).toFixed(2)} €</span>
+              </div>
+              ` : ''}
               <hr style="margin: 15px 0; border: none; border-top: 2px solid #3B82F6;">
               <div style="display: flex; justify-content: space-between; font-size: 18px; font-weight: bold;">
                 <span>Gesamtbetrag:</span>
@@ -472,7 +480,7 @@ export async function sendGuestOrderConfirmationEmail({ name, email, orderNumber
   }
 }
 
-export async function sendOrderConfirmationEmail({ name, email, orderNumber, items, subtotal, shippingCosts, total, bonusPointsEarned, pointsRedeemed, pointsDiscount, shippingAddress, billingAddress, paymentMethod }: OrderConfirmationEmailData) {
+export async function sendOrderConfirmationEmail({ name, email, orderNumber, items, subtotal, shippingCosts, total, bonusPointsEarned, pointsRedeemed, pointsDiscount, discountCode, discountCents, shippingAddress, billingAddress, paymentMethod }: OrderConfirmationEmailData) {
   const mailOptions: SendMailOptions = {
     from: `"3DarterDE" <${process.env.SMTP_FROM || process.env.SMTP_USER}>`,
     to: email,
@@ -490,7 +498,7 @@ export async function sendOrderConfirmationEmail({ name, email, orderNumber, ite
     text: `Hallo ${name}!\n\nVielen Dank für deine Bestellung bei 3DarterDE! 🎯\n\nBestellnummer: ${orderNumber}\n\nBestellte Artikel:\n${items.map((item, index) => {
       const variations = item.variations ? ` (${Object.entries(item.variations).map(([key, value]) => `${key}: ${value}`).join(', ')})` : '';
       return `${index + 1}. ${item.name}${variations}\n   Menge: ${item.quantity}\n   Preis: ${((item.price * item.quantity) / 100).toFixed(2)} €`;
-    }).join('\n\n')}\n\nZwischensumme: ${subtotal.toFixed(2)} €\nVersandkosten: ${shippingCosts > 0 ? `${(shippingCosts / 100).toFixed(2)} €` : 'Kostenlos'}\n${pointsRedeemed ? `Bonuspunkte-Rabatt: -${pointsDiscount ? (pointsDiscount / 100).toFixed(2) : '0'} €\n` : ''}Gesamtbetrag: ${total.toFixed(2)} €\n\nBonuspunkte verdient: ${bonusPointsEarned} Punkte${pointsRedeemed ? `\nBonuspunkte eingelöst: ${pointsRedeemed} Punkte (${pointsDiscount ? (pointsDiscount / 100).toFixed(2) : '0'} € Rabatt)` : ''}\n\nLieferadresse:\n${shippingAddress.firstName || ''} ${shippingAddress.lastName || ''}\n${shippingAddress.street} ${shippingAddress.houseNumber}\n${shippingAddress.addressLine2 ? shippingAddress.addressLine2 + '\n' : ''}${shippingAddress.postalCode} ${shippingAddress.city}\n${shippingAddress.country}\n\n${billingAddress && billingAddress !== shippingAddress ? `Rechnungsadresse:\n${billingAddress.firstName || ''} ${billingAddress.lastName || ''}\n${billingAddress.street} ${billingAddress.houseNumber}\n${billingAddress.addressLine2 ? billingAddress.addressLine2 + '\n' : ''}${billingAddress.postalCode} ${billingAddress.city}\n${billingAddress.country}\n\n` : ''}Zahlungsmethode: ${paymentMethod === 'card' ? 'Kreditkarte/Debitkarte' : paymentMethod === 'paypal' ? 'PayPal' : paymentMethod === 'bank' ? 'Banküberweisung' : 'Nicht angegeben'}\n\nWir bearbeiten deine Bestellung so schnell wie möglich und informieren dich über den Versand.\n\nMit freundlichen Grüßen\nDein 3DarterDE Team\n\nBei Fragen erreichst du uns unter: service@3darter.de`,
+    }).join('\n\n')}\n\nZwischensumme: ${subtotal.toFixed(2)} €\nVersandkosten: ${shippingCosts > 0 ? `${(shippingCosts / 100).toFixed(2)} €` : 'Kostenlos'}\n${discountCode && discountCents ? `Rabattcode "${discountCode}": -${(discountCents / 100).toFixed(2)} €\n` : ''}${pointsRedeemed ? `Bonuspunkte-Rabatt: -${pointsDiscount ? (pointsDiscount / 100).toFixed(2) : '0'} €\n` : ''}Gesamtbetrag: ${total.toFixed(2)} €\n\nBonuspunkte verdient: ${bonusPointsEarned} Punkte${pointsRedeemed ? `\nBonuspunkte eingelöst: ${pointsRedeemed} Punkte (${pointsDiscount ? (pointsDiscount / 100).toFixed(2) : '0'} € Rabatt)` : ''}\n\nLieferadresse:\n${shippingAddress.firstName || ''} ${shippingAddress.lastName || ''}\n${shippingAddress.street} ${shippingAddress.houseNumber}\n${shippingAddress.addressLine2 ? shippingAddress.addressLine2 + '\n' : ''}${shippingAddress.postalCode} ${shippingAddress.city}\n${shippingAddress.country}\n\n${billingAddress && billingAddress !== shippingAddress ? `Rechnungsadresse:\n${billingAddress.firstName || ''} ${billingAddress.lastName || ''}\n${billingAddress.street} ${billingAddress.houseNumber}\n${billingAddress.addressLine2 ? billingAddress.addressLine2 + '\n' : ''}${billingAddress.postalCode} ${billingAddress.city}\n${billingAddress.country}\n\n` : ''}Zahlungsmethode: ${paymentMethod === 'card' ? 'Kreditkarte/Debitkarte' : paymentMethod === 'paypal' ? 'PayPal' : paymentMethod === 'bank' ? 'Banküberweisung' : 'Nicht angegeben'}\n\nWir bearbeiten deine Bestellung so schnell wie möglich und informieren dich über den Versand.\n\nMit freundlichen Grüßen\nDein 3DarterDE Team\n\nBei Fragen erreichst du uns unter: service@3darter.de`,
     html: `
       <!DOCTYPE html>
       <html>
@@ -554,6 +562,12 @@ export async function sendOrderConfirmationEmail({ name, email, orderNumber, ite
                   <span>Versandkosten:</span>
                   <span style="font-weight: bold; ${shippingCosts > 0 ? 'color: #333;' : 'color: #059669;'}">${shippingCosts > 0 ? `${(shippingCosts / 100).toFixed(2)} €` : 'Kostenlos'}</span>
                 </div>
+                ${discountCode && discountCents ? `
+                <div style="display: flex; justify-content: space-between; margin-bottom: 8px;">
+                  <span>Rabattcode "${discountCode}":</span>
+                  <span style="font-weight: bold; color: #059669;">-${(discountCents / 100).toFixed(2)} €</span>
+                </div>
+                ` : ''}
                 ${pointsRedeemed ? `
                 <div style="display: flex; justify-content: space-between; margin-bottom: 8px;">
                   <span>Bonuspunkte-Rabatt:</span>
@@ -571,7 +585,7 @@ export async function sendOrderConfirmationEmail({ name, email, orderNumber, ite
             
             <div class="bonus-points">
               <h4 style="margin: 0 0 10px 0;">🎁 Bonuspunkte</h4>
-              <p style="margin: 0;">Du hast <strong>${bonusPointsEarned} Bonuspunkte</strong> verdient! Diese werden nach der Lieferung deinem Konto gutgeschrieben.</p>
+              <p style="margin: 0;">Du hast <strong>${bonusPointsEarned} Bonuspunkte</strong> verdient! Diese werden 14 Tage nach der Lieferung deinem Konto gutgeschrieben.</p>
               ${pointsRedeemed ? `<p style="margin: 10px 0 0 0;">Du hast <strong>${pointsRedeemed} Bonuspunkte</strong> eingelöst und <strong>${pointsDiscount ? (pointsDiscount / 100).toFixed(2) : '0'} €</strong> gespart!</p>` : ''}
             </div>
             

@@ -48,7 +48,14 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
     const { id } = await params;
     const doc = await ReturnRequest.findById(id).lean();
     if (!doc) return NextResponse.json({ error: 'Nicht gefunden' }, { status: 404 });
-    return NextResponse.json({ returnRequest: doc });
+    
+    // Also fetch the original order for refund calculations
+    const order = await Order.findById(doc.orderId).lean();
+    
+    return NextResponse.json({ 
+      returnRequest: doc,
+      order: order || null
+    });
   } catch (error) {
     console.error('Error fetching return:', error);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
@@ -289,10 +296,23 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
           }
 
           // Calculate total amount for credit note
-          const totalAmount = creditNoteItems.reduce((sum, item) => sum + item.total, 0);
+          const itemsAmount = creditNoteItems.reduce((sum, item) => sum + item.total, 0);
+          
+          // Check if all items are being returned (for shipping refund)
+          const totalSelectedQuantity = acceptedItems.reduce((sum, item) => sum + item.quantity, 0);
+          const totalOrderQuantity = orderItems.reduce((sum, item) => sum + item.quantity, 0);
+          const isFullReturn = totalSelectedQuantity >= totalOrderQuantity;
+          
+          // Add shipping costs if all items are being returned
+          const shippingCents = Number(order?.shippingCosts || 0);
+          const shippingAmount = isFullReturn ? (shippingCents / 100) : 0;
+          
+          const totalAmount = itemsAmount + shippingAmount;
+          
           // Default refund amount to discounted total if not explicitly provided
+          // Convert totalAmount (in euros) to cents for storage
           if (!returnDoc.refund || typeof returnDoc.refund.amount !== 'number' || isNaN(returnDoc.refund.amount)) {
-            (returnDoc as any).refund = { ...(returnDoc.refund || {}), amount: totalAmount };
+            (returnDoc as any).refund = { ...(returnDoc.refund || {}), amount: Math.round(totalAmount * 100) };
           }
           const creditNoteNumber = `ST-${order?.orderNumber || returnDoc.orderNumber}`;
 

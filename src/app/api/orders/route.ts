@@ -273,6 +273,8 @@ export async function POST(request: NextRequest) {
           bonusPointsEarned: bonusPointsEarned,
           pointsRedeemed: redeemPoints ? pointsToRedeem : 0,
           pointsDiscount: pointsDiscountCents,
+          discountCode: appliedDiscountCode,
+          discountCents: discountCode ? appliedDiscountCents : 0,
           shippingAddress: shippingAddress,
           billingAddress: billingAddress && billingAddress.street && billingAddress.houseNumber && billingAddress.city && billingAddress.postalCode ? billingAddress : shippingAddress,
           paymentMethod: paymentMethod || 'card'

@@ -8,6 +8,7 @@ import CustomerButton from "./CustomerButton";
 import { useState, useEffect, useMemo, useCallback } from "react";
 import { useAuth } from '@/lib/hooks/useAuth';
 import { TiShoppingCart } from "react-icons/ti";
+import { withCursorPointer } from '@/lib/cursor-utils';
 import { useRouter } from "next/navigation";
 import CartSidebar from "./CartSidebar";
 
@@ -45,6 +46,7 @@ export default function Navbar() {
   const [isLoadingBrands, setIsLoadingBrands] = useState(true);
   const [currentView, setCurrentView] = useState<'main' | 'categories' | 'brands'>('main');
   const [selectedCategory, setSelectedCategory] = useState<Category | null>(null);
+  const [adminNotifications, setAdminNotifications] = useState({ pendingOrders: 0, pendingReturns: 0 });
   const router = useRouter();
 
   // Memoized Logo component to prevent re-renders
@@ -102,6 +104,29 @@ export default function Navbar() {
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, [isAdminMenuOpen]);
+
+  // Fetch admin notifications
+  const fetchAdminNotifications = useCallback(async () => {
+    if (!isAdmin) return;
+    
+    try {
+      const response = await fetch('/api/admin/notifications');
+      const result = await response.json();
+      if (result.success) {
+        setAdminNotifications(result.data);
+      }
+    } catch (error) {
+      console.error('Error fetching admin notifications:', error);
+    }
+  }, [isAdmin]);
+
+  useEffect(() => {
+    fetchAdminNotifications();
+    
+    // Poll for updates every 30 seconds
+    const interval = setInterval(fetchAdminNotifications, 30000);
+    return () => clearInterval(interval);
+  }, [fetchAdminNotifications]);
 
   // Load categories and brands for mobile menu
   useEffect(() => {
@@ -221,7 +246,7 @@ export default function Navbar() {
             <CustomerButton />
             <button 
               onClick={toggleCart}
-              className="relative flex items-center text-white hover:text-blue-200 transition-all duration-300 group"
+              className={withCursorPointer("relative flex items-center text-white hover:text-blue-200 transition-all duration-300 group")}
               aria-label="Warenkorb öffnen"
             >
               <div className="relative group-hover:drop-shadow-[0_0_6px_rgba(173,216,230,0.6)] transition-all duration-300">
@@ -236,16 +261,23 @@ export default function Navbar() {
 
             {isAdmin && (
               <div className="relative" data-admin-menu>
-                <button
-                  onClick={toggleAdminMenu}
-                  className="p-2 text-white hover:text-blue-200 transition-all duration-300 group"
-                  title="Admin-Bereich"
-                  aria-label="Admin-Menü öffnen"
-                >
+              <button
+                onClick={toggleAdminMenu}
+                className={withCursorPointer("relative p-2 text-white hover:text-blue-200 transition-all duration-300 group")}
+                title="Admin-Bereich"
+                aria-label="Admin-Menü öffnen"
+              >
                   {/* Hamburger icon for admin menu */}
                   <svg className="w-6 h-6 transition-transform duration-300 group-hover:scale-110" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 7h16M4 12h16M4 17h16" />
                   </svg>
+                  
+                  {/* Notification badge */}
+                  {(adminNotifications.pendingOrders > 0 || adminNotifications.pendingReturns > 0) && (
+                    <span className="absolute -top-1 -right-1 inline-flex items-center justify-center px-1.5 py-0.5 text-xs font-bold leading-none text-white bg-red-500 rounded-full min-w-[18px] h-[18px] animate-pulse">
+                      {adminNotifications.pendingOrders + adminNotifications.pendingReturns}
+                    </span>
+                  )}
                 </button>
                 {isAdminMenuOpen && (
                   <div className="absolute right-0 top-10 w-48 bg-white rounded-lg shadow-lg border border-gray-200 py-1 z-50">
@@ -260,84 +292,38 @@ export default function Navbar() {
                       Dashboard
                     </Link>
                     <Link
-                      href="/admin/products"
-                      onClick={closeAdminMenu}
-                      className="flex items-center px-4 py-2 text-sm text-gray-700 hover:bg-blue-50 hover:text-blue-600 transition-colors"
-                    >
-                      <svg className="w-4 h-4 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
-                      </svg>
-                      Produkte
-                    </Link>
-                    <Link
-                      href="/admin/categories"
-                      onClick={closeAdminMenu}
-                      className="flex items-center px-4 py-2 text-sm text-gray-700 hover:bg-blue-50 hover:text-blue-600 transition-colors"
-                    >
-                      <svg className="w-4 h-4 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
-                      </svg>
-                      Kategorien
-                    </Link>
-                    <Link
-                      href="/admin/brands"
-                      onClick={closeAdminMenu}
-                      className="flex items-center px-4 py-2 text-sm text-gray-700 hover:bg-blue-50 hover:text-blue-600 transition-colors"
-                    >
-                      <svg className="w-4 h-4 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z" />
-                      </svg>
-                      Marken
-                    </Link>
-                    <Link
                       href="/admin/orders"
                       onClick={closeAdminMenu}
-                      className="flex items-center px-4 py-2 text-sm text-gray-700 hover:bg-blue-50 hover:text-blue-600 transition-colors"
+                      className="flex items-center justify-between px-4 py-2 text-sm text-gray-700 hover:bg-blue-50 hover:text-blue-600 transition-colors"
                     >
-                      <svg className="w-4 h-4 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z" />
-                      </svg>
-                      Bestellungen
+                      <div className="flex items-center">
+                        <svg className="w-4 h-4 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z" />
+                        </svg>
+                        Bestellungen
+                      </div>
+                      {adminNotifications.pendingOrders > 0 && (
+                        <span className="inline-flex items-center justify-center px-2 py-1 text-xs font-bold leading-none text-white bg-red-500 rounded-full">
+                          {adminNotifications.pendingOrders}
+                        </span>
+                      )}
                     </Link>
                     <Link
                       href="/admin/returns"
                       onClick={closeAdminMenu}
-                      className="flex items-center px-4 py-2 text-sm text-gray-700 hover:bg-blue-50 hover:text-blue-600 transition-colors"
+                      className="flex items-center justify-between px-4 py-2 text-sm text-gray-700 hover:bg-blue-50 hover:text-blue-600 transition-colors"
                     >
-                      <svg className="w-4 h-4 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v6h6M20 20v-6h-6M20 8a8 8 0 11-16 0" />
-                      </svg>
-                      Rücksendungen
-                    </Link>
-                    <Link
-                      href="/admin/users"
-                      onClick={closeAdminMenu}
-                      className="flex items-center px-4 py-2 text-sm text-gray-700 hover:bg-blue-50 hover:text-blue-600 transition-colors"
-                    >
-                      <svg className="w-4 h-4 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197m13.5-9a2.5 2.5 0 11-5 0 2.5 2.5 0 015 0z" />
-                      </svg>
-                      Benutzer
-                    </Link>
-                    <Link
-                      href="/admin/discounts"
-                      onClick={closeAdminMenu}
-                      className="flex items-center px-4 py-2 text-sm text-gray-700 hover:bg-blue-50 hover:text-blue-600 transition-colors"
-                    >
-                      <svg className="w-4 h-4 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 7h.01M7 3h5a2 2 0 011.414.586l6 6a2 2 0 010 2.828l-6 6A2 2 0 0112 19H7a2 2 0 01-2-2V5a2 2 0 012-2z" />
-                      </svg>
-                      Rabattcodes
-                    </Link>
-                    <Link
-                      href="/admin/filters"
-                      onClick={closeAdminMenu}
-                      className="flex items-center px-4 py-2 text-sm text-gray-700 hover:bg-blue-50 hover:text-blue-600 transition-colors"
-                    >
-                      <svg className="w-4 h-4 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" />
-                      </svg>
-                      Filter
+                      <div className="flex items-center">
+                        <svg className="w-4 h-4 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v6h6M20 20v-6h-6M20 8a8 8 0 11-16 0" />
+                        </svg>
+                        Rücksendungen
+                      </div>
+                      {adminNotifications.pendingReturns > 0 && (
+                        <span className="inline-flex items-center justify-center px-2 py-1 text-xs font-bold leading-none text-white bg-orange-500 rounded-full">
+                          {adminNotifications.pendingReturns}
+                        </span>
+                      )}
                     </Link>
                   </div>
                 )}

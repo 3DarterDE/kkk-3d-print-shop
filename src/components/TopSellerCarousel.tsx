@@ -60,7 +60,7 @@ export default function TopSellerCarousel({ products, showNavigation = true, cur
         {products.length > 1 && (
           <button
             onClick={prevSlide}
-            className="w-[45px] h-[25px] bg-gray-400 hover:bg-gray-700 text-white shadow-lg hover:shadow-xl transition-all duration-200 border border-gray-400 flex items-center justify-center rounded-sm"
+            className="w-[45px] h-[25px] bg-gray-400 hover:bg-gray-700 text-white shadow-lg hover:shadow-xl transition-all duration-200 border border-gray-400 flex items-center justify-center rounded-sm cursor-pointer"
             aria-label="Vorherige Produkte"
           >
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -79,7 +79,7 @@ export default function TopSellerCarousel({ products, showNavigation = true, cur
         {products.length > 1 && (
           <button
             onClick={nextSlide}
-            className="w-[45px] h-[25px] bg-gray-400 hover:bg-gray-700 text-white shadow-lg hover:shadow-xl transition-all duration-200 border border-gray-400 flex items-center justify-center rounded-sm"
+            className="w-[45px] h-[25px] bg-gray-400 hover:bg-gray-700 text-white shadow-lg hover:shadow-xl transition-all duration-200 border border-gray-400 flex items-center justify-center rounded-sm cursor-pointer"
             aria-label="Nächste Produkte"
           >
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">

@@ -2,6 +2,7 @@
 import React, { useEffect, useState } from "react";
 import Link from "next/link";
 import { useUserData } from "@/lib/contexts/UserDataContext";
+import { withCursorPointer } from '@/lib/cursor-utils';
 
 type Order = {
   _id: string;
@@ -415,7 +416,7 @@ export default function OrdersPage() {
             <p className="text-gray-600 mb-4">Die Bestellungen konnten nicht geladen werden.</p>
             <button 
               onClick={() => window.location.reload()}
-              className="bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700 transition-colors"
+              className={withCursorPointer("bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700 transition-colors")}
             >
               Erneut versuchen
             </button>
@@ -449,10 +450,6 @@ export default function OrdersPage() {
                   <div className="w-2 h-2 bg-slate-300 rounded-full mr-3 group-hover:bg-blue-500 transition-colors"></div>
                   Bonuspunkte
                 </Link>
-                <a href="#" className="flex items-center px-4 py-3 text-sm font-medium text-slate-600 hover:text-blue-600 hover:bg-blue-50 rounded-xl transition-all duration-200 group">
-                  <div className="w-2 h-2 bg-slate-300 rounded-full mr-3 group-hover:bg-blue-500 transition-colors"></div>
-                  Mein Wunschzettel
-                </a>
               </nav>
             </div>
           </div>
@@ -550,7 +547,7 @@ export default function OrdersPage() {
                                   <td className="px-3 sm:px-6 py-4 text-center">
                                     <button
                                       onClick={() => setExpandedOrder(isExpanded ? null : order._id)}
-                                      className="text-blue-600 hover:text-blue-700 text-xs sm:text-sm font-medium hover:underline flex items-center mx-auto"
+                                      className={withCursorPointer("text-blue-600 hover:text-blue-700 text-xs sm:text-sm font-medium hover:underline flex items-center mx-auto")}
                                     >
                                       <span className="truncate">
                                         {isExpanded ? 'Weniger' : 'Details'}
@@ -581,7 +578,7 @@ export default function OrdersPage() {
                                             {order.status === 'return_completed' && (
                                               <button 
                                                 onClick={() => downloadCreditNote(order.orderNumber)}
-                                                className="px-4 py-2 text-sm font-medium rounded-lg transition-colors flex items-center gap-2 text-red-600 bg-red-50 hover:bg-red-100 cursor-pointer"
+                                                className={withCursorPointer("px-4 py-2 text-sm font-medium rounded-lg transition-colors flex items-center gap-2 text-red-600 bg-red-50 hover:bg-red-100")}
                                               >
                                                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
@@ -596,7 +593,7 @@ export default function OrdersPage() {
                                               disabled={order.status !== 'delivered' && (order as any).status !== 'return_completed' && order.status !== 'return_requested'}
                                               className={`px-4 py-2 text-sm font-medium rounded-lg transition-colors flex items-center gap-2 ${
                                                 order.status === 'delivered' || (order as any).status === 'return_completed' || order.status === 'return_requested'
-                                                  ? 'text-green-600 bg-green-50 hover:bg-green-100 cursor-pointer'
+                                                  ? withCursorPointer('text-green-600 bg-green-50 hover:bg-green-100')
                                                   : 'text-gray-400 bg-gray-100 cursor-not-allowed'
                                               }`}
                                             >
@@ -621,7 +618,7 @@ export default function OrdersPage() {
                                                 order.status === 'delivered' || (order as any).status === 'return_completed' || order.status === 'return_requested'
                                                   ? getReviewStatus(order._id).allReviewed 
                                                     ? 'text-green-600 bg-green-50 cursor-default' 
-                                                    : 'text-yellow-600 bg-yellow-50 hover:bg-yellow-100'
+                                                    : withCursorPointer('text-yellow-600 bg-yellow-50 hover:bg-yellow-100')
                                                   : 'text-gray-400 bg-gray-100 cursor-not-allowed'
                                               }`}
                                             >
@@ -657,7 +654,7 @@ export default function OrdersPage() {
                                               disabled={!canReturnOrder(order)}
                                               className={`px-4 py-2 text-sm font-medium rounded-lg transition-colors ${
                                                 canReturnOrder(order)
-                                                  ? 'text-purple-700 bg-purple-50 hover:bg-purple-100 cursor-pointer'
+                                                  ? withCursorPointer('text-purple-700 bg-purple-50 hover:bg-purple-100')
                                                   : 'text-gray-400 bg-gray-100 cursor-not-allowed'
                                               }`}
                                             >
@@ -697,7 +694,7 @@ export default function OrdersPage() {
                                                       <div className="text-sm font-medium text-slate-800">{item.name}</div>
                                                       {isItemReturned(order._id, item) && (
                                                         <div className="text-xs text-red-600 mt-1 font-medium">
-                                                          ↩️ Zurückgegeben
+                                                          Zurückgegeben
                                                         </div>
                                                       )}
                                                     </td>
@@ -923,7 +920,7 @@ export default function OrdersPage() {
                               </span>
                               <button
                                 onClick={() => setExpandedOrder(isExpanded ? null : order._id)}
-                                className="p-1 text-slate-400 hover:text-slate-600"
+                                className={withCursorPointer("p-1 text-slate-400 hover:text-slate-600")}
                               >
                                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d={isExpanded ? "M19 9l-7 7-7-7" : "M9 5l7 7-7 7"} />
@@ -942,7 +939,7 @@ export default function OrdersPage() {
                                   {order.status === 'delivered' || (order as any).status === 'return_completed' || order.status === 'return_requested' ? (
                                     <button
                                       onClick={() => downloadInvoice(order.orderNumber)}
-                                      className="flex-1 inline-flex items-center justify-center px-3 py-2 text-xs font-medium text-green-600 bg-green-50 rounded-lg hover:bg-green-100 transition-colors duration-200"
+                                      className={withCursorPointer("flex-1 inline-flex items-center justify-center px-3 py-2 text-xs font-medium text-green-600 bg-green-50 rounded-lg hover:bg-green-100 transition-colors duration-200")}
                                     >
                                       <svg className="w-3 h-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
@@ -959,7 +956,7 @@ export default function OrdersPage() {
                                   {order.status === 'return_completed' && (
                                     <button
                                       onClick={() => downloadCreditNote(order.orderNumber)}
-                                      className="flex-1 inline-flex items-center justify-center px-3 py-2 text-xs font-medium text-red-600 bg-red-50 rounded-lg hover:bg-red-100 transition-colors duration-200"
+                                      className={withCursorPointer("flex-1 inline-flex items-center justify-center px-3 py-2 text-xs font-medium text-red-600 bg-red-50 rounded-lg hover:bg-red-100 transition-colors duration-200")}
                                     >
                                       <svg className="w-3 h-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
@@ -985,7 +982,7 @@ export default function OrdersPage() {
                                       order.status === 'delivered' || (order as any).status === 'return_completed' || order.status === 'return_requested'
                                         ? getReviewStatus(order._id).allReviewed 
                                           ? 'text-green-600 bg-green-50 cursor-default' 
-                                          : 'text-yellow-600 bg-yellow-50 hover:bg-yellow-100'
+                                          : withCursorPointer('text-yellow-600 bg-yellow-50 hover:bg-yellow-100')
                                         : 'text-slate-500 bg-slate-50 cursor-not-allowed'
                                     }`}
                                   >
@@ -1020,7 +1017,7 @@ export default function OrdersPage() {
                                     disabled={!canReturnOrder(order)}
                                     className={`flex-1 inline-flex items-center justify-center px-3 py-2 text-xs font-medium rounded-lg transition-colors duration-200 ${
                                       canReturnOrder(order)
-                                        ? 'text-purple-700 bg-purple-50 hover:bg-purple-100'
+                                        ? withCursorPointer('text-purple-700 bg-purple-50 hover:bg-purple-100')
                                         : 'text-slate-500 bg-slate-50 cursor-not-allowed'
                                     }`}
                                   >
@@ -1046,7 +1043,7 @@ export default function OrdersPage() {
                                         <div className="text-sm font-medium text-slate-800 mb-1">{item.name}</div>
                                         {isItemReturned(order._id, item) && (
                                           <div className="text-xs text-red-600 mb-1 font-medium">
-                                            ↩️ Zurückgegeben
+                                            Zurückgegeben
                                           </div>
                                         )}
                                         <div className="text-xs text-slate-500">
@@ -1256,7 +1253,7 @@ export default function OrdersPage() {
                   setReturnReason('');
                   setReturnSelections({});
                 }}
-                className="text-slate-500 hover:text-slate-700 p-2 hover:bg-slate-100 rounded-lg transition-colors"
+                className={withCursorPointer("text-slate-500 hover:text-slate-700 p-2 hover:bg-slate-100 rounded-lg transition-colors")}
                 aria-label="Schließen"
               >
                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1311,7 +1308,7 @@ export default function OrdersPage() {
                               <div className="font-medium text-slate-800 mb-1">{item.name}</div>
                               {isItemReturned(order._id, item) && (
                                 <div className="text-xs text-red-600 mb-1 font-medium">
-                                  ↩️ Zurückgegeben
+                                  Zurückgegeben
                                 </div>
                               )}
                               {item.variations && Object.keys(item.variations).length > 0 && (
@@ -1433,27 +1430,50 @@ export default function OrdersPage() {
                               </div>
                             );
                           })}
-                          <div className="border-t border-purple-200 pt-2 mt-2">
-                            <div className="flex justify-between font-medium text-purple-800">
-                              <span>Gesamtbetrag:</span>
-                              <span>
-                                {(() => {
-                                  const orderSubtotalCents = order.items.reduce((s, it) => s + (it.price * it.quantity), 0);
-                                  const discountCents = (order as any).discountCents || 0;
-                                  const pointsDiscountCents = ((order as any).bonusPointsRedeemed ? getPointsDiscountAmount((order as any).bonusPointsRedeemed) * 100 : 0);
-                                  const totalRefundCents = selectedItems.reduce((sum, item) => {
-                                    const origLineTotal = item.price * item.quantity;
-                                    const share = orderSubtotalCents > 0 ? Math.min(1, Math.max(0, origLineTotal / orderSubtotalCents)) : 0;
-                                    const proratedDiscount = Math.round(discountCents * share);
-                                    const proratedPoints = Math.round(pointsDiscountCents * share);
-                                    const perUnitDeduction = Math.round(proratedDiscount / item.quantity) + Math.round(proratedPoints / item.quantity);
-                                    const effectiveUnitCents = Math.max(0, item.price - perUnitDeduction);
-                                    return sum + (effectiveUnitCents * item.returnQty);
-                                  }, 0);
-                                  return `€${(totalRefundCents / 100).toFixed(2)}`;
-                                })()}
-                              </span>
-                            </div>
+                          <div className="border-t border-purple-200 pt-2 mt-2 space-y-2">
+                            {(() => {
+                              const orderSubtotalCents = order.items.reduce((s, it) => s + (it.price * it.quantity), 0);
+                              const discountCents = (order as any).discountCents || 0;
+                              const pointsDiscountCents = ((order as any).bonusPointsRedeemed ? getPointsDiscountAmount((order as any).bonusPointsRedeemed) * 100 : 0);
+                              const shippingCents = (order as any).shippingCosts || 0;
+                              
+                              // Calculate refund for selected items
+                              const totalRefundCents = selectedItems.reduce((sum, item) => {
+                                const origLineTotal = item.price * item.quantity;
+                                const share = orderSubtotalCents > 0 ? Math.min(1, Math.max(0, origLineTotal / orderSubtotalCents)) : 0;
+                                const proratedDiscount = Math.round(discountCents * share);
+                                const proratedPoints = Math.round(pointsDiscountCents * share);
+                                const perUnitDeduction = Math.round(proratedDiscount / item.quantity) + Math.round(proratedPoints / item.quantity);
+                                const effectiveUnitCents = Math.max(0, item.price - perUnitDeduction);
+                                return sum + (effectiveUnitCents * item.returnQty);
+                              }, 0);
+                              
+                              // Check if all items are being returned
+                              const totalSelectedQuantity = selectedItems.reduce((sum, item) => sum + item.returnQty, 0);
+                              const totalOrderQuantity = order.items.reduce((sum, item) => sum + item.quantity, 0);
+                              const isFullReturn = totalSelectedQuantity >= totalOrderQuantity;
+                              
+                              const finalRefundCents = totalRefundCents + (isFullReturn ? shippingCents : 0);
+                              
+                              return (
+                                <>
+                                  <div className="flex justify-between text-sm text-purple-700">
+                                    <span>Artikel:</span>
+                                    <span>€{(totalRefundCents / 100).toFixed(2)}</span>
+                                  </div>
+                                  {isFullReturn && shippingCents > 0 && (
+                                    <div className="flex justify-between text-sm text-purple-700">
+                                      <span>Versandkosten:</span>
+                                      <span>€{(shippingCents / 100).toFixed(2)}</span>
+                                    </div>
+                                  )}
+                                  <div className="flex justify-between font-medium text-purple-800 border-t border-purple-200 pt-2">
+                                    <span>Gesamtbetrag:</span>
+                                    <span>€{(finalRefundCents / 100).toFixed(2)}</span>
+                                  </div>
+                                </>
+                              );
+                            })()}
                           </div>
                         </div>
                       </div>
@@ -1479,10 +1499,10 @@ export default function OrdersPage() {
                       onClick={() => { 
                         setReturnModalOrderId(null); 
                         setReturnError(null); 
-                        setReturnReason('');
+                        setReturnReason(''); 
                         setReturnSelections({});
                       }}
-                      className="px-6 py-3 text-sm font-medium rounded-lg bg-slate-100 text-slate-700 hover:bg-slate-200 transition-colors"
+                      className={withCursorPointer("px-6 py-3 text-sm font-medium rounded-lg bg-slate-100 text-slate-700 hover:bg-slate-200 transition-colors")}
                     >
                       Abbrechen
                     </button>
@@ -1531,7 +1551,7 @@ export default function OrdersPage() {
                           setReturnSubmitting(false);
                         }
                       }}
-                      className="px-6 py-3 text-sm font-medium rounded-lg bg-purple-600 text-white hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center gap-2"
+                      className={`px-6 py-3 text-sm font-medium rounded-lg bg-purple-600 text-white hover:bg-purple-700 disabled:opacity-50 transition-colors flex items-center gap-2 ${returnSubmitting || Object.values(returnSelections).every(qty => qty === 0) ? 'cursor-not-allowed' : withCursorPointer('')}`}
                     >
                       {returnSubmitting ? (
                         <>
@@ -1565,7 +1585,7 @@ export default function OrdersPage() {
               <h3 className="text-lg font-semibold text-slate-800">Bewertung abgeben</h3>
               <button
                 onClick={() => { setReviewModalOrderId(null); setReviewError(null); setReviewAttemptedSubmit(false); }}
-                className="text-slate-500 hover:text-slate-700"
+                className={withCursorPointer("text-slate-500 hover:text-slate-700")}
                 aria-label="Schließen"
               >
                 ✕
@@ -1614,7 +1634,7 @@ export default function OrdersPage() {
                               Preis: €{(item.price / 100).toFixed(2)} | Bonuspunkte: {Math.floor((item.price / 100) * 1.75)}
                             </div>
                           </div>
-                          <label className="flex items-center gap-2 select-none">
+                          <label className={withCursorPointer("flex items-center gap-2 select-none")}>
                             <input
                               type="checkbox"
                               checked={!!currentReview.selected}
@@ -1622,7 +1642,7 @@ export default function OrdersPage() {
                                 ...prev,
                                 [itemKey]: { ...prev[itemKey] || { rating: 5, title: '', comment: '', isAnonymous: false, selected: false }, selected: e.target.checked }
                               }))}
-                              className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                              className={withCursorPointer("w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500")}
                             />
                             <span className="text-sm font-medium text-slate-700">Bewertung schreiben</span>
                           </label>
@@ -1642,7 +1662,7 @@ export default function OrdersPage() {
                                       ...prev,
                                       [itemKey]: { ...prev[itemKey] || { rating: 5, title: '', comment: '', isAnonymous: false, selected: false }, rating: star }
                                     }))}
-                                    className={`text-2xl ${star <= currentReview.rating ? 'text-yellow-400' : 'text-gray-300'} hover:text-yellow-400 transition-colors`}
+                                    className={withCursorPointer(`text-2xl ${star <= currentReview.rating ? 'text-yellow-400' : 'text-gray-300'} hover:text-yellow-400 transition-colors`)}
                                   >
                                     ★
                                   </button>
@@ -1691,7 +1711,7 @@ export default function OrdersPage() {
                             </div>
                             
                             <div>
-                              <label className="flex items-center gap-2">
+                              <label className={withCursorPointer("flex items-center gap-2")}>
                                 <input
                                   type="checkbox"
                                   checked={currentReview.isAnonymous}
@@ -1699,7 +1719,7 @@ export default function OrdersPage() {
                                     ...prev,
                                     [itemKey]: { ...prev[itemKey] || { rating: 5, title: '', comment: '', isAnonymous: false, selected: false }, isAnonymous: e.target.checked }
                                   }))}
-                                  className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                                  className={withCursorPointer("w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500")}
                                 />
                                 <span className="text-sm font-medium text-slate-700">
                                   Anonym bewerten
@@ -1731,7 +1751,7 @@ export default function OrdersPage() {
                     <div className="flex justify-end gap-2">
                       <button
                         onClick={() => { setReviewModalOrderId(null); setReviewError(null); setReviewAttemptedSubmit(false); }}
-                        className="px-4 py-2 text-sm rounded-lg bg-slate-100 text-slate-700 hover:bg-slate-200"
+                        className={withCursorPointer("px-4 py-2 text-sm rounded-lg bg-slate-100 text-slate-700 hover:bg-slate-200")}
                       >
                         Abbrechen
                       </button>
@@ -1815,7 +1835,7 @@ export default function OrdersPage() {
                             setReviewSubmitting(false);
                           }
                         }}
-                        className="px-4 py-2 text-sm rounded-lg bg-yellow-600 text-white hover:bg-yellow-700 disabled:opacity-50"
+                        className={`px-4 py-2 text-sm rounded-lg bg-yellow-600 text-white hover:bg-yellow-700 disabled:opacity-50 ${reviewSubmitting ? 'cursor-not-allowed' : withCursorPointer('')}`}
                       >
                         {reviewSubmitting ? 'Sende...' : 'Bewertungen absenden'}
                       </button>

@@ -137,6 +137,8 @@ export async function POST(request: NextRequest) {
         subtotal: subtotalCents / 100,
         shippingCosts: shippingCents,
         total: totalCents / 100,
+        discountCode: undefined, // Guest orders don't support discount codes yet
+        discountCents: 0,
         shippingAddress: shippingAddress,
         billingAddress: billingAddress && billingAddress.street && billingAddress.houseNumber && billingAddress.city && billingAddress.postalCode ? billingAddress : shippingAddress,
         paymentMethod: paymentMethod || 'card'

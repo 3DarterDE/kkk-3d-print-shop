@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from 'react';
+import { withCursorPointer } from '@/lib/cursor-utils';
 
 type CartLine = { price: number; quantity: number };
 
@@ -66,11 +67,11 @@ export default function ApplyDiscountInput({
           className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm"
         />
         {discountCents > 0 ? (
-          <button onClick={clear} className="px-4 py-2 bg-gray-100 text-gray-700 text-sm font-medium rounded-lg hover:bg-gray-200 transition-colors">
+          <button onClick={clear} className={withCursorPointer("px-4 py-2 bg-gray-100 text-gray-700 text-sm font-medium rounded-lg hover:bg-gray-200 transition-colors")}>
             Entfernen
           </button>
         ) : (
-          <button disabled={loading} onClick={apply} className="px-4 py-2 bg-gray-600 text-white text-sm font-medium rounded-lg hover:bg-gray-700 transition-colors disabled:opacity-50">
+          <button disabled={loading} onClick={apply} className={`px-4 py-2 bg-gray-600 text-white text-sm font-medium rounded-lg hover:bg-gray-700 transition-colors disabled:opacity-50 ${loading ? 'cursor-not-allowed' : withCursorPointer('')}`}>
             {loading ? 'Prüfe…' : 'Einlösen'}
           </button>
         )}

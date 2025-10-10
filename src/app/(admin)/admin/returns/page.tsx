@@ -75,8 +75,13 @@ export default function AdminReturnsPage() {
   const openDetail = async (id: string) => {
     const res = await fetch(`/api/admin/returns/${id}`);
     const data = await res.json();
-    if (res.ok) setSelected(data.returnRequest);
-    else alert(data.error || 'Fehler beim Laden');
+    if (res.ok) {
+      setSelected(data.returnRequest);
+      // Set the order data directly from the API response
+      setOrderForReturn(data.order);
+    } else {
+      alert(data.error || 'Fehler beim Laden');
+    }
   };
 
   const toggleAccepted = (productId: string) => {
@@ -171,12 +176,28 @@ export default function AdminReturnsPage() {
 
   const computeAcceptedRefundTotalCents = () => {
     if (!selected) return 0;
-    return selected.items.reduce((sum, it: any) => {
+    
+    // Calculate refund for accepted items
+    const itemsRefundCents = selected.items.reduce((sum, it: any) => {
       if (!it.accepted) return sum;
       const eff = computeEffectiveUnitCents(it);
       const qty = Number(it.quantity) || 0;
       return sum + eff * qty;
     }, 0);
+    
+    // Add shipping costs if all items are being returned
+    if (orderForReturn) {
+      const totalSelectedQuantity = selected.items
+        .filter(it => it.accepted)
+        .reduce((sum, it) => sum + Number(it.quantity), 0);
+      const totalOrderQuantity = orderForReturn.items.reduce((sum: number, it: any) => sum + Number(it.quantity), 0);
+      const isFullReturn = totalSelectedQuantity >= totalOrderQuantity;
+      
+      const shippingCents = Number(orderForReturn.shippingCosts || 0);
+      return itemsRefundCents + (isFullReturn ? shippingCents : 0);
+    }
+    
+    return itemsRefundCents;
   };
 
   if (loading && returns.length === 0) {
@@ -522,11 +543,29 @@ export default function AdminReturnsPage() {
                   {(() => {
                     const hasDiscount = Number(orderForReturn.discountCents || 0) > 0;
                     const hasPoints = Number(orderForReturn.bonusPointsRedeemed || 0) > 0;
+                    const shippingCents = Number(orderForReturn.shippingCosts || 0);
+                    
+                    // Check if all items are being returned (for shipping refund)
+                    const totalSelectedQuantity = selected.items
+                      .filter(it => it.accepted)
+                      .reduce((sum, it) => sum + Number(it.quantity), 0);
+                    const totalOrderQuantity = orderForReturn.items.reduce((sum: number, it: any) => sum + Number(it.quantity), 0);
+                    const isFullReturn = totalSelectedQuantity >= totalOrderQuantity;
+                    const includesShipping = isFullReturn && shippingCents > 0;
+                    
+                    const details = [];
                     if (hasDiscount || hasPoints) {
+                      details.push(`anteiligem ${hasDiscount ? 'Rabatt' : ''}${hasDiscount && hasPoints ? ' und ' : ''}${hasPoints ? 'Bonuspunkte-Rabatt' : ''}`);
+                    }
+                    if (includesShipping) {
+                      details.push('Versandkosten');
+                    }
+                    
+                    if (details.length > 0) {
                       return (
                         <div className="text-sm text-green-700 flex items-center gap-1">
                           <span>ℹ️</span>
-                          inkl. anteiligem {hasDiscount ? 'Rabatt' : ''}{hasDiscount && hasPoints ? ' und ' : ''}{hasPoints ? 'Bonuspunkte-Rabatt' : ''}
+                          inkl. {details.join(' und ')}
                         </div>
                       );
                     }

@@ -6,6 +6,7 @@ import { IoCheckmarkCircleSharp } from 'react-icons/io5';
 import { GoXCircleFill } from 'react-icons/go';
 import useAuth from '@/lib/hooks/useAuth';
 import { useUserData } from '@/lib/contexts/UserDataContext';
+import { withCursorPointer } from '@/lib/cursor-utils';
 
 export default function CustomerButton() {
   const { user: authUser, loading, error, refresh } = useAuth();
@@ -151,7 +152,7 @@ export default function CustomerButton() {
       <div className="relative" data-customer-dropdown>
         <button
           onClick={handleButtonClick}
-          className={`flex items-center text-sm ${isInteractive ? 'text-white hover:text-blue-200' : 'text-white/60 cursor-wait'} transition-all duration-300 group`}
+          className={`flex items-center text-sm ${isInteractive ? withCursorPointer('text-white hover:text-blue-200') : 'text-white/60 cursor-wait'} transition-all duration-300 group`}
           aria-label="Kundenbereich"
           disabled={!isInteractive}
         >

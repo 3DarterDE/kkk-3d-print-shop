@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useCartStore } from "@/lib/store/cart";
 import { getOptimizedImageUrl, getContextualImageSize } from "@/lib/image-utils";
+import { withCursorPointer } from '@/lib/cursor-utils';
 
 interface CartSidebarProps {
   isOpen: boolean;
@@ -101,7 +102,7 @@ export default function CartSidebar({ isOpen, onClose }: CartSidebarProps) {
         {isOpen && (
           <button
             onClick={onClose}
-            className="hidden md:flex absolute left-[-60px] top-1/2 transform -translate-y-1/2 w-12 h-12 bg-blue-600 hover:bg-blue-700 text-white rounded-l-lg shadow-lg transition-colors duration-200 items-center justify-center cursor-pointer"
+            className={withCursorPointer("hidden md:flex absolute left-[-60px] top-1/2 transform -translate-y-1/2 w-12 h-12 bg-blue-600 hover:bg-blue-700 text-white rounded-l-lg shadow-lg transition-colors duration-200 items-center justify-center")}
             aria-label="Warenkorb einfahren"
           >
             <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -114,7 +115,7 @@ export default function CartSidebar({ isOpen, onClose }: CartSidebarProps) {
           <h2 className="text-lg font-bold uppercase">Warenkorb</h2>
           <button
             onClick={onClose}
-            className="text-white hover:text-gray-200 transition-colors cursor-pointer"
+            className={withCursorPointer("text-white hover:text-gray-200 transition-colors")}
             aria-label="Warenkorb schließen"
           >
             <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -138,7 +139,7 @@ export default function CartSidebar({ isOpen, onClose }: CartSidebarProps) {
               <Link 
                 href="/shop" 
                 onClick={onClose}
-                className="inline-flex items-center px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 transition-colors cursor-pointer"
+                className={withCursorPointer("inline-flex items-center px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 transition-colors")}
               >
                 Jetzt einkaufen
               </Link>
@@ -192,7 +193,7 @@ export default function CartSidebar({ isOpen, onClose }: CartSidebarProps) {
                                className={`w-6 h-6 flex items-center justify-center rounded transition-colors ${
                                  item.quantity <= 1
                                    ? 'text-gray-400 cursor-not-allowed bg-gray-100'
-                                   : 'text-gray-600 hover:text-gray-800 hover:bg-gray-200 cursor-pointer'
+                                   : withCursorPointer('text-gray-600 hover:text-gray-800 hover:bg-gray-200')
                                }`}
                              >
                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -212,7 +213,7 @@ export default function CartSidebar({ isOpen, onClose }: CartSidebarProps) {
                                className={`w-6 h-6 flex items-center justify-center rounded transition-colors ${
                                  (item.stockQuantity || 0) > 0 && item.quantity >= (item.stockQuantity || 0)
                                    ? 'text-gray-400 cursor-not-allowed bg-gray-100'
-                                   : 'text-gray-600 hover:text-gray-800 hover:bg-gray-200 cursor-pointer'
+                                   : withCursorPointer('text-gray-600 hover:text-gray-800 hover:bg-gray-200')
                                }`}
                              >
                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -241,7 +242,7 @@ export default function CartSidebar({ isOpen, onClose }: CartSidebarProps) {
                         </div>
                         <button
                           onClick={() => removeItem(item.slug, item.variations)}
-                          className="text-blue-600 hover:text-red-800 transition-colors cursor-pointer p-1"
+                          className={withCursorPointer("text-blue-600 hover:text-red-800 transition-colors p-1")}
                           title="Entfernen"
                         >
                           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -306,7 +307,7 @@ export default function CartSidebar({ isOpen, onClose }: CartSidebarProps) {
                     onClose();
                     window.location.href = '/cart';
                   }}
-                  className="w-full bg-blue-600 text-white font-bold py-3 px-4 rounded-lg hover:bg-blue-700 transition-colors uppercase text-base cursor-pointer"
+                  className={withCursorPointer("w-full bg-blue-600 text-white font-bold py-3 px-4 rounded-lg hover:bg-blue-700 transition-colors uppercase text-base")}
                 >
                   Zum Warenkorb
                 </button>
@@ -315,7 +316,7 @@ export default function CartSidebar({ isOpen, onClose }: CartSidebarProps) {
                     onClose();
                     window.location.href = '/checkout';
                   }}
-                  className="w-full bg-green-600 text-white font-bold py-3 px-4 rounded-lg hover:bg-green-700 transition-colors uppercase text-base cursor-pointer"
+                  className={withCursorPointer("w-full bg-green-600 text-white font-bold py-3 px-4 rounded-lg hover:bg-green-700 transition-colors uppercase text-base")}
                 >
                   Bestellung
                 </button>

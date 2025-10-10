@@ -109,7 +109,7 @@ export default function Footer() {
             <div className="mt-4">
               <h4 className="font-medium text-white mb-2">Kontakt</h4>
               <div className="text-sm text-gray-300">
-                <p>📧 info@3darterde.de</p>
+                <p>📧 service@3darterde.de</p>
               </div>
             </div>
           </div>
@@ -194,10 +194,10 @@ export default function Footer() {
                 />
               </div>
               <div>
-                <button 
+                <button
                   type="submit"
                   disabled={status === 'loading'}
-                  className="w-full px-3 py-2 bg-gradient-to-r from-blue-600 to-blue-700 text-white rounded-md text-sm hover:from-blue-700 hover:to-blue-800 transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="w-full px-3 py-2 bg-gradient-to-r from-blue-600 to-blue-700 text-white rounded-md text-sm hover:from-blue-700 hover:to-blue-800 transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
                 >
                   {status === 'loading' ? 'Wird verarbeitet...' : 'Anmelden'}
                 </button>

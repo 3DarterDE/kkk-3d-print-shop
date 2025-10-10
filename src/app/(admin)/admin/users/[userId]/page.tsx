@@ -730,7 +730,7 @@ export default function UserDetailPage() {
                                             <p className="font-medium text-gray-900">{item.name}</p>
                                             {isItemReturned(order._id, item) && (
                                               <div className="text-xs text-red-600 mt-1 font-medium">
-                                                ↩️ Zurückgegeben
+                                                Zurückgegeben
                                               </div>
                                             )}
                                             {item.variations && Object.keys(item.variations).length > 0 && (

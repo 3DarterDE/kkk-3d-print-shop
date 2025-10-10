@@ -309,6 +309,13 @@ export default function ProductsPage() {
       }
     }
 
+    // Check if product has variations
+    const hasVariations = variations.some(variation => 
+      variation.name && variation.name.trim() !== '' && 
+      variation.options.length > 0 && 
+      variation.options.every(option => option.value && option.value.trim() !== '')
+    );
+
     const productData = {
       title: title,
       sku: formData.sku || generateSKU(title, formData.category),
@@ -324,8 +331,9 @@ export default function ProductsPage() {
       subcategoryIds: formData.subcategory ? [formData.subcategory] : [],
       brand: formData.brand || undefined,
       tags: formData.tags.split(",").map(tag => tag.trim()).filter(tag => tag),
-      inStock: formData.inStock,
-      stockQuantity: parseInt(formData.stockQuantity) || 0,
+      // Automatically adjust basic stock data when variations are present
+      inStock: hasVariations ? false : formData.inStock,
+      stockQuantity: hasVariations ? 0 : parseInt(formData.stockQuantity) || 0,
       images: uploadedFiles.filter(url => url.includes('/uploads/images/')),
       imageSizes: uploadedImageSizes,
       videos: uploadedFiles.filter(url => url.includes('/uploads/videos/')),

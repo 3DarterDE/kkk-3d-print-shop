@@ -20,8 +20,29 @@ export async function GET(request: Request) {
     // Build match criteria
     const matchCriteria: any = { isActive: true };
     if (inStock) {
-      matchCriteria.inStock = true;
-      matchCriteria.stockQuantity = { $gt: 0 };
+      // Include products that are either:
+      // 1. In stock with basic stock quantity > 0, OR
+      // 2. Have variations with at least one available option
+      matchCriteria.$or = [
+        // Basic stock available
+        { 
+          inStock: true, 
+          stockQuantity: { $gt: 0 },
+          $or: [
+            { variations: { $exists: false } },
+            { variations: { $size: 0 } }
+          ]
+        },
+        // Variations available
+        {
+          'variations.options': {
+            $elemMatch: {
+              inStock: true,
+              stockQuantity: { $gt: 0 }
+            }
+          }
+        }
+      ];
     }
     
     if (random) {

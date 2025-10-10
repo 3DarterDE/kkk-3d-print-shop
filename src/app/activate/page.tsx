@@ -107,8 +107,8 @@ function ActivatePageContent() {
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="text-center">
+      <div className="bg-gray-50 pt-8 pb-4">
+        <div className="max-w-md w-full mx-auto bg-white rounded-lg shadow-md p-8 text-center">
           <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
           <p className="mt-2 text-gray-600">Lade...</p>
         </div>
@@ -122,8 +122,8 @@ function ActivatePageContent() {
 
   if (success) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50">
-        <div className="max-w-md w-full bg-white rounded-lg shadow-md p-8 text-center">
+      <div className="bg-gray-50 pt-8 pb-4">
+        <div className="max-w-md w-full mx-auto bg-white rounded-lg shadow-md p-8 text-center">
           <div className="text-green-500 text-6xl mb-4">✅</div>
           <h1 className="text-2xl font-bold text-gray-900 mb-2">E-Mail bestätigt!</h1>
           <p className="text-gray-600 mb-4">
@@ -168,8 +168,8 @@ function ActivatePageContent() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-50">
-      <div className="max-w-md w-full bg-white rounded-lg shadow-md p-8">
+    <div className="bg-gray-50 pt-8 pb-4">
+      <div className="max-w-md w-full mx-auto bg-white rounded-lg shadow-md p-8">
         <div className="text-center mb-8">
           <div className="text-blue-500 text-6xl mb-4">📧</div>
           <h1 className="text-2xl font-bold text-gray-900 mb-2">E-Mail bestätigen</h1>

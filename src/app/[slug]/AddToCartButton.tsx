@@ -114,8 +114,8 @@ export default function AddToCartButton({
           isDisabled 
             ? 'bg-gray-300 text-gray-500 cursor-not-allowed' 
             : isAnimating
-            ? 'bg-green-600 text-white scale-95'
-            : 'bg-black text-white hover:bg-gray-800 hover:scale-105'
+            ? 'bg-green-600 text-white scale-95 cursor-pointer'
+            : 'bg-black text-white hover:bg-gray-800 hover:scale-105 cursor-pointer'
         }`}
       >
         {isOutOfStock ? (

@@ -7,6 +7,7 @@ import { getOptimizedImageUrl, getContextualImageSize } from "@/lib/image-utils"
 import { useUserData } from "@/lib/contexts/UserDataContext";
 import ProductCard from "@/components/ProductCard";
 import ApplyDiscountInput from "../../../components/ApplyDiscountInput";
+import { withCursorPointer } from '@/lib/cursor-utils';
 
 export default function CartPage() {
   const items = useCartStore((state) => state.items);
@@ -156,11 +157,9 @@ export default function CartPage() {
       const response = await fetch('/api/shop/products?limit=20&random=true&inStock=true');
       if (response.ok) {
         const data = await response.json();
-        // Filter out sold out products and products already in cart
+        // Filter out products already in cart (API already handles stock availability)
         const cartProductSlugs = items.map(item => item.slug);
         const availableProducts = data.products.filter((product: any) => 
-          product.inStock && 
-          product.stockQuantity > 0 &&
           !cartProductSlugs.includes(product.slug)
         );
         const shuffled = availableProducts.sort(() => 0.5 - Math.random());
@@ -191,16 +190,9 @@ export default function CartPage() {
     }
   }, [cartInitialized, productsLoaded, loadRandomProducts]);
 
-  // Remove specific product from random products when added to cart
-  const removeProductFromSuggestions = useCallback((productSlug: string) => {
-    // Wait 2 seconds before removing the product so the animation is visible
-    setTimeout(() => {
-      setRandomProducts(prev => prev.filter(product => product.slug !== productSlug));
-    }, 800);
-  }, []);
 
   // Only reload random products on initial load, not when cart changes
-  // Individual products are removed via onProductAdded callback
+  // Products stay in the list even when added to cart
 
   return (
     <div className="min-h-screen bg-white">
@@ -243,7 +235,7 @@ export default function CartPage() {
             <p className="text-gray-600 mb-8">Entdecke unsere Produkte und füge Artikel zu deinem Warenkorb hinzu</p>
             <Link 
               href="/shop" 
-              className="inline-flex items-center px-6 py-3 bg-blue-600 text-white font-medium rounded-lg hover:bg-blue-700 transition-colors"
+              className={withCursorPointer("inline-flex items-center px-6 py-3 bg-blue-600 text-white font-medium rounded-lg hover:bg-blue-700 transition-colors")}
             >
               <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z" />
@@ -273,7 +265,7 @@ export default function CartPage() {
                       <div className="lg:col-span-5">
                         <div className="flex items-start space-x-3 lg:items-center">
                           <Link href={`/${i.slug}`} className="block">
-                            <div className="w-12 h-12 lg:w-16 lg:h-16 rounded-lg overflow-hidden flex-shrink-0 bg-gray-100 hover:opacity-80 transition-opacity cursor-pointer">
+                            <div className={withCursorPointer("w-12 h-12 lg:w-16 lg:h-16 rounded-lg overflow-hidden flex-shrink-0 bg-gray-100 hover:opacity-80 transition-opacity")}>
                               {i.image ? (
                                 <img
                                   src={getOptimizedImageUrl(i.image, getContextualImageSize('thumbnail'), i.imageSizes, 0)}
@@ -295,7 +287,7 @@ export default function CartPage() {
                             <div className="flex items-start justify-between lg:block">
                               <div className="flex-1">
                                 <Link href={`/${i.slug}`}>
-                                  <h3 className="text-base lg:text-sm font-semibold text-gray-900 hover:text-blue-600 transition-colors cursor-pointer">{i.title}</h3>
+                                  <h3 className={withCursorPointer("text-base lg:text-sm font-semibold text-gray-900 hover:text-blue-600 transition-colors")}>{i.title}</h3>
                                 </Link>
                                 
                                 {/* Mobile Quantity Controls */}
@@ -308,7 +300,7 @@ export default function CartPage() {
                                       className={`w-6 h-6 flex items-center justify-center rounded transition-colors ${
                                         i.quantity <= 1
                                           ? 'text-gray-400 cursor-not-allowed bg-gray-100'
-                                          : 'text-gray-600 hover:text-gray-800 hover:bg-gray-200'
+                                          : withCursorPointer('text-gray-600 hover:text-gray-800 hover:bg-gray-200')
                                       }`}
                                     >
                                       <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -324,7 +316,7 @@ export default function CartPage() {
                                       className={`w-6 h-6 flex items-center justify-center rounded transition-colors ${
                                         (i.stockQuantity || 0) > 0 && i.quantity >= (i.stockQuantity || 0)
                                           ? 'text-gray-400 cursor-not-allowed bg-gray-100'
-                                          : 'text-gray-600 hover:text-gray-800 hover:bg-gray-200'
+                                          : withCursorPointer('text-gray-600 hover:text-gray-800 hover:bg-gray-200')
                                       }`}
                                     >
                                       <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -353,7 +345,7 @@ export default function CartPage() {
                                 </div>
                                 <button
                                   onClick={() => removeItem(i.slug, i.variations)}
-                                  className="text-blue-600 hover:text-red-800 transition-colors mt-1 p-1"
+                                  className={withCursorPointer("text-blue-600 hover:text-red-800 transition-colors mt-1 p-1")}
                                   title="Entfernen"
                                 >
                                   <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -383,7 +375,7 @@ export default function CartPage() {
                             className={`w-6 h-6 flex items-center justify-center rounded transition-colors ${
                               i.quantity <= 1
                                 ? 'text-gray-400 cursor-not-allowed bg-gray-100'
-                                : 'text-gray-600 hover:text-gray-800 hover:bg-gray-200'
+                                : withCursorPointer('text-gray-600 hover:text-gray-800 hover:bg-gray-200')
                             }`}
                           >
                             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -399,7 +391,7 @@ export default function CartPage() {
                             className={`w-6 h-6 flex items-center justify-center rounded transition-colors ${
                               (i.stockQuantity || 0) > 0 && i.quantity >= (i.stockQuantity || 0)
                                 ? 'text-gray-400 cursor-not-allowed bg-gray-100'
-                                : 'text-gray-600 hover:text-gray-800 hover:bg-gray-200'
+                                : withCursorPointer('text-gray-600 hover:text-gray-800 hover:bg-gray-200')
                             }`}
                           >
                             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -420,7 +412,7 @@ export default function CartPage() {
                       <div className="hidden lg:block lg:col-span-1 text-center">
                         <button
                           onClick={() => removeItem(i.slug, i.variations)}
-                          className="text-blue-600 hover:text-red-800 hover:bg-red-50 rounded-lg p-1 transition-colors cursor-pointer"
+                          className={withCursorPointer("text-blue-600 hover:text-red-800 hover:bg-red-50 rounded-lg p-1 transition-colors")}
                           title="Entfernen"
                         >
                           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -516,7 +508,7 @@ export default function CartPage() {
                                   window.addEventListener('message', onMessage);
                                 }
                               }}
-                              className="text-blue-600 hover:text-blue-800 underline bg-transparent border-none p-0 cursor-pointer"
+                              className={withCursorPointer("text-blue-600 hover:text-blue-800 underline bg-transparent border-none p-0")}
                             >
                               Melde dich an
                             </button> oder 
@@ -562,7 +554,7 @@ export default function CartPage() {
                                   window.addEventListener('message', onMessage);
                                 }
                               }}
-                              className="text-blue-600 hover:text-blue-800 underline bg-transparent border-none p-0 cursor-pointer ml-1"
+                              className={withCursorPointer("text-blue-600 hover:text-blue-800 underline bg-transparent border-none p-0 ml-1")}
                             >
                               erstelle ein Konto
                             </button> um Bonuspunkte für diese Bestellung zu erhalten
@@ -722,7 +714,7 @@ export default function CartPage() {
                   <div className="space-y-3">
                     <Link 
                       href={`/checkout?redeemPoints=${redeemPoints}&pointsToRedeem=${selectedPointsToRedeem}`}
-                      className="w-full flex items-center justify-center px-6 py-3 bg-green-600 text-white font-medium rounded-lg hover:bg-green-700 transition-colors"
+                          className={withCursorPointer("w-full flex items-center justify-center px-6 py-3 bg-green-600 text-white font-medium rounded-lg hover:bg-green-700 transition-colors")}
                     >
                       <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" />
@@ -733,7 +725,7 @@ export default function CartPage() {
                     <button
                       onClick={validateCart}
                       disabled={isValidating}
-                      className="w-full flex items-center justify-center px-6 py-3 border border-blue-300 text-blue-700 font-medium rounded-lg hover:bg-blue-50 disabled:opacity-50 transition-colors cursor-pointer disabled:cursor-not-allowed"
+                      className={`w-full flex items-center justify-center px-6 py-3 border border-blue-300 text-blue-700 font-medium rounded-lg hover:bg-blue-50 disabled:opacity-50 transition-colors ${isValidating ? 'cursor-not-allowed' : withCursorPointer('')}`}
                     >
                       {isValidating ? (
                         <>
@@ -772,7 +764,7 @@ export default function CartPage() {
           <div className="mt-8 mb-4">
             <Link 
               href="/shop" 
-              className="text-blue-600 hover:text-blue-800 font-medium text-sm transition-colors"
+              className={withCursorPointer("text-blue-600 hover:text-blue-800 font-medium text-sm transition-colors")}
             >
               ← Weiter einkaufen
             </Link>
@@ -811,7 +803,6 @@ export default function CartPage() {
                     variations: product.variations || [],
                     reviews: product.reviews || null
                   }}
-                  onProductAdded={removeProductFromSuggestions}
                 />
               ))}
             </div>

@@ -47,7 +47,7 @@ export default function CategoryTree({ categories, selectedCategory, selectedSub
     <nav className="space-y-2">
       <button
         onClick={() => handleCategoryClick()}
-        className={`w-full text-left block px-3 py-2 rounded-md text-sm ${
+        className={`w-full text-left block px-3 py-2 rounded-md text-sm cursor-pointer ${
           !selectedCategory
             ? 'bg-blue-100 text-blue-700 font-medium'
             : 'text-gray-700 hover:bg-gray-100'
@@ -61,7 +61,7 @@ export default function CategoryTree({ categories, selectedCategory, selectedSub
           <div className="flex items-center">
             <button
               onClick={() => handleCategoryClick(category.slug)}
-              className={`flex-1 text-left px-3 py-2 rounded-md text-sm ${
+              className={`flex-1 text-left px-3 py-2 rounded-md text-sm cursor-pointer ${
                 selectedCategory === category.slug
                   ? 'bg-blue-100 text-blue-700 font-medium'
                   : 'text-gray-700 hover:bg-gray-100'
@@ -78,7 +78,7 @@ export default function CategoryTree({ categories, selectedCategory, selectedSub
                 <button
                   key={subcategory._id}
                   onClick={() => handleCategoryClick(category.slug, subcategory.slug)}
-                  className={`w-full text-left block px-3 py-2 rounded-md text-sm ${
+                  className={`w-full text-left block px-3 py-2 rounded-md text-sm cursor-pointer ${
                     selectedSubcategory === subcategory.slug
                       ? 'bg-blue-100 text-blue-700 font-medium'
                       : 'text-gray-600 hover:bg-gray-100'

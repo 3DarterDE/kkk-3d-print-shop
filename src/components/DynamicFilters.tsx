@@ -420,7 +420,7 @@ export default function DynamicFilters({
           <div key={filterKey} className={`border-b border-gray-200 ${isExpanded ? 'pb-2' : 'pb-0'}`}>
             <button
               onClick={() => toggleFilter(filterKey)}
-              className="flex items-center justify-between w-full text-left mb-2 hover:text-blue-600 transition-colors"
+              className="flex items-center justify-between w-full text-left mb-2 hover:text-blue-600 transition-colors cursor-pointer"
             >
               <div className="flex items-center gap-2">
                 <h3 className="text-lg font-semibold">{filter.name}</h3>
@@ -463,7 +463,7 @@ export default function DynamicFilters({
                   productCount: getProductCountForOption(filter._id!, option.value)
                 }))
                 .map((option: any) => (
-                <label key={option.value} className="flex items-center">
+                <label key={option.value} className="flex items-center cursor-pointer">
                   <input
                     type="radio"
                     name={`filter-${filter._id}`}
@@ -473,7 +473,7 @@ export default function DynamicFilters({
                       const newValues = e.target.checked ? [option.value] : [];
                       onFilterChange(String(filter._id!), newValues);
                     }}
-                    className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                    className="rounded border-gray-300 text-blue-600 focus:ring-blue-500 cursor-pointer"
                   />
                     <span className="ml-1 text-sm text-gray-700 flex items-center justify-between w-full">
                       <span>{option.name}</span>
@@ -499,7 +499,7 @@ export default function DynamicFilters({
             return (
               <div className="space-y-1">
                 {visibleOptions.map((option: any) => (
-                  <label key={option.value} className="flex items-center">
+                  <label key={option.value} className="flex items-center cursor-pointer">
                     <input
                       type="checkbox"
                       value={option.value}
@@ -511,7 +511,7 @@ export default function DynamicFilters({
                           : currentValues.filter(v => v !== option.value);
                         onFilterChange(String(filter._id!), newValues);
                       }}
-                      className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                      className="rounded border-gray-300 text-blue-600 focus:ring-blue-500 cursor-pointer"
                     />
                     <span className="ml-1 text-sm text-gray-700 flex items-center justify-between w-full">
                       <span>{option.name}</span>
@@ -522,7 +522,7 @@ export default function DynamicFilters({
                 {hasMoreThanFive && (
                   <button
                     onClick={() => toggleOptionsExpansion(filterKey)}
-                    className="text-sm text-blue-600 hover:text-blue-800 mt-2 flex items-center"
+                    className="text-sm text-blue-600 hover:text-blue-800 mt-2 flex items-center cursor-pointer"
                   >
                     {isExpanded ? (
                       <>
@@ -769,7 +769,7 @@ export default function DynamicFilters({
                           : [...currentValues, option.value];
                         onFilterChange(String(filter._id!), newValues);
                       }}
-                      className={`w-6 h-6 rounded-full border-2 transition-all hover:scale-110 ${
+                      className={`w-6 h-6 rounded-full border-2 transition-all hover:scale-110 cursor-pointer ${
                         isSelected 
                           ? 'border-gray-800 shadow-lg' 
                           : 'border-gray-300 hover:border-gray-500'
@@ -786,7 +786,7 @@ export default function DynamicFilters({
                 {(selectedFilters[String(filter._id!)] || []).length > 0 && (
                   <button
                     onClick={() => onFilterChange(String(filter._id!), [])}
-                    className="mt-2 text-xs text-blue-600 hover:text-blue-800"
+                    className="mt-2 text-xs text-blue-600 hover:text-blue-800 cursor-pointer"
                   >
                     Filter zurücksetzen
                   </button>

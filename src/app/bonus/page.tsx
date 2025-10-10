@@ -3,6 +3,7 @@ import React from "react";
 import { useUserData } from "@/lib/contexts/UserDataContext";
 import { useAuth } from '@/lib/hooks/useAuth';
 import Link from "next/link";
+import { withCursorPointer } from '@/lib/cursor-utils';
 
 type BonusGoal = {
   id: string;
@@ -180,7 +181,7 @@ export default function BonusPointsPage() {
           <p className="text-gray-600 mb-4">Bitte melde dich an, um deine Bonuspunkte zu sehen.</p>
           <a
             href="/api/auth/login"
-            className="bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700 transition-colors"
+            className={withCursorPointer("bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700 transition-colors")}
           >
             Jetzt anmelden
           </a>
@@ -281,10 +282,6 @@ export default function BonusPointsPage() {
                   <div className="w-2 h-2 bg-white rounded-full mr-3"></div>
                   Bonuspunkte
                 </a>
-                <a href="#" className="flex items-center px-4 py-3 text-sm font-medium text-slate-600 hover:text-blue-600 hover:bg-blue-50 rounded-xl transition-all duration-200 group">
-                  <div className="w-2 h-2 bg-slate-300 rounded-full mr-3 group-hover:bg-blue-500 transition-colors"></div>
-                  Mein Wunschzettel
-                </a>
               </nav>
             </div>
           </div>
@@ -306,7 +303,7 @@ export default function BonusPointsPage() {
               </div>
             </div>
             <div className="mt-4">
-              <button onClick={() => { setShowHistory(true); resetPagination(); refetchOrders?.(); }} className="px-4 py-2 bg-white/10 hover:bg-white/20 rounded-lg text-white text-sm font-medium transition-colors">
+              <button onClick={() => { setShowHistory(true); resetPagination(); refetchOrders?.(); }} className={withCursorPointer("px-4 py-2 bg-white/10 hover:bg-white/20 rounded-lg text-white text-sm font-medium transition-colors")}>
                 Verlauf ansehen
               </button>
             </div>
@@ -362,7 +359,7 @@ export default function BonusPointsPage() {
           <h3 className="text-lg sm:text-xl font-semibold text-slate-900">Bonuspunkte-Verlauf</h3>
           <button 
             onClick={() => setShowHistory(false)} 
-            className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-lg transition-colors"
+            className={withCursorPointer("p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-lg transition-colors")}
           >
             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
@@ -378,7 +375,7 @@ export default function BonusPointsPage() {
               <div className="grid grid-cols-3 gap-1 bg-slate-100 p-1 rounded-lg">
                 <button
                   onClick={() => handleTabChange('orders')}
-                  className={`px-2 sm:px-4 py-2 text-xs sm:text-sm font-medium rounded-md transition-colors ${
+                  className={`px-2 sm:px-4 py-2 text-xs sm:text-sm font-medium rounded-md transition-colors ${withCursorPointer('')} ${
                     activeTab === 'orders'
                       ? 'bg-white text-blue-600 shadow-sm'
                       : 'text-slate-600 hover:text-slate-800'
@@ -389,7 +386,7 @@ export default function BonusPointsPage() {
                 </button>
                 <button
                   onClick={() => handleTabChange('reviews')}
-                  className={`px-2 sm:px-4 py-2 text-xs sm:text-sm font-medium rounded-md transition-colors ${
+                  className={`px-2 sm:px-4 py-2 text-xs sm:text-sm font-medium rounded-md transition-colors ${withCursorPointer('')} ${
                     activeTab === 'reviews'
                       ? 'bg-white text-blue-600 shadow-sm'
                       : 'text-slate-600 hover:text-slate-800'
@@ -400,7 +397,7 @@ export default function BonusPointsPage() {
                 </button>
                 <button
                   onClick={() => handleTabChange('returns')}
-                  className={`px-2 sm:px-4 py-2 text-xs sm:text-sm font-medium rounded-md transition-colors ${
+                  className={`px-2 sm:px-4 py-2 text-xs sm:text-sm font-medium rounded-md transition-colors ${withCursorPointer('')} ${
                     activeTab === 'returns'
                       ? 'bg-white text-blue-600 shadow-sm'
                       : 'text-slate-600 hover:text-slate-800'
@@ -498,7 +495,7 @@ export default function BonusPointsPage() {
                     <button
                       onClick={() => handlePageChange(currentPage - 1)}
                       disabled={currentPage === 1}
-                      className="px-4 py-2 text-sm border border-slate-300 rounded-lg hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed flex items-center"
+                      className={`px-4 py-2 text-sm border border-slate-300 rounded-lg hover:bg-slate-50 disabled:opacity-50 flex items-center ${currentPage === 1 ? 'cursor-not-allowed' : withCursorPointer('')}`}
                     >
                       <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
@@ -523,7 +520,7 @@ export default function BonusPointsPage() {
                           <button
                             key={pageNum}
                             onClick={() => handlePageChange(pageNum)}
-                            className={`px-3 py-1 text-sm rounded-lg ${
+                            className={`px-3 py-1 text-sm rounded-lg ${withCursorPointer('')} ${
                               currentPage === pageNum
                                 ? 'bg-blue-600 text-white'
                                 : 'border border-slate-300 hover:bg-slate-50'
@@ -538,7 +535,7 @@ export default function BonusPointsPage() {
                     <button
                       onClick={() => handlePageChange(currentPage + 1)}
                       disabled={currentPage === totalPages}
-                      className="px-4 py-2 text-sm border border-slate-300 rounded-lg hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed flex items-center"
+                      className={`px-4 py-2 text-sm border border-slate-300 rounded-lg hover:bg-slate-50 disabled:opacity-50 flex items-center ${currentPage === totalPages ? 'cursor-not-allowed' : withCursorPointer('')}`}
                     >
                       Weiter
                       <svg className="w-4 h-4 ml-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -557,7 +554,7 @@ export default function BonusPointsPage() {
                     <button
                       onClick={() => handlePageChange(currentPage - 1)}
                       disabled={currentPage === 1}
-                      className="px-3 py-1 text-sm border border-slate-300 rounded-lg hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                      className={`px-3 py-1 text-sm border border-slate-300 rounded-lg hover:bg-slate-50 disabled:opacity-50 ${currentPage === 1 ? 'cursor-not-allowed' : withCursorPointer('')}`}
                     >
                       Zurück
                     </button>
@@ -579,7 +576,7 @@ export default function BonusPointsPage() {
                           <button
                             key={pageNum}
                             onClick={() => handlePageChange(pageNum)}
-                            className={`px-3 py-1 text-sm rounded-lg ${
+                            className={`px-3 py-1 text-sm rounded-lg ${withCursorPointer('')} ${
                               currentPage === pageNum
                                 ? 'bg-blue-600 text-white'
                                 : 'border border-slate-300 hover:bg-slate-50'
@@ -594,7 +591,7 @@ export default function BonusPointsPage() {
                     <button
                       onClick={() => handlePageChange(currentPage + 1)}
                       disabled={currentPage === totalPages}
-                      className="px-3 py-1 text-sm border border-slate-300 rounded-lg hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                      className={`px-3 py-1 text-sm border border-slate-300 rounded-lg hover:bg-slate-50 disabled:opacity-50 ${currentPage === totalPages ? 'cursor-not-allowed' : withCursorPointer('')}`}
                     >
                       Weiter
                     </button>

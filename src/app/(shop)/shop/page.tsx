@@ -1655,7 +1655,7 @@ export default function ShopPage({ searchParams }: { searchParams: Promise<{ cat
                         updateNewItemsFilter(false);
                         setShowAvailableOnly(false);
                       }}
-                      className="text-sm text-blue-600 hover:text-blue-800 hover:underline transition-colors"
+                      className="text-sm text-blue-600 hover:text-blue-800 hover:underline transition-colors cursor-pointer"
                     >
                       Filter zurücksetzen
                     </button>
@@ -1664,12 +1664,12 @@ export default function ShopPage({ searchParams }: { searchParams: Promise<{ cat
                 <div className="space-y-2">
                   {/* Bestseller */}
                   {initialViewProducts.some(p => p.isTopSeller) && (
-                    <label className="flex items-center">
+                    <label className="flex items-center cursor-pointer">
                       <input
                         type="checkbox"
                         checked={showTopSellers}
                         onChange={(e) => updateTopSellersFilter(e.target.checked)}
-                        className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                        className="rounded border-gray-300 text-blue-600 focus:ring-blue-500 cursor-pointer"
                       />
                       <span className="ml-1 text-sm text-gray-700 flex items-center justify-between w-full">
                         <span>Bestseller</span>
@@ -1679,12 +1679,12 @@ export default function ShopPage({ searchParams }: { searchParams: Promise<{ cat
                   
                   {/* Sale */}
                   {initialViewProducts.some(p => p.isOnSale) && (
-                    <label className="flex items-center">
+                    <label className="flex items-center cursor-pointer">
                       <input
                         type="checkbox"
                         checked={showSaleItems}
                         onChange={(e) => updateSaleFilter(e.target.checked)}
-                        className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                        className="rounded border-gray-300 text-blue-600 focus:ring-blue-500 cursor-pointer"
                       />
                       <span className="ml-1 text-sm text-gray-700 flex items-center justify-between w-full">
                         <span>Im Angebot</span>
@@ -1699,12 +1699,12 @@ export default function ShopPage({ searchParams }: { searchParams: Promise<{ cat
                     const productDate = new Date(p.createdAt || p.updatedAt);
                     return productDate >= twoWeeksAgo;
                   }) && (
-                    <label className="flex items-center">
+                    <label className="flex items-center cursor-pointer">
                       <input
                         type="checkbox"
                         checked={showNewItems}
                         onChange={(e) => updateNewItemsFilter(e.target.checked)}
-                        className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                        className="rounded border-gray-300 text-blue-600 focus:ring-blue-500 cursor-pointer"
                       />
                       <span className="ml-1 text-sm text-gray-700 flex items-center justify-between w-full">
                         <span>Neu (letzte 2 Wochen)</span>
@@ -1714,12 +1714,12 @@ export default function ShopPage({ searchParams }: { searchParams: Promise<{ cat
                   
                   {/* Verfügbar */}
                   {initialViewProducts.some(p => isProductAvailable(p)) && (
-                    <label className="flex items-center">
+                    <label className="flex items-center cursor-pointer">
                       <input
                         type="checkbox"
                         checked={showAvailableOnly}
                         onChange={(e) => setShowAvailableOnly(e.target.checked)}
-                        className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                        className="rounded border-gray-300 text-blue-600 focus:ring-blue-500 cursor-pointer"
                       />
                       <span className="ml-1 text-sm text-gray-700 flex items-center justify-between w-full">
                         <span>Auf Lager</span>
@@ -2016,7 +2016,7 @@ export default function ShopPage({ searchParams }: { searchParams: Promise<{ cat
                       updateNewItemsFilter(false);
                       setShowAvailableOnly(false);
                     }}
-                    className="text-sm text-blue-600 hover:text-blue-800 hover:underline transition-colors"
+                    className="text-sm text-blue-600 hover:text-blue-800 hover:underline transition-colors cursor-pointer"
                   >
                     Filter zurücksetzen
                   </button>
@@ -2025,12 +2025,12 @@ export default function ShopPage({ searchParams }: { searchParams: Promise<{ cat
               <div className="space-y-2">
                 {/* Bestseller */}
                 {initialViewProducts.some(p => p.isTopSeller) && (
-                  <label className="flex items-center">
+                  <label className="flex items-center cursor-pointer">
                     <input
                       type="checkbox"
                       checked={showTopSellers}
                       onChange={(e) => updateTopSellersFilter(e.target.checked)}
-                      className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                      className="rounded border-gray-300 text-blue-600 focus:ring-blue-500 cursor-pointer"
                     />
                     <span className="ml-1 text-sm text-gray-700 flex items-center justify-between w-full">
                       <span>Bestseller</span>
@@ -2040,12 +2040,12 @@ export default function ShopPage({ searchParams }: { searchParams: Promise<{ cat
                 
                 {/* Sale */}
                 {initialViewProducts.some(p => p.isOnSale) && (
-                  <label className="flex items-center">
+                  <label className="flex items-center cursor-pointer">
                     <input
                       type="checkbox"
                       checked={showSaleItems}
                       onChange={(e) => updateSaleFilter(e.target.checked)}
-                      className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                      className="rounded border-gray-300 text-blue-600 focus:ring-blue-500 cursor-pointer"
                     />
                     <span className="ml-1 text-sm text-gray-700 flex items-center justify-between w-full">
                       <span>Im Angebot</span>
@@ -2060,12 +2060,12 @@ export default function ShopPage({ searchParams }: { searchParams: Promise<{ cat
                   const productDate = new Date(p.createdAt || p.updatedAt);
                   return productDate >= twoWeeksAgo;
                 }) && (
-                  <label className="flex items-center">
+                  <label className="flex items-center cursor-pointer">
                     <input
                       type="checkbox"
                       checked={showNewItems}
                       onChange={(e) => updateNewItemsFilter(e.target.checked)}
-                      className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                      className="rounded border-gray-300 text-blue-600 focus:ring-blue-500 cursor-pointer"
                     />
                     <span className="ml-1 text-sm text-gray-700 flex items-center justify-between w-full">
                       <span>Neu (letzte 2 Wochen)</span>
@@ -2075,12 +2075,12 @@ export default function ShopPage({ searchParams }: { searchParams: Promise<{ cat
                 
                 {/* Verfügbar */}
                 {initialViewProducts.some(p => isProductAvailable(p)) && (
-                  <label className="flex items-center">
+                  <label className="flex items-center cursor-pointer">
                     <input
                       type="checkbox"
                       checked={showAvailableOnly}
                       onChange={(e) => setShowAvailableOnly(e.target.checked)}
-                      className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                      className="rounded border-gray-300 text-blue-600 focus:ring-blue-500 cursor-pointer"
                     />
                     <span className="ml-1 text-sm text-gray-700 flex items-center justify-between w-full">
                       <span>Auf Lager</span>

@@ -5,6 +5,7 @@ import { useCartStore } from "@/lib/store/cart";
 import { useUserData } from "@/lib/contexts/UserDataContext";
 import { useSearchParams } from "next/navigation";
 import { useAuth } from "@/lib/hooks/useAuth";
+import { withCursorPointer } from '@/lib/cursor-utils';
 
 export type CheckoutFormData = {
   firstName: string;
@@ -44,6 +45,18 @@ interface CheckoutClientProps {
 }
 
 export default function CheckoutClient({ initialIsLoggedIn, initialFormData, initialStep }: CheckoutClientProps) {
+  // Helper function to scroll to checkout form
+  const scrollToCheckoutForm = () => {
+    setTimeout(() => {
+      const checkoutForm = document.querySelector('[data-checkout-form]');
+      if (checkoutForm) {
+        const rect = checkoutForm.getBoundingClientRect();
+        const scrollTop = window.pageYOffset + rect.top +50; // 100px offset from top
+        window.scrollTo({ top: scrollTop, behavior: 'smooth' });
+      }
+    }, 100);
+  };
+
   const [total, setTotal] = useState(0);
   const [isProcessing, setIsProcessing] = useState(false);
   const [orderStatus, setOrderStatus] = useState<'idle' | 'processing' | 'success' | 'error'>('idle');
@@ -355,6 +368,7 @@ export default function CheckoutClient({ initialIsLoggedIn, initialFormData, ini
     if (items.length === 0) {
       setErrorMessage('Warenkorb ist leer');
       setOrderStatus('error');
+      window.scrollTo({ top: 0, behavior: 'smooth' });
       return;
     }
 
@@ -362,6 +376,7 @@ export default function CheckoutClient({ initialIsLoggedIn, initialFormData, ini
     if (!agbAccepted || !privacyAccepted) {
       setErrorMessage('Bitte akzeptieren Sie die Allgemeinen Geschäftsbedingungen und die Datenschutzerklärung.');
       setOrderStatus('error');
+      window.scrollTo({ top: 0, behavior: 'smooth' });
       return;
     }
 
@@ -378,6 +393,7 @@ export default function CheckoutClient({ initialIsLoggedIn, initialFormData, ini
         if (response.ok && result.exists) {
           setErrorMessage('Diese E-Mail-Adresse ist bereits registriert. Bitte loggen Sie sich ein, um fortzufahren.');
           setOrderStatus('error');
+          window.scrollTo({ top: 0, behavior: 'smooth' });
           return;
         }
       } catch (error) {
@@ -388,6 +404,9 @@ export default function CheckoutClient({ initialIsLoggedIn, initialFormData, ini
 
     setIsProcessing(true);
     setOrderStatus('processing');
+    
+    // Scroll to top to show processing/result status
+    window.scrollTo({ top: 0, behavior: 'smooth' });
 
     try {
       const orderData: any = {
@@ -445,6 +464,7 @@ export default function CheckoutClient({ initialIsLoggedIn, initialFormData, ini
             setErrorMessage(result.error);
             setOrderStatus('error');
             setIsProcessing(false);
+            window.scrollTo({ top: 0, behavior: 'smooth' });
             return;
           }
           throw new Error(result.error || 'Fehler beim Erstellen der Bestellung');
@@ -477,10 +497,19 @@ export default function CheckoutClient({ initialIsLoggedIn, initialFormData, ini
       console.error('Checkout error:', error);
       setErrorMessage(error instanceof Error ? error.message : 'Unbekannter Fehler');
       setOrderStatus('error');
+      // Scroll to top to show error message
+      window.scrollTo({ top: 0, behavior: 'smooth' });
     } finally {
       setIsProcessing(false);
     }
   };
+
+  // Scroll to top when order is successful
+  useEffect(() => {
+    if (orderStatus === 'success') {
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+  }, [orderStatus]);
 
   if (orderStatus === 'success') {
     return (
@@ -537,7 +566,7 @@ export default function CheckoutClient({ initialIsLoggedIn, initialFormData, ini
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-100 overflow-x-hidden">
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-100 overflow-x-hidden" data-checkout-form>
       <div className="max-w-sm md:max-w-7xl mx-auto px-3 md:px-4 py-4 md:py-8 overflow-x-hidden">
         {/* Header */}
         <div className="text-center mb-6 md:mb-12">
@@ -554,11 +583,11 @@ export default function CheckoutClient({ initialIsLoggedIn, initialFormData, ini
           {/* Desktop: Full Progress Steps */}
           <div className="hidden md:flex items-center justify-between max-w-4xl mx-auto">
             {[
-              { step: 1, title: 'Kontaktdaten', icon: '👤' },
-              { step: 2, title: 'Lieferadresse', icon: '📍' },
-              { step: 3, title: 'Rechnungsadresse', icon: '📄' },
-              { step: 4, title: 'Zahlungsart', icon: '💳' },
-              { step: 5, title: 'Zusammenfassung', icon: '✅' }
+              { step: 1, title: 'Kontaktdaten' },
+              { step: 2, title: 'Lieferadresse' },
+              { step: 3, title: 'Rechnungsadresse' },
+              { step: 4, title: 'Zahlungsart' },
+              { step: 5, title: 'Zusammenfassung' }
             ].map((item, index) => (
               <div key={item.step} className="flex items-center">
                 <button
@@ -568,7 +597,7 @@ export default function CheckoutClient({ initialIsLoggedIn, initialFormData, ini
                     currentStep >= item.step 
                       ? 'text-blue-600 hover:text-blue-700' 
                       : 'text-gray-400'
-                  } ${currentStep < item.step ? 'cursor-not-allowed' : 'cursor-pointer hover:scale-105'}`}
+                  } ${currentStep < item.step ? 'cursor-not-allowed' : withCursorPointer('hover:scale-105')}`}
                 >
                   <div className={`w-12 h-12 rounded-full flex items-center justify-center text-lg font-semibold transition-all duration-300 ${
                     currentStep >= item.step 
@@ -579,7 +608,6 @@ export default function CheckoutClient({ initialIsLoggedIn, initialFormData, ini
                   </div>
                   <div className="ml-3 text-left">
                     <div className="text-xs md:text-sm font-medium">{item.title}</div>
-                    <div className="text-xs text-gray-500">{item.icon}</div>
                   </div>
                 </button>
                 {index < 4 && (
@@ -830,7 +858,7 @@ export default function CheckoutClient({ initialIsLoggedIn, initialFormData, ini
                                     window.addEventListener('message', onMessage);
                                   }
                                 }}
-                                className="text-blue-600 hover:text-blue-700 font-semibold underline"
+                                className={withCursorPointer("text-blue-600 hover:text-blue-700 font-semibold underline")}
                               >
                                 Hier einloggen
                               </button>
@@ -890,7 +918,7 @@ export default function CheckoutClient({ initialIsLoggedIn, initialFormData, ini
                                     window.addEventListener('message', onMessage);
                                   }
                                 }}
-                                className="text-blue-600 hover:text-blue-700 font-semibold underline"
+                                className={withCursorPointer("text-blue-600 hover:text-blue-700 font-semibold underline")}
                               >
                                 Bonuspunkte und schnelleren Checkout
                               </button>
@@ -903,8 +931,14 @@ export default function CheckoutClient({ initialIsLoggedIn, initialFormData, ini
 
                   <div className="flex justify-end pt-4 md:pt-6">
                     <button 
-                      onClick={async () => { if (await validateStep(1)) { await saveProfileData(); setCurrentStep(2); } }} 
-                      className="w-full md:w-auto px-6 md:px-8 py-3 md:py-4 bg-gradient-to-r from-blue-600 to-indigo-600 text-white font-semibold rounded-xl hover:from-blue-700 hover:to-indigo-700 transition-all duration-200 shadow-lg hover:shadow-xl transform hover:-translate-y-0.5 text-base md:text-xs md:text-sm"
+                      onClick={async () => { 
+                        if (await validateStep(1)) { 
+                          await saveProfileData(); 
+                          setCurrentStep(2); 
+                          scrollToCheckoutForm();
+                        } 
+                      }} 
+                      className={withCursorPointer("w-full md:w-auto px-6 md:px-8 py-3 md:py-4 bg-gradient-to-r from-blue-600 to-indigo-600 text-white font-semibold rounded-xl hover:from-blue-700 hover:to-indigo-700 transition-all duration-200 shadow-lg hover:shadow-xl transform hover:-translate-y-0.5 text-base md:text-xs md:text-sm")}
                     >
                       Weiter
                       <svg className="w-5 h-5 ml-2 inline" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1130,8 +1164,8 @@ export default function CheckoutClient({ initialIsLoggedIn, initialFormData, ini
 
                   <div className="flex flex-col md:flex-row justify-between pt-4 md:pt-6 gap-3 md:gap-0 min-w-0">
                     <button
-                      onClick={() => setCurrentStep(1)}
-                      className="w-full md:w-auto px-6 py-3 bg-slate-600 text-white font-semibold rounded-xl hover:bg-slate-700 transition-all duration-200 text-base md:text-xs md:text-sm"
+                      onClick={() => { setCurrentStep(1); scrollToCheckoutForm(); }}
+                      className={withCursorPointer("w-full md:w-auto px-6 py-3 bg-slate-600 text-white font-semibold rounded-xl hover:bg-slate-700 transition-all duration-200 text-base md:text-xs md:text-sm")}
                     >
                       <svg className="w-5 h-5 mr-2 inline" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
@@ -1139,8 +1173,8 @@ export default function CheckoutClient({ initialIsLoggedIn, initialFormData, ini
                       Zurück
                     </button>
                     <button 
-                      onClick={async () => { if (await validateStep(2)) { await saveProfileData(); setCurrentStep(3); } }} 
-                      className="w-full md:w-auto px-6 md:px-8 py-3 md:py-4 bg-gradient-to-r from-blue-600 to-indigo-600 text-white font-semibold rounded-xl hover:from-blue-700 hover:to-indigo-700 transition-all duration-200 shadow-lg hover:shadow-xl transform hover:-translate-y-0.5 text-base md:text-xs md:text-sm"
+                      onClick={async () => { if (await validateStep(2)) { await saveProfileData(); setCurrentStep(3); scrollToCheckoutForm(); } }} 
+                      className={withCursorPointer("w-full md:w-auto px-6 md:px-8 py-3 md:py-4 bg-gradient-to-r from-blue-600 to-indigo-600 text-white font-semibold rounded-xl hover:from-blue-700 hover:to-indigo-700 transition-all duration-200 shadow-lg hover:shadow-xl transform hover:-translate-y-0.5 text-base md:text-xs md:text-sm")}
                     >
                       Weiter
                       <svg className="w-5 h-5 ml-2 inline" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1169,7 +1203,7 @@ export default function CheckoutClient({ initialIsLoggedIn, initialFormData, ini
                   </div>
 
                   <div className="bg-gradient-to-r from-blue-50 to-indigo-50 rounded-xl p-6 border border-blue-200">
-                    <label className="flex items-center cursor-pointer">
+                    <label className={withCursorPointer("flex items-center")}>
                       <input
                         type="checkbox"
                         checked={useSameAddress}
@@ -1413,8 +1447,8 @@ export default function CheckoutClient({ initialIsLoggedIn, initialFormData, ini
 
                   <div className="flex flex-col md:flex-row justify-between pt-4 md:pt-6 gap-3 md:gap-0 min-w-0">
                     <button
-                      onClick={() => setCurrentStep(2)}
-                      className="w-full md:w-auto px-6 py-3 bg-slate-600 text-white font-semibold rounded-xl hover:bg-slate-700 transition-all duration-200 text-base md:text-xs md:text-sm"
+                      onClick={() => { setCurrentStep(2); scrollToCheckoutForm(); }}
+                      className={withCursorPointer("w-full md:w-auto px-6 py-3 bg-slate-600 text-white font-semibold rounded-xl hover:bg-slate-700 transition-all duration-200 text-base md:text-xs md:text-sm")}
                     >
                       <svg className="w-5 h-5 mr-2 inline" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
@@ -1422,8 +1456,8 @@ export default function CheckoutClient({ initialIsLoggedIn, initialFormData, ini
                       Zurück
                     </button>
                     <button 
-                      onClick={async () => { if (await validateStep(3)) { await saveProfileData(); setCurrentStep(4); } }} 
-                      className="w-full md:w-auto px-6 md:px-8 py-3 md:py-4 bg-gradient-to-r from-blue-600 to-indigo-600 text-white font-semibold rounded-xl hover:from-blue-700 hover:to-indigo-700 transition-all duration-200 shadow-lg hover:shadow-xl transform hover:-translate-y-0.5 text-base md:text-xs md:text-sm"
+                      onClick={async () => { if (await validateStep(3)) { await saveProfileData(); setCurrentStep(4); scrollToCheckoutForm(); } }} 
+                      className={withCursorPointer("w-full md:w-auto px-6 md:px-8 py-3 md:py-4 bg-gradient-to-r from-blue-600 to-indigo-600 text-white font-semibold rounded-xl hover:from-blue-700 hover:to-indigo-700 transition-all duration-200 shadow-lg hover:shadow-xl transform hover:-translate-y-0.5 text-base md:text-xs md:text-sm")}
                     >
                       Weiter
                       <svg className="w-5 h-5 ml-2 inline" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1452,7 +1486,7 @@ export default function CheckoutClient({ initialIsLoggedIn, initialFormData, ini
                   </div>
 
                   <div className="space-y-4">
-                    <div className={`flex items-center p-6 border-2 rounded-xl transition-all duration-200 cursor-pointer ${
+                    <div className={`${withCursorPointer("flex items-center p-6 border-2 rounded-xl transition-all duration-200")} ${
                       formData.paymentMethod === 'card' 
                         ? 'border-blue-500 bg-blue-50/50 shadow-lg' 
                         : 'border-slate-200 hover:border-slate-300 hover:shadow-md'
@@ -1466,7 +1500,7 @@ export default function CheckoutClient({ initialIsLoggedIn, initialFormData, ini
                         onChange={(e) => handleInputChange('paymentMethod', e.target.value)} 
                         className="w-5 h-5 text-blue-600 border-2 border-blue-300 focus:ring-blue-500 focus:ring-2" 
                       />
-                      <label htmlFor="card" className="ml-4 flex items-center cursor-pointer flex-1">
+                      <label htmlFor="card" className={withCursorPointer("ml-4 flex items-center flex-1")}>
                         <div className="w-12 h-12 bg-gradient-to-r from-blue-500 to-indigo-500 rounded-lg flex items-center justify-center mr-4">
                           <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" />
@@ -1486,7 +1520,7 @@ export default function CheckoutClient({ initialIsLoggedIn, initialFormData, ini
                       </label>
                     </div>
 
-                    <div className={`flex items-center p-6 border-2 rounded-xl transition-all duration-200 cursor-pointer ${
+                    <div className={`${withCursorPointer("flex items-center p-6 border-2 rounded-xl transition-all duration-200")} ${
                       formData.paymentMethod === 'paypal' 
                         ? 'border-blue-500 bg-blue-50/50 shadow-lg' 
                         : 'border-slate-200 hover:border-slate-300 hover:shadow-md'
@@ -1500,7 +1534,7 @@ export default function CheckoutClient({ initialIsLoggedIn, initialFormData, ini
                         onChange={(e) => handleInputChange('paymentMethod', e.target.value)} 
                         className="w-5 h-5 text-blue-600 border-2 border-blue-300 focus:ring-blue-500 focus:ring-2" 
                       />
-                      <label htmlFor="paypal" className="ml-4 flex items-center cursor-pointer flex-1">
+                      <label htmlFor="paypal" className={withCursorPointer("ml-4 flex items-center flex-1")}>
                         <div className="w-12 h-12 bg-gradient-to-r from-blue-500 to-blue-600 rounded-lg flex items-center justify-center mr-4">
                           <svg className="w-6 h-6 text-white" fill="currentColor" viewBox="0 0 24 24">
                             <path d="M7.076 21.337H2.47a.641.641 0 0 1-.633-.74L4.944.901C5.026.382 5.474 0 5.998 0h7.46c2.57 0 4.578.543 5.69 1.81 1.01 1.15 1.304 2.42 1.012 4.287-.023.143-.047.288-.077.437-.983 5.05-4.349 6.797-8.647 6.797h-2.19c-.524 0-.968.382-1.05.9l-1.12 7.106zm14.146-14.42a3.35 3.35 0 0 0-.543-.7c-.13-.12-.27-.24-.42-.35a3.35 3.35 0 0 0-.54-.35c-.18-.1-.37-.19-.56-.27a3.35 3.35 0 0 0-.57-.2c-.19-.06-.38-.11-.57-.15a3.35 3.35 0 0 0-.58-.08c-.19-.03-.38-.05-.57-.05H9.18c-.52 0-.96.38-1.05.9L6.01 20.597h4.66c.52 0 .96-.38 1.05-.9l1.12-7.106h2.19c4.298 0 7.664-1.747 8.647-6.797.03-.149.054-.294.077-.437.292-1.867-.002-3.137-1.012-4.287z"/>
@@ -1514,7 +1548,7 @@ export default function CheckoutClient({ initialIsLoggedIn, initialFormData, ini
                       </label>
                     </div>
 
-                    <div className={`flex items-center p-6 border-2 rounded-xl transition-all duration-200 cursor-pointer ${
+                    <div className={`${withCursorPointer("flex items-center p-6 border-2 rounded-xl transition-all duration-200")} ${
                       formData.paymentMethod === 'bank' 
                         ? 'border-blue-500 bg-blue-50/50 shadow-lg' 
                         : 'border-slate-200 hover:border-slate-300 hover:shadow-md'
@@ -1528,7 +1562,7 @@ export default function CheckoutClient({ initialIsLoggedIn, initialFormData, ini
                         onChange={(e) => handleInputChange('paymentMethod', e.target.value)} 
                         className="w-5 h-5 text-blue-600 border-2 border-blue-300 focus:ring-blue-500 focus:ring-2" 
                       />
-                      <label htmlFor="bank" className="ml-4 flex items-center cursor-pointer flex-1">
+                      <label htmlFor="bank" className={withCursorPointer("ml-4 flex items-center flex-1")}>
                         <div className="w-12 h-12 bg-gradient-to-r from-slate-500 to-slate-600 rounded-lg flex items-center justify-center mr-4">
                           <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
@@ -1572,8 +1606,8 @@ export default function CheckoutClient({ initialIsLoggedIn, initialFormData, ini
 
                   <div className="flex flex-col md:flex-row justify-between pt-4 md:pt-6 gap-3 md:gap-0 min-w-0">
                     <button
-                      onClick={() => setCurrentStep(3)}
-                      className="w-full md:w-auto px-6 py-3 bg-slate-600 text-white font-semibold rounded-xl hover:bg-slate-700 transition-all duration-200 text-base md:text-xs md:text-sm"
+                      onClick={() => { setCurrentStep(3); scrollToCheckoutForm(); }}
+                      className={withCursorPointer("w-full md:w-auto px-6 py-3 bg-slate-600 text-white font-semibold rounded-xl hover:bg-slate-700 transition-all duration-200 text-base md:text-xs md:text-sm")}
                     >
                       <svg className="w-5 h-5 mr-2 inline" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
@@ -1581,8 +1615,8 @@ export default function CheckoutClient({ initialIsLoggedIn, initialFormData, ini
                       Zurück
                     </button>
                     <button 
-                      onClick={async () => { if (await validateStep(4)) { await saveProfileData(); setCurrentStep(5); } }}
-                      className="w-full md:w-auto px-6 md:px-8 py-3 md:py-4 bg-gradient-to-r from-blue-600 to-indigo-600 text-white font-semibold rounded-xl hover:from-blue-700 hover:to-indigo-700 transition-all duration-200 shadow-lg hover:shadow-xl transform hover:-translate-y-0.5 text-base md:text-xs md:text-sm"
+                      onClick={async () => { if (await validateStep(4)) { await saveProfileData(); setCurrentStep(5); scrollToCheckoutForm(); } }}
+                      className={withCursorPointer("w-full md:w-auto px-6 md:px-8 py-3 md:py-4 bg-gradient-to-r from-blue-600 to-indigo-600 text-white font-semibold rounded-xl hover:from-blue-700 hover:to-indigo-700 transition-all duration-200 shadow-lg hover:shadow-xl transform hover:-translate-y-0.5 text-base md:text-xs md:text-sm")}
                     >
                       Zur Zusammenfassung
                       <svg className="w-5 h-5 ml-2 inline" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1610,14 +1644,14 @@ export default function CheckoutClient({ initialIsLoggedIn, initialFormData, ini
 
                   {/* Kontaktdaten */}
                   <div className="bg-gradient-to-r from-slate-50 to-blue-50 rounded-xl p-6 border border-slate-200">
-                    <h3 className="font-semibold text-slate-800 mb-4 flex items-center">
-                      <div className="w-8 h-8 bg-blue-100 rounded-lg flex items-center justify-center mr-3">
-                        <svg className="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
-                        </svg>
-                      </div>
-                      Kontaktdaten
-                    </h3>
+                     <h3 className="font-semibold text-slate-800 mb-4 flex items-center">
+                       <div className="w-8 h-8 bg-blue-100 rounded-lg flex items-center justify-center mr-3">
+                         <svg className="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                         </svg>
+                       </div>
+                       Kontaktdaten
+                     </h3>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs md:text-sm">
                       <div>
                         <span className="text-slate-600 font-medium">Name:</span>
@@ -1629,8 +1663,8 @@ export default function CheckoutClient({ initialIsLoggedIn, initialFormData, ini
                       </div>
                     </div>
                     <button 
-                      onClick={() => setCurrentStep(1)} 
-                      className="mt-4 text-xs md:text-sm text-blue-600 hover:text-blue-700 font-medium underline"
+                      onClick={() => { setCurrentStep(1); scrollToCheckoutForm(); }} 
+                      className={withCursorPointer("mt-4 text-xs md:text-sm text-blue-600 hover:text-blue-700 font-medium underline")}
                     >
                       Bearbeiten
                     </button>
@@ -1639,15 +1673,15 @@ export default function CheckoutClient({ initialIsLoggedIn, initialFormData, ini
                   {/* Adressen */}
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-3 md:gap-6 min-w-0">
                     <div className="bg-gradient-to-r from-slate-50 to-blue-50 rounded-xl p-6 border border-slate-200">
-                      <h3 className="font-semibold text-slate-800 mb-4 flex items-center">
-                        <div className="w-8 h-8 bg-blue-100 rounded-lg flex items-center justify-center mr-3">
-                          <svg className="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
-                          </svg>
-                        </div>
-                        Lieferadresse
-                      </h3>
+                       <h3 className="font-semibold text-slate-800 mb-4 flex items-center">
+                         <div className="w-8 h-8 bg-blue-100 rounded-lg flex items-center justify-center mr-3">
+                           <svg className="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+                           </svg>
+                         </div>
+                         Lieferadresse
+                       </h3>
                       <div className="text-xs md:text-sm">
                         {formData.shippingAddress.company && (
                           <p className="font-semibold text-slate-800">{formData.shippingAddress.company}</p>
@@ -1660,8 +1694,8 @@ export default function CheckoutClient({ initialIsLoggedIn, initialFormData, ini
                         <p className="text-slate-600">{formData.shippingAddress.country}</p>
                       </div>
                       <button 
-                        onClick={() => setCurrentStep(2)} 
-                        className="mt-4 text-xs md:text-sm text-blue-600 hover:text-blue-700 font-medium underline"
+                        onClick={() => { setCurrentStep(2); scrollToCheckoutForm(); }} 
+                        className={withCursorPointer("mt-4 text-xs md:text-sm text-blue-600 hover:text-blue-700 font-medium underline")}
                       >
                         Bearbeiten
                       </button>
@@ -1703,8 +1737,8 @@ export default function CheckoutClient({ initialIsLoggedIn, initialFormData, ini
                         </div>
                       )}
                       <button 
-                        onClick={() => setCurrentStep(3)} 
-                        className="mt-4 text-xs md:text-sm text-blue-600 hover:text-blue-700 font-medium underline"
+                        onClick={() => { setCurrentStep(3); scrollToCheckoutForm(); }} 
+                        className={withCursorPointer("mt-4 text-xs md:text-sm text-blue-600 hover:text-blue-700 font-medium underline")}
                       >
                         Bearbeiten
                       </button>
@@ -1729,8 +1763,8 @@ export default function CheckoutClient({ initialIsLoggedIn, initialFormData, ini
                       </p>
                     </div>
                     <button 
-                      onClick={() => setCurrentStep(4)} 
-                      className="mt-4 text-xs md:text-sm text-blue-600 hover:text-blue-700 font-medium underline"
+                      onClick={() => { setCurrentStep(4); scrollToCheckoutForm(); }} 
+                      className={withCursorPointer("mt-4 text-xs md:text-sm text-blue-600 hover:text-blue-700 font-medium underline")}
                     >
                       Bearbeiten
                     </button>
@@ -1752,7 +1786,7 @@ export default function CheckoutClient({ initialIsLoggedIn, initialFormData, ini
 
                   {/* AGB und Datenschutz Checkboxes */}
                   <div className="space-y-4 p-6 bg-gradient-to-r from-gray-50 to-slate-50 rounded-xl border border-gray-200">
-                    <label className="flex items-start space-x-3 cursor-pointer">
+                    <label className={withCursorPointer("flex items-start space-x-3")}>
                       <input 
                         type="checkbox" 
                         checked={agbAccepted}
@@ -1773,7 +1807,7 @@ export default function CheckoutClient({ initialIsLoggedIn, initialFormData, ini
                       </span>
                     </label>
                     
-                    <label className="flex items-start space-x-3 cursor-pointer">
+                    <label className={withCursorPointer("flex items-start space-x-3")}>
                       <input 
                         type="checkbox" 
                         checked={privacyAccepted}
@@ -1795,7 +1829,7 @@ export default function CheckoutClient({ initialIsLoggedIn, initialFormData, ini
                     </label>
                     
                     {!user?.newsletterSubscribed && (
-                      <label className="flex items-start space-x-3 cursor-pointer">
+                      <label className={withCursorPointer("flex items-start space-x-3")}>
                         <input 
                           type="checkbox" 
                           checked={newsletterSubscribed}
@@ -1816,8 +1850,8 @@ export default function CheckoutClient({ initialIsLoggedIn, initialFormData, ini
 
                   <div className="flex flex-col md:flex-row justify-between pt-4 md:pt-6 gap-3 md:gap-0 min-w-0">
                     <button
-                      onClick={() => setCurrentStep(4)}
-                      className="w-full md:w-auto px-6 py-3 bg-slate-600 text-white font-semibold rounded-xl hover:bg-slate-700 transition-all duration-200 text-base md:text-xs md:text-sm"
+                      onClick={() => { setCurrentStep(4); scrollToCheckoutForm(); }}
+                      className={withCursorPointer("w-full md:w-auto px-6 py-3 bg-slate-600 text-white font-semibold rounded-xl hover:bg-slate-700 transition-all duration-200 text-base md:text-xs md:text-sm")}
                     >
                       <svg className="w-5 h-5 mr-2 inline" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
@@ -1830,7 +1864,7 @@ export default function CheckoutClient({ initialIsLoggedIn, initialFormData, ini
                       className={`w-full md:w-auto px-6 md:px-8 py-3 md:py-4 font-semibold rounded-xl transition-all duration-200 text-base md:text-xs md:text-sm ${
                         isProcessing || !agbAccepted || !privacyAccepted
                           ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
-                          : 'bg-gradient-to-r from-green-600 to-emerald-600 text-white hover:from-green-700 hover:to-emerald-700 shadow-lg hover:shadow-xl transform hover:-translate-y-0.5'
+                          : withCursorPointer('bg-gradient-to-r from-green-600 to-emerald-600 text-white hover:from-green-700 hover:to-emerald-700 shadow-lg hover:shadow-xl transform hover:-translate-y-0.5')
                       }`}
                     >
                       {isProcessing ? (
@@ -1966,7 +2000,7 @@ export default function CheckoutClient({ initialIsLoggedIn, initialFormData, ini
                               window.addEventListener('message', onMessage);
                             }
                           }}
-                          className="text-blue-600 hover:text-blue-800 underline bg-transparent border-none p-0 cursor-pointer"
+                          className={withCursorPointer("text-blue-600 hover:text-blue-800 underline bg-transparent border-none p-0")}
                         >
                           Melde dich an
                         </button> oder 
@@ -2012,7 +2046,7 @@ export default function CheckoutClient({ initialIsLoggedIn, initialFormData, ini
                               window.addEventListener('message', onMessage);
                             }
                           }}
-                          className="text-blue-600 hover:text-blue-800 underline bg-transparent border-none p-0 cursor-pointer ml-1"
+                          className={withCursorPointer("text-blue-600 hover:text-blue-800 underline bg-transparent border-none p-0 ml-1")}
                         >
                           erstelle ein Konto
                         </button> um Bonuspunkte für diese Bestellung zu erhalten
@@ -2030,7 +2064,7 @@ export default function CheckoutClient({ initialIsLoggedIn, initialFormData, ini
                           <p className="text-xs md:text-sm text-yellow-800 font-medium">Verfügbare Bonuspunkte: {availablePoints}</p>
                         </div>
                       </div>
-                      <label className="flex items-center cursor-pointer ml-3">
+                      <label className={withCursorPointer("flex items-center ml-3")}>
                         <input
                           type="checkbox"
                           checked={redeemPoints}

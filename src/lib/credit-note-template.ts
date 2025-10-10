@@ -30,7 +30,17 @@ export async function generateCreditNotePDF(
   
   // Calculate final total after all discounts
   const originalSubtotal = acceptedItems.reduce((sum, it) => sum + (it.total / 100), 0);
-  const finalTotal = originalSubtotal - (totalDiscountCents / 100) - (totalBonusPointsDiscountCents / 100);
+  
+  // Check if all items are being returned (for shipping refund)
+  const totalSelectedQuantity = acceptedItems.reduce((sum, it) => sum + it.quantity, 0);
+  const totalOrderQuantity = order.items.reduce((sum: number, it: any) => sum + it.quantity, 0);
+  const isFullReturn = totalSelectedQuantity >= totalOrderQuantity;
+  
+  // Add shipping costs if all items are being returned
+  const shippingCents = Number(order.shippingCosts || 0);
+  const shippingAmount = isFullReturn ? (shippingCents / 100) : 0;
+  
+  const finalTotal = originalSubtotal - (totalDiscountCents / 100) - (totalBonusPointsDiscountCents / 100) + shippingAmount;
 
   // Clone order and override fields to reflect a credit note using the same layout
   const creditOrder = {
@@ -43,11 +53,11 @@ export async function generateCreditNotePDF(
     })),
     // Subtotal and total are expressed in euros within invoice template computations
     subtotal: originalSubtotal, // Show original subtotal
-    total: finalTotal, // Show final total after discount
+    total: finalTotal, // Show final total after discount and including shipping
     discountCents: totalDiscountCents, // Pass discount for display
     bonusPointsRedeemed: order.bonusPointsRedeemed, // Pass bonus points for display
     pointsDiscountOverrideCents: totalBonusPointsDiscountCents, // Prorated bonus points discount for display
-    shippingCosts: null, // Remove shipping costs from credit note
+    shippingCosts: isFullReturn ? shippingCents : 0, // Include shipping costs only for full returns
   } as any;
 
   // Use the invoice template with custom title and legal note
