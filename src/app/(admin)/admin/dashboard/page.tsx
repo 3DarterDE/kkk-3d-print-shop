@@ -234,7 +234,7 @@ export default function DashboardPage() {
 
             {/* Bonus Points Timer */}
             <Link
-              href="/admin/bonus-timer"
+              href="/admin/bonus-point-timers"
               className="group bg-gradient-to-br from-pink-50 to-pink-100 rounded-lg p-6 border border-pink-200 hover:border-pink-300 transition-all duration-200 hover:shadow-md"
             >
               <div className="flex items-center mb-3">
