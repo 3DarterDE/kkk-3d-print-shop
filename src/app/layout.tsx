@@ -11,6 +11,7 @@ import CartValidationProvider from "../components/CartValidationProvider";
 import VerificationRedirect from "@/components/VerificationRedirect";
 import ScrollToTopButton from "@/components/ScrollToTopButton";
 import { UserDataProvider } from "@/lib/contexts/UserDataContext";
+import { ShopDataProvider } from "@/lib/contexts/ShopDataContext";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -53,16 +54,18 @@ export default function RootLayout({
       >
         <CartValidationProvider>
           <UserDataProvider>
-            <VerificationRedirect />
-            <Navbar />
-            <CategoryNavigation />
-            
-            <MobileSearchBar />
-            <MobileSpacer />
-            
-            <main className="pt-16 md:pt-16">{children}</main>
-            <Footer />
-            <ScrollToTopButton />
+            <ShopDataProvider>
+              <VerificationRedirect />
+              <Navbar />
+              <CategoryNavigation />
+              
+              <MobileSearchBar />
+              <MobileSpacer />
+              
+              <main className="pt-16 md:pt-16">{children}</main>
+              <Footer />
+              <ScrollToTopButton />
+            </ShopDataProvider>
           </UserDataProvider>
         </CartValidationProvider>
       </body>

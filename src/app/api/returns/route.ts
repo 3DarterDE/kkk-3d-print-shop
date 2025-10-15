@@ -35,8 +35,8 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Bestellung nicht gefunden' }, { status: 404 });
     }
 
-    if (order.status !== 'delivered') {
-      return NextResponse.json({ error: 'Rücksendeanfrage ist nur für gelieferte Bestellungen möglich' }, { status: 400 });
+    if (order.status !== 'delivered' && order.status !== 'partially_returned' && order.status !== 'return_requested') {
+      return NextResponse.json({ error: 'Rücksendeanfrage ist nur für gelieferte oder teilweise zurückgesendete Bestellungen möglich' }, { status: 400 });
     }
 
     // 30-tage nach Lieferung
@@ -49,6 +49,32 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Rücksendung nur innerhalb von 30 Tagen nach Lieferung' }, { status: 400 });
     }
 
+    // Get all previously returned items for this order
+    const previousReturns = await ReturnRequest.find({ 
+      orderId: order._id.toString(), 
+      status: { $in: ['completed', 'received', 'processing'] }
+    }).lean();
+    
+    // Calculate already returned quantities per item
+    const alreadyReturnedMap = new Map<string, number>();
+    const alreadyRequestedMap = new Map<string, number>();
+    
+    previousReturns.forEach(returnDoc => {
+      returnDoc.items.forEach((item: any) => {
+        const signature = `${item.productId}|${item.variations ? Object.entries(item.variations).sort(([a],[b]) => a.localeCompare(b)).map(([k,v]) => `${k}:${v}`).join(',') : ''}`;
+        
+        if (returnDoc.status === 'completed' && item.accepted) {
+          // Already completed and accepted
+          const currentQty = alreadyReturnedMap.get(signature) || 0;
+          alreadyReturnedMap.set(signature, currentQty + item.quantity);
+        } else if (returnDoc.status === 'received' || returnDoc.status === 'processing') {
+          // Already requested but not yet processed
+          const currentQty = alreadyRequestedMap.get(signature) || 0;
+          alreadyRequestedMap.set(signature, currentQty + item.quantity);
+        }
+      });
+    });
+
     // Map requested items to order items to capture full data (name, image, price, variations)
     // Build a lookup that considers productId + variations signature
     const signature = (it: any) => `${it.productId}|${it.variations ? Object.entries(it.variations).sort(([a],[b]) => a.localeCompare(b)).map(([k,v]) => `${k}:${v}`).join(',') : ''}`;
@@ -59,9 +85,17 @@ export async function POST(request: NextRequest) {
       const key = signature(reqItem);
       const orderItem = orderItemMap.get(key);
       if (!orderItem) continue;
-      const maxQty = orderItem.quantity;
-      const qty = Math.max(0, Math.min(Number(reqItem.quantity) || 0, maxQty));
+      
+      // Calculate available quantity (original - already returned - already requested)
+      const alreadyReturned = alreadyReturnedMap.get(key) || 0;
+      const alreadyRequested = alreadyRequestedMap.get(key) || 0;
+      const availableQty = orderItem.quantity - alreadyReturned - alreadyRequested;
+      
+      if (availableQty <= 0) continue; // Item already fully returned or requested
+      
+      const qty = Math.max(0, Math.min(Number(reqItem.quantity) || 0, availableQty));
       if (qty <= 0) continue;
+      
       normalizedItems.push({
         productId: orderItem.productId,
         name: orderItem.name,
@@ -94,8 +128,10 @@ export async function POST(request: NextRequest) {
 
     await returnRequest.save();
 
-    // Update order status -> return_requested
-    await Order.findByIdAndUpdate(order._id, { $set: { status: 'return_requested' } });
+    // Update order status -> return_requested (only if not already partially_returned)
+    if (order.status !== 'partially_returned') {
+      await Order.findByIdAndUpdate(order._id, { $set: { status: 'return_requested' } });
+    }
 
     // Send confirmation email to customer
     try {

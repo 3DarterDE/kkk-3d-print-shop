@@ -25,7 +25,12 @@ export async function GET(request: NextRequest) {
     }
     
     const productFilters = await ProductFilterModel.find(query);
-    return NextResponse.json(productFilters);
+    const result = NextResponse.json(productFilters);
+
+    // Cache for 60 seconds
+    result.headers.set('Cache-Control', 'public, max-age=60');
+
+    return result;
   } catch (error) {
     console.error('Error fetching product filters:', error);
     return NextResponse.json({ error: 'Failed to fetch product filters' }, { status: 500 });

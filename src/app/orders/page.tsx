@@ -1,5 +1,5 @@
 "use client";
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useRef } from "react";
 import Link from "next/link";
 import { useUserData } from "@/lib/contexts/UserDataContext";
 import { withCursorPointer } from '@/lib/cursor-utils';
@@ -7,7 +7,7 @@ import { withCursorPointer } from '@/lib/cursor-utils';
 type Order = {
   _id: string;
   orderNumber: string;
-  status: 'pending' | 'processing' | 'shipped' | 'delivered' | 'cancelled' | 'return_requested' | 'return_completed';
+  status: 'pending' | 'processing' | 'shipped' | 'delivered' | 'cancelled' | 'return_requested' | 'partially_returned' | 'return_completed';
   total: number;
   items: {
     productId: string;
@@ -17,6 +17,14 @@ type Order = {
     image?: string;
     variations?: Record<string, string>;
   }[];
+  returnedItems?: Array<{
+    productId: string;
+    name: string;
+    quantity: number;
+    variations?: Record<string, string>;
+    returnRequestId: string;
+    returnedAt: Date;
+  }>; // Track already returned items
   shippingAddress: {
     firstName?: string;
     lastName?: string;
@@ -72,14 +80,53 @@ export default function OrdersPage() {
   const [reviews, setReviews] = useState<Record<string, { rating: number; title: string; comment: string; isAnonymous: boolean; selected: boolean }>>({});
   const [existingReviews, setExistingReviews] = useState<Record<string, any>>({});
   const [returnedItems, setReturnedItems] = useState<Record<string, any[]>>({});
+  const [pendingReturns, setPendingReturns] = useState<Record<string, Record<string, number>>>({});
+  const [pendingReturnsLoaded, setPendingReturnsLoaded] = useState<Set<string>>(new Set());
+  const [creditNoteDownloading, setCreditNoteDownloading] = useState<string | null>(null);
+  const [downloadAttempts, setDownloadAttempts] = useState<Record<string, { count: number; resetTime: number }>>({});
+  
+  // Refs to track if data has been loaded to prevent unnecessary API calls
+  const reviewsLoadedRef = useRef(false);
+  const returnedItemsLoadedRef = useRef(false);
+  const lastOrdersHashRef = useRef<string>('');
+  
+  // Simple cache for API responses
+  const apiCacheRef = useRef<Map<string, { data: any; timestamp: number }>>(new Map());
+  
+  const getCachedData = (key: string, maxAge: number = 30000) => { // 30 seconds default
+    const cached = apiCacheRef.current.get(key);
+    if (cached && Date.now() - cached.timestamp < maxAge) {
+      return cached.data;
+    }
+    return null;
+  };
+  
+  const setCachedData = (key: string, data: any) => {
+    apiCacheRef.current.set(key, { data, timestamp: Date.now() });
+  };
 
   // Load existing reviews for orders
   useEffect(() => {
     const loadExistingReviews = async () => {
-      if (orders.length === 0) return;
+      if (orders.length === 0 || reviewsLoadedRef.current) return;
       
       try {
         const orderIds = orders.map(o => o._id);
+        const ordersHash = orderIds.sort().join(',');
+        
+        // Only load if orders have actually changed
+        if (lastOrdersHashRef.current === ordersHash) return;
+        
+        const cacheKey = `reviews-${ordersHash}`;
+        const cachedData = getCachedData(cacheKey);
+        
+        if (cachedData) {
+          setExistingReviews(cachedData);
+          reviewsLoadedRef.current = true;
+          lastOrdersHashRef.current = ordersHash;
+          return;
+        }
+        
         const response = await fetch(`/api/reviews?orderId=${orderIds.join(',')}`);
         if (response.ok) {
           const data = await response.json();
@@ -89,6 +136,9 @@ export default function OrdersPage() {
             reviewMap[review.orderId].push(review);
           });
           setExistingReviews(reviewMap);
+          setCachedData(cacheKey, reviewMap);
+          reviewsLoadedRef.current = true;
+          lastOrdersHashRef.current = ordersHash;
         }
       } catch (error) {
         console.error('Error loading existing reviews:', error);
@@ -101,11 +151,25 @@ export default function OrdersPage() {
   // Load returned items for orders
   useEffect(() => {
     const loadReturnedItems = async () => {
+      if (returnedItemsLoadedRef.current) return;
+      
       try {
+        const cacheKey = 'returned-items';
+        const cachedData = getCachedData(cacheKey);
+        
+        if (cachedData) {
+          setReturnedItems(cachedData);
+          returnedItemsLoadedRef.current = true;
+          return;
+        }
+        
         const response = await fetch('/api/returns/user');
         if (response.ok) {
           const data = await response.json();
-          setReturnedItems(data.returnedItemsByOrder || {});
+          const returnedItemsData = data.returnedItemsByOrder || {};
+          setReturnedItems(returnedItemsData);
+          setCachedData(cacheKey, returnedItemsData);
+          returnedItemsLoadedRef.current = true;
         }
       } catch (error) {
         console.error('Error loading returned items:', error);
@@ -114,6 +178,47 @@ export default function OrdersPage() {
 
     loadReturnedItems();
   }, []);
+
+  // Load pending returns for orders - BATCH VERSION
+  useEffect(() => {
+    const loadPendingReturns = async () => {
+      if (orders.length === 0) return;
+      
+      // Filter orders that need pending returns data
+      const ordersNeedingPendingData = orders.filter(order => 
+        ((order as any).status === 'return_requested' || (order as any).status === 'partially_returned') &&
+        !pendingReturnsLoaded.has(order._id)
+      );
+      
+      if (ordersNeedingPendingData.length === 0) return;
+      
+      try {
+        const orderIds = ordersNeedingPendingData.map(o => o._id).join(',');
+        const cacheKey = `pending-batch-${orderIds}`;
+        const cachedData = getCachedData(cacheKey, 10000);
+        
+        if (cachedData) {
+          setPendingReturns(prev => ({ ...prev, ...cachedData }));
+          setPendingReturnsLoaded(prev => new Set([...prev, ...ordersNeedingPendingData.map(o => o._id)]));
+          return;
+        }
+        
+        const response = await fetch(`/api/returns/pending/batch?orderIds=${orderIds}`);
+        if (response.ok) {
+          const data = await response.json();
+          const pendingData = data.pendingReturnsByOrder || {};
+          
+          setCachedData(cacheKey, pendingData);
+          setPendingReturns(prev => ({ ...prev, ...pendingData }));
+          setPendingReturnsLoaded(prev => new Set([...prev, ...ordersNeedingPendingData.map(o => o._id)]));
+        }
+      } catch (error) {
+        console.error('Error loading batch pending returns:', error);
+      }
+    };
+
+    loadPendingReturns();
+  }, [orders, pendingReturnsLoaded]);
 
   // Initialize reviews when review modal opens
   useEffect(() => {
@@ -226,6 +331,14 @@ export default function OrdersPage() {
           icon: '✅',
           description: 'Rücksendung ist abgeschlossen. Rückerstattung wird/ist veranlasst.'
         };
+      case 'partially_returned':
+        return {
+          text: 'Teilweise\nzurückgesendet',
+          color: 'text-orange-700',
+          bg: 'bg-orange-50',
+          icon: '↩️',
+          description: 'Einige Artikel wurden zurückgesendet. Weitere Rücksendungen möglich.'
+        };
       default:
         return {
           text: status,
@@ -237,24 +350,86 @@ export default function OrdersPage() {
     }
   };
 
-  // Helper function to check if an item was returned
+  // Helper function to check if an item was returned (any quantity)
   const isItemReturned = (orderId: string, item: any) => {
-    const orderReturnedItems = returnedItems[orderId] || [];
-    return orderReturnedItems.some(returnedItem => 
-      returnedItem.productId === item.productId &&
-      JSON.stringify(returnedItem.variations || {}) === JSON.stringify(item.variations || {})
-    );
+    const order = orders.find(o => o._id === orderId);
+    if (!order) return false;
+    
+    // Use the same logic as isItemAvailableForReturn for consistency
+    let alreadyReturnedQty = 0;
+    
+    // Check against returnedItems from the order (already completed returns) - this is the primary source
+    if ((order as any).returnedItems && (order as any).returnedItems.length > 0) {
+      (order as any).returnedItems.forEach((returnedItem: any) => {
+        if (returnedItem.productId === item.productId &&
+            JSON.stringify(returnedItem.variations || {}) === JSON.stringify(item.variations || {})) {
+          alreadyReturnedQty += returnedItem.quantity;
+        }
+      });
+    } else {
+      // Only use context returnedItems if order.returnedItems is not available (backward compatibility)
+      const orderReturnedItems = returnedItems[orderId] || [];
+      orderReturnedItems.forEach(returnedItem => {
+        if (returnedItem.productId === item.productId &&
+            JSON.stringify(returnedItem.variations || {}) === JSON.stringify(item.variations || {})) {
+          alreadyReturnedQty += returnedItem.quantity;
+        }
+      });
+    }
+    
+    return alreadyReturnedQty > 0;
+  };
+
+  // Helper function to check if an item is available for return (not already returned or requested)
+  const isItemAvailableForReturn = (order: any, item: any) => {
+    // Calculate total already returned quantity for this specific item
+    let alreadyReturnedQty = 0;
+    
+    // Check against returnedItems from the order (already completed returns) - this is the primary source
+    if ((order as any).returnedItems && (order as any).returnedItems.length > 0) {
+      (order as any).returnedItems.forEach((returnedItem: any) => {
+        if (returnedItem.productId === item.productId &&
+            JSON.stringify(returnedItem.variations || {}) === JSON.stringify(item.variations || {})) {
+          alreadyReturnedQty += returnedItem.quantity;
+        }
+      });
+    } else {
+      // Only use context returnedItems if order.returnedItems is not available (backward compatibility)
+      const orderReturnedItems = returnedItems[order._id] || [];
+      orderReturnedItems.forEach(returnedItem => {
+        if (returnedItem.productId === item.productId &&
+            JSON.stringify(returnedItem.variations || {}) === JSON.stringify(item.variations || {})) {
+          alreadyReturnedQty += returnedItem.quantity;
+        }
+      });
+    }
+    
+    // Check against pending returns (already requested but not yet processed)
+    const orderPendingReturns = pendingReturns[order._id] || {};
+    const itemSignature = `${item.productId}|${item.variations ? Object.entries(item.variations).sort(([a],[b]) => a.localeCompare(b)).map(([k,v]) => `${k}:${v}`).join(',') : ''}`;
+    const alreadyRequested = orderPendingReturns[itemSignature] || 0;
+    
+    // Calculate total unavailable quantity (returned + requested)
+    const totalUnavailableQty = alreadyReturnedQty + alreadyRequested;
+    
+    // Check if there's still available quantity
+    return item.quantity > totalUnavailableQty;
+  };
+
+  // Helper function to check if order has any available items for return
+  const hasAvailableItemsForReturn = (order: any) => {
+    return order.items.some((item: any) => isItemAvailableForReturn(order, item));
   };
 
   // Check if return is still possible (within 14 days of delivery)
   const canReturnOrder = (order: any) => {
-    // If return already requested, cannot return again
-    if (order.status === 'return_requested') {
+    // Allow returns for delivered, partially returned, and return_requested orders
+    if (order.status !== 'delivered' && order.status !== 'partially_returned' && order.status !== 'return_requested') {
       return false;
     }
     
-    // Only allow returns for delivered orders
-    if (order.status !== 'delivered') {
+    // Check if there are any available items for return
+    if (!hasAvailableItemsForReturn(order)) {
       return false;
     }
     
@@ -268,13 +443,19 @@ export default function OrdersPage() {
 
   // Get return status text
   const getReturnStatusText = (order: any) => {
-    if (order.status === 'return_requested') {
-      return 'Rücksendung bereits angefordert';
-    }
-    if (order.status === 'delivered') {
+    if (order.status === 'delivered' || (order as any).status === 'partially_returned' || order.status === 'return_requested') {
       if (canReturnOrder(order)) {
+        if (order.status === 'return_requested') {
+          return 'Weitere Artikel zurücksenden';
+        } else if ((order as any).status === 'partially_returned') {
+          return 'Weitere Artikel zurücksenden';
+        } else {
         return 'Artikel zurücksenden';
+        }
       } else {
+        if (!hasAvailableItemsForReturn(order)) {
+          return 'Alle Artikel bereits zurückgesendet';
+        }
         return 'Rücksendung (Frist abgelaufen)';
       }
     }
@@ -294,8 +475,46 @@ export default function OrdersPage() {
     }
   };
 
+  // Rate limiting function (5 downloads per minute)
+  const checkRateLimit = (orderKey: string): { allowed: boolean; remainingTime?: number } => {
+    const now = Date.now();
+    const attempts = downloadAttempts[orderKey];
+    
+    if (!attempts || now > attempts.resetTime) {
+      // Reset or first attempt
+      setDownloadAttempts(prev => ({
+        ...prev,
+        [orderKey]: { count: 1, resetTime: now + 60000 } // 1 minute from now
+      }));
+      return { allowed: true };
+    }
+    
+    if (attempts.count >= 5) {
+      const remainingTime = Math.ceil((attempts.resetTime - now) / 1000);
+      return { allowed: false, remainingTime };
+    }
+    
+    // Increment count
+    setDownloadAttempts(prev => ({
+      ...prev,
+      [orderKey]: { ...attempts, count: attempts.count + 1 }
+    }));
+    
+    return { allowed: true };
+  };
+
   const downloadCreditNote = async (orderKey: string) => {
+    if (creditNoteDownloading === orderKey) return; // Prevent multiple clicks
+    
+    // Check rate limit
+    const rateLimit = checkRateLimit(orderKey);
+    if (!rateLimit.allowed) {
+      alert(`Zu viele Downloads! Bitte warte ${rateLimit.remainingTime} Sekunden.`);
+      return;
+    }
+    
     try {
+      setCreditNoteDownloading(orderKey);
       const response = await fetch(`/api/orders/${orderKey}/credit-note`);
       
       if (!response.ok) {
@@ -323,10 +542,19 @@ export default function OrdersPage() {
     } catch (error) {
       console.error('Error downloading credit note:', error);
       alert('Fehler beim Herunterladen der Storno-Rechnung');
+    } finally {
+      setCreditNoteDownloading(null);
     }
   };
 
   const downloadInvoice = async (orderKey: string) => {
+    // Check rate limit
+    const rateLimit = checkRateLimit(orderKey);
+    if (!rateLimit.allowed) {
+      alert(`Zu viele Downloads! Bitte warte ${rateLimit.remainingTime} Sekunden.`);
+      return;
+    }
+    
     try {
       const response = await fetch(`/api/orders/${orderKey}/invoice`);
       
@@ -574,25 +802,41 @@ export default function OrdersPage() {
                                         <div className="bg-white rounded-lg p-4">
                                           <h4 className="font-semibold text-slate-800 mb-4">Aktionen</h4>
                                           <div className="flex flex-wrap gap-3">
-                                            {/* Credit Note Download Button - Only for completed returns */}
-                                            {order.status === 'return_completed' && (
+                                            {/* Credit Note Download Button - For completed and partially returned orders */}
+                                            {(order.status === 'return_completed' || (order as any).status === 'partially_returned') && (
                                               <button 
                                                 onClick={() => downloadCreditNote(order.orderNumber)}
-                                                className={withCursorPointer("px-4 py-2 text-sm font-medium rounded-lg transition-colors flex items-center gap-2 text-red-600 bg-red-50 hover:bg-red-100")}
+                                                disabled={creditNoteDownloading === order.orderNumber}
+                                                className={`px-4 py-2 text-sm font-medium rounded-lg transition-colors flex items-center gap-2 ${
+                                                  creditNoteDownloading === order.orderNumber
+                                                    ? 'text-gray-400 bg-gray-100 cursor-not-allowed'
+                                                    : withCursorPointer('text-red-600 bg-red-50 hover:bg-red-100')
+                                                }`}
                                               >
+                                                {creditNoteDownloading === order.orderNumber ? (
+                                                  <>
+                                                    <svg className="w-4 h-4 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                                                    </svg>
+                                                    Lade...
+                                                  </>
+                                                ) : (
+                                                  <>
                                                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                                                 </svg>
                                                 Storno-Rechnung herunterladen
+                                                  </>
+                                                )}
                                               </button>
                                             )}
 
                                             {/* Invoice Download Button - Always visible */}
                                             <button 
-                                              onClick={() => (order.status === 'delivered' || (order as any).status === 'return_completed' || order.status === 'return_requested') ? downloadInvoice(order.orderNumber) : null}
-                                              disabled={order.status !== 'delivered' && (order as any).status !== 'return_completed' && order.status !== 'return_requested'}
+                                              onClick={() => ((order as any).status === 'delivered' || (order as any).status === 'return_completed' || (order as any).status === 'return_requested' || (order as any).status === 'partially_returned') ? downloadInvoice(order.orderNumber) : null}
+                                              disabled={(order as any).status !== 'delivered' && (order as any).status !== 'return_completed' && (order as any).status !== 'return_requested' && (order as any).status !== 'partially_returned'}
                                               className={`px-4 py-2 text-sm font-medium rounded-lg transition-colors flex items-center gap-2 ${
-                                                order.status === 'delivered' || (order as any).status === 'return_completed' || order.status === 'return_requested'
+                                                (order as any).status === 'delivered' || (order as any).status === 'return_completed' || (order as any).status === 'return_requested' || (order as any).status === 'partially_returned'
                                                   ? withCursorPointer('text-green-600 bg-green-50 hover:bg-green-100')
                                                   : 'text-gray-400 bg-gray-100 cursor-not-allowed'
                                               }`}
@@ -600,22 +844,22 @@ export default function OrdersPage() {
                                               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                                               </svg>
-                                              {order.status === 'delivered' || (order as any).status === 'return_completed' || order.status === 'return_requested' ? 'Rechnung herunterladen' : 'Rechnung (nach Lieferung)'}
+                                              {(order as any).status === 'delivered' || (order as any).status === 'return_completed' || (order as any).status === 'return_requested' || (order as any).status === 'partially_returned' ? 'Rechnung herunterladen' : 'Rechnung (nach Lieferung)'}
                                             </button>
 
                                             {/* Review Button - Always visible */}
                                             <button 
                                               onClick={() => {
-                                                if (order.status === 'delivered' || (order as any).status === 'return_completed' || order.status === 'return_requested') {
+                                                if ((order as any).status === 'delivered' || (order as any).status === 'return_completed' || (order as any).status === 'return_requested' || (order as any).status === 'partially_returned') {
                                                   const reviewStatus = getReviewStatus(order._id);
                                                   if (!reviewStatus.allReviewed) {
                                                     setReviewModalOrderId(order._id);
                                                   }
                                                 }
                                               }}
-                                              disabled={order.status !== 'delivered' && (order as any).status !== 'return_completed' && order.status !== 'return_requested'}
+                                              disabled={(order as any).status !== 'delivered' && (order as any).status !== 'return_completed' && (order as any).status !== 'return_requested' && (order as any).status !== 'partially_returned'}
                                               className={`px-4 py-2 text-sm font-medium rounded-lg transition-colors flex items-center gap-2 ${
-                                                order.status === 'delivered' || (order as any).status === 'return_completed' || order.status === 'return_requested'
+                                                (order as any).status === 'delivered' || (order as any).status === 'return_completed' || (order as any).status === 'return_requested' || (order as any).status === 'partially_returned'
                                                   ? getReviewStatus(order._id).allReviewed 
                                                     ? 'text-green-600 bg-green-50 cursor-default' 
                                                     : withCursorPointer('text-yellow-600 bg-yellow-50 hover:bg-yellow-100')
@@ -626,7 +870,7 @@ export default function OrdersPage() {
                                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.197-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.784-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z" />
                                               </svg>
                                               {(() => {
-                                                if (order.status !== 'delivered' && (order as any).status !== 'return_completed') {
+                                                if ((order as any).status !== 'delivered' && (order as any).status !== 'return_completed' && (order as any).status !== 'return_requested' && (order as any).status !== 'partially_returned') {
                                                   return 'Bewertung (nach Lieferung)';
                                                 }
                                                 const reviewStatus = getReviewStatus(order._id);
@@ -936,7 +1180,7 @@ export default function OrdersPage() {
                               <div className="mb-4 flex flex-col space-y-2">
                                 <div className="flex space-x-2">
                                   {/* Invoice Download Button */}
-                                  {order.status === 'delivered' || (order as any).status === 'return_completed' || order.status === 'return_requested' ? (
+                                  {(order as any).status === 'delivered' || (order as any).status === 'return_completed' || (order as any).status === 'return_requested' || (order as any).status === 'partially_returned' ? (
                                     <button
                                       onClick={() => downloadInvoice(order.orderNumber)}
                                       className={withCursorPointer("flex-1 inline-flex items-center justify-center px-3 py-2 text-xs font-medium text-green-600 bg-green-50 rounded-lg hover:bg-green-100 transition-colors duration-200")}
@@ -952,16 +1196,32 @@ export default function OrdersPage() {
                                     </div>
                                   )}
                                   
-                                  {/* Credit Note Download Button - Only for completed returns */}
-                                  {order.status === 'return_completed' && (
+                                  {/* Credit Note Download Button - For completed and partially returned orders */}
+                                  {(order.status === 'return_completed' || (order as any).status === 'partially_returned') && (
                                     <button
                                       onClick={() => downloadCreditNote(order.orderNumber)}
-                                      className={withCursorPointer("flex-1 inline-flex items-center justify-center px-3 py-2 text-xs font-medium text-red-600 bg-red-50 rounded-lg hover:bg-red-100 transition-colors duration-200")}
+                                      disabled={creditNoteDownloading === order.orderNumber}
+                                      className={`flex-1 inline-flex items-center justify-center px-3 py-2 text-xs font-medium rounded-lg transition-colors duration-200 ${
+                                        creditNoteDownloading === order.orderNumber
+                                          ? 'text-gray-400 bg-gray-100 cursor-not-allowed'
+                                          : withCursorPointer('text-red-600 bg-red-50 hover:bg-red-100')
+                                      }`}
                                     >
+                                      {creditNoteDownloading === order.orderNumber ? (
+                                        <>
+                                          <svg className="w-3 h-3 mr-1 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                                          </svg>
+                                          Lade...
+                                        </>
+                                      ) : (
+                                        <>
                                       <svg className="w-3 h-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                                       </svg>
                                       Storno-Rechnung
+                                        </>
+                                      )}
                                     </button>
                                   )}
                                 </div>
@@ -970,16 +1230,16 @@ export default function OrdersPage() {
                                   {/* Review Button */}
                                   <button
                                     onClick={() => {
-                                      if (order.status === 'delivered' || (order as any).status === 'return_completed' || order.status === 'return_requested') {
+                                      if ((order as any).status === 'delivered' || (order as any).status === 'return_completed' || (order as any).status === 'return_requested' || (order as any).status === 'partially_returned') {
                                         const reviewStatus = getReviewStatus(order._id);
                                         if (!reviewStatus.allReviewed) {
                                           setReviewModalOrderId(order._id);
                                         }
                                       }
                                     }}
-                                    disabled={order.status !== 'delivered' && (order as any).status !== 'return_completed' && order.status !== 'return_requested'}
+                                    disabled={(order as any).status !== 'delivered' && (order as any).status !== 'return_completed' && (order as any).status !== 'return_requested' && (order as any).status !== 'partially_returned'}
                                     className={`flex-1 inline-flex items-center justify-center px-3 py-2 text-xs font-medium rounded-lg transition-colors duration-200 ${
-                                      order.status === 'delivered' || (order as any).status === 'return_completed' || order.status === 'return_requested'
+                                      (order as any).status === 'delivered' || (order as any).status === 'return_completed' || (order as any).status === 'return_requested' || (order as any).status === 'partially_returned'
                                         ? getReviewStatus(order._id).allReviewed 
                                           ? 'text-green-600 bg-green-50 cursor-default' 
                                           : withCursorPointer('text-yellow-600 bg-yellow-50 hover:bg-yellow-100')
@@ -990,7 +1250,7 @@ export default function OrdersPage() {
                                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.197-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.784-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z" />
                                     </svg>
                                     {(() => {
-                                      if (order.status !== 'delivered' && (order as any).status !== 'return_completed') {
+                                      if ((order as any).status !== 'delivered' && (order as any).status !== 'return_completed' && (order as any).status !== 'return_requested' && (order as any).status !== 'partially_returned') {
                                         return 'Bewertung (nach Lieferung)';
                                       }
                                       const reviewStatus = getReviewStatus(order._id);
@@ -1296,11 +1556,14 @@ export default function OrdersPage() {
                       const key = String(index);
                       const selectedQty = returnSelections[key] ?? 0;
                       const isSelected = selectedQty > 0;
+                      const isAlreadyReturned = !isItemAvailableForReturn(order, item);
                       
                       return (
                         <div key={`${item.productId}-${index}`} className={`border rounded-xl p-4 transition-all duration-200 ${
                           isSelected 
                             ? 'border-purple-200 bg-purple-50 shadow-sm' 
+                            : isAlreadyReturned
+                            ? 'border-gray-200 bg-gray-50 opacity-60'
                             : 'border-slate-200 bg-white hover:border-slate-300'
                         }`}>
                           <div className="flex items-start gap-4">
@@ -1324,18 +1587,108 @@ export default function OrdersPage() {
                                 <span>Gekauft: {item.quantity}×</span>
                                 <span>Preis: €{(item.price / 100).toFixed(2)}</span>
                                 {(() => {
+                                  // Calculate total already returned quantity for this specific item
+                                  let alreadyReturnedQty = 0;
+                                  
+                                  // Check against returnedItems from the order (already completed returns) - this is the primary source
+                                  if ((order as any).returnedItems && (order as any).returnedItems.length > 0) {
+                                    (order as any).returnedItems.forEach((returnedItem: any) => {
+                                      if (returnedItem.productId === item.productId &&
+                                          JSON.stringify(returnedItem.variations || {}) === JSON.stringify(item.variations || {})) {
+                                        alreadyReturnedQty += returnedItem.quantity;
+                                      }
+                                    });
+                                  } else {
+                                    // Only use context returnedItems if order.returnedItems is not available (backward compatibility)
+                                    const orderReturnedItems = returnedItems[order._id] || [];
+                                    orderReturnedItems.forEach(returnedItem => {
+                                      if (returnedItem.productId === item.productId &&
+                                          JSON.stringify(returnedItem.variations || {}) === JSON.stringify(item.variations || {})) {
+                                        alreadyReturnedQty += returnedItem.quantity;
+                                      }
+                                    });
+                                  }
+                                  
+                                  if (alreadyReturnedQty > 0) {
+                                    return (
+                                      <span className="text-red-600 font-medium">
+                                        Bereits zurückgegeben: {alreadyReturnedQty}×
+                                      </span>
+                                    );
+                                  }
+                                  return null;
+                                })()}
+                                {(() => {
+                                  const orderPendingReturns = pendingReturns[order._id] || {};
+                                  const itemSignature = `${item.productId}|${item.variations ? Object.entries(item.variations).sort(([a],[b]) => a.localeCompare(b)).map(([k,v]) => `${k}:${v}`).join(',') : ''}`;
+                                  const alreadyRequested = orderPendingReturns[itemSignature] || 0;
+                                  
+                                  if (alreadyRequested > 0) {
+                                    return (
+                                      <span className="text-orange-600 font-medium">
+                                        Bereits angefragt: {alreadyRequested}×
+                                      </span>
+                                    );
+                                  }
+                                  return null;
+                                })()}
+                                {(() => {
+                                  // Calculate total already returned quantity for this specific item
+                                  let alreadyReturnedQty = 0;
+                                  
+                                  // Check against returnedItems from the order (already completed returns) - this is the primary source
+                                  if ((order as any).returnedItems && (order as any).returnedItems.length > 0) {
+                                    (order as any).returnedItems.forEach((returnedItem: any) => {
+                                      if (returnedItem.productId === item.productId &&
+                                          JSON.stringify(returnedItem.variations || {}) === JSON.stringify(item.variations || {})) {
+                                        alreadyReturnedQty += returnedItem.quantity;
+                                      }
+                                    });
+                                  } else {
+                                    // Only use context returnedItems if order.returnedItems is not available (backward compatibility)
+                                    const orderReturnedItems = returnedItems[order._id] || [];
+                                    orderReturnedItems.forEach(returnedItem => {
+                                      if (returnedItem.productId === item.productId &&
+                                          JSON.stringify(returnedItem.variations || {}) === JSON.stringify(item.variations || {})) {
+                                        alreadyReturnedQty += returnedItem.quantity;
+                                      }
+                                    });
+                                  }
+                                  
+                                  // Check against pending returns (already requested but not yet processed)
+                                  const orderPendingReturns = pendingReturns[order._id] || {};
+                                  const itemSignature = `${item.productId}|${item.variations ? Object.entries(item.variations).sort(([a],[b]) => a.localeCompare(b)).map(([k,v]) => `${k}:${v}`).join(',') : ''}`;
+                                  const alreadyRequested = orderPendingReturns[itemSignature] || 0;
+                                  
+                                  // Calculate total unavailable quantity (returned + requested)
+                                  const totalUnavailableQty = alreadyReturnedQty + alreadyRequested;
+                                  const availableQty = item.quantity - totalUnavailableQty;
+                                  
+                                  if (totalUnavailableQty > 0) {
+                                    return (
+                                      <span className="text-blue-600 font-medium">
+                                        Verfügbar: {availableQty}×
+                                      </span>
+                                    );
+                                  }
+                                  return null;
+                                })()}
+                                {(() => {
                                   const orderSubtotalCents = order.items.reduce((s, it) => s + (it.price * it.quantity), 0);
                                   const discountCents = (order as any).discountCents || 0;
                                   const pointsDiscountCents = ((order as any).bonusPointsRedeemed ? getPointsDiscountAmount((order as any).bonusPointsRedeemed) * 100 : 0);
-                                  const origLineTotal = item.price * item.quantity;
-                                  const share = orderSubtotalCents > 0 ? Math.min(1, Math.max(0, origLineTotal / orderSubtotalCents)) : 0;
-                                  const proratedDiscount = Math.round(discountCents * share);
-                                  const proratedPoints = Math.round(pointsDiscountCents * share);
-                                  const perUnitDeduction = Math.round(proratedDiscount / item.quantity) + Math.round(proratedPoints / item.quantity);
+                                  
+                                  // Calculate effective unit price for this specific item
+                                  const itemOriginalCents = item.price * item.quantity;
+                                  const itemShare = orderSubtotalCents > 0 ? itemOriginalCents / orderSubtotalCents : 0;
+                                  const proratedDiscount = discountCents * itemShare;
+                                  const proratedPoints = pointsDiscountCents * itemShare;
+                                  const perUnitDeduction = (proratedDiscount / item.quantity) + (proratedPoints / item.quantity);
                                   const effectiveUnitCents = Math.max(0, item.price - perUnitDeduction);
+                                  
                                   if (effectiveUnitCents !== item.price) {
                                     return (
-                                      <span className="text-green-700 font-medium">Erstattung/ Stück: €{(effectiveUnitCents / 100).toFixed(2)}</span>
+                                      <span className="text-green-700 font-medium">Erstattung/ Stück: €{(Math.round(effectiveUnitCents) / 100).toFixed(2)}</span>
                                     );
                                   }
                                   return null;
@@ -1349,6 +1702,11 @@ export default function OrdersPage() {
                             </div>
                             <div className="flex items-center gap-3">
                               <label className="text-sm font-medium text-slate-700">Menge:</label>
+                              {isAlreadyReturned ? (
+                                <div className="text-sm text-gray-500 italic">
+                                  Bereits zurückgesendet
+                                </div>
+                              ) : (
                               <select
                                 className={`border rounded-lg px-3 py-2 pr-8 text-sm font-medium transition-colors appearance-none ${
                                   isSelected
@@ -1361,10 +1719,44 @@ export default function OrdersPage() {
                                   setReturnSelections((prev) => ({ ...prev, [key]: value }));
                                 }}
                               >
-                                {Array.from({ length: item.quantity + 1 }, (_, i) => i).map(i => (
+                                  {(() => {
+                                    // Calculate total already returned quantity for this specific item
+                                    let alreadyReturnedQty = 0;
+                                    
+                                    // Check against returnedItems from the order (already completed returns) - this is the primary source
+                                    if ((order as any).returnedItems && (order as any).returnedItems.length > 0) {
+                                      (order as any).returnedItems.forEach((returnedItem: any) => {
+                                        if (returnedItem.productId === item.productId &&
+                                            JSON.stringify(returnedItem.variations || {}) === JSON.stringify(item.variations || {})) {
+                                          alreadyReturnedQty += returnedItem.quantity;
+                                        }
+                                      });
+                                    } else {
+                                      // Only use context returnedItems if order.returnedItems is not available (backward compatibility)
+                                      const orderReturnedItems = returnedItems[order._id] || [];
+                                      orderReturnedItems.forEach(returnedItem => {
+                                        if (returnedItem.productId === item.productId &&
+                                            JSON.stringify(returnedItem.variations || {}) === JSON.stringify(item.variations || {})) {
+                                          alreadyReturnedQty += returnedItem.quantity;
+                                        }
+                                      });
+                                    }
+                                    
+                                    // Check against pending returns (already requested but not yet processed)
+                                    const orderPendingReturns = pendingReturns[order._id] || {};
+                                    const itemSignature = `${item.productId}|${item.variations ? Object.entries(item.variations).sort(([a],[b]) => a.localeCompare(b)).map(([k,v]) => `${k}:${v}`).join(',') : ''}`;
+                                    const alreadyRequested = orderPendingReturns[itemSignature] || 0;
+                                    
+                                    // Calculate total unavailable quantity (returned + requested)
+                                    const totalUnavailableQty = alreadyReturnedQty + alreadyRequested;
+                                    const availableQty = item.quantity - totalUnavailableQty;
+                                    
+                                    return Array.from({ length: availableQty + 1 }, (_, i) => i).map(i => (
                                   <option key={i} value={i}>{i}</option>
-                                ))}
+                                    ));
+                                  })()}
                               </select>
+                              )}
                             </div>
                           </div>
                         </div>
@@ -1397,7 +1789,7 @@ export default function OrdersPage() {
                   {(() => {
                     const selectedItems = order.items
                       .map((it, idx) => ({ ...it, returnQty: returnSelections[String(idx)] || 0 }))
-                      .filter(it => it.returnQty > 0);
+                      .filter(it => it.returnQty > 0 && isItemAvailableForReturn(order, it));
                     
                     if (selectedItems.length === 0) return null;
                     
@@ -1410,26 +1802,59 @@ export default function OrdersPage() {
                           Zusammenfassung
                         </h4>
                         <div className="space-y-2">
-                          {selectedItems.map((item, idx) => {
+                          {(() => {
                             const orderSubtotalCents = order.items.reduce((s, it) => s + (it.price * it.quantity), 0);
                             const discountCents = (order as any).discountCents || 0;
                             const pointsDiscountCents = ((order as any).bonusPointsRedeemed ? getPointsDiscountAmount((order as any).bonusPointsRedeemed) * 100 : 0);
-                            const origLineTotal = item.price * item.quantity;
-                            const share = orderSubtotalCents > 0 ? Math.min(1, Math.max(0, origLineTotal / orderSubtotalCents)) : 0;
-                            const proratedDiscount = Math.round(discountCents * share);
-                            const proratedPoints = Math.round(pointsDiscountCents * share);
-                            const perUnitDeduction = Math.round(proratedDiscount / item.quantity) + Math.round(proratedPoints / item.quantity);
-                            const effectiveUnitCents = Math.max(0, item.price - perUnitDeduction);
-                            const lineRefundCents = effectiveUnitCents * item.returnQty;
+                            
+                            // Calculate total refund first to determine if we need to cap individual items
+                            let totalCalculatedRefundCents = selectedItems.reduce((sum, item) => {
+                              const itemOriginalLineTotal = item.price * item.quantity;
+                              const itemShareOfOrder = orderSubtotalCents > 0 ? itemOriginalLineTotal / orderSubtotalCents : 0;
+                              const itemLineDiscountCents = discountCents * itemShareOfOrder;
+                              const itemLinePointsCents = pointsDiscountCents * itemShareOfOrder;
+                              const perUnitDiscountCents = itemLineDiscountCents / item.quantity;
+                              const perUnitPointsCents = itemLinePointsCents / item.quantity;
+                              const effectiveUnitCents = Math.max(0, item.price - perUnitDiscountCents - perUnitPointsCents);
+                              return sum + (effectiveUnitCents * item.returnQty);
+                            }, 0);
+                            
+                            const originalOrderTotalCents = Math.round(order.total * 100);
+                            const needsCapping = totalCalculatedRefundCents > originalOrderTotalCents;
+                            const capRatio = needsCapping ? originalOrderTotalCents / totalCalculatedRefundCents : 1;
+                            
+                            return selectedItems.map((item, idx) => {
+                              // Calculate the proportion of this item's original line total to the entire order
+                              const itemOriginalLineTotal = item.price * item.quantity; // Original line total for this item
+                              const itemShareOfOrder = orderSubtotalCents > 0 ? itemOriginalLineTotal / orderSubtotalCents : 0;
+                              
+                              // Calculate proportional discount and bonus points for this item's original line
+                              const itemLineDiscountCents = discountCents * itemShareOfOrder;
+                              const itemLinePointsCents = pointsDiscountCents * itemShareOfOrder;
+                              
+                              // Calculate per-unit discount and points
+                              const perUnitDiscountCents = itemLineDiscountCents / item.quantity;
+                              const perUnitPointsCents = itemLinePointsCents / item.quantity;
+                              
+                              // Calculate effective unit price
+                              const effectiveUnitCents = Math.max(0, item.price - perUnitDiscountCents - perUnitPointsCents);
+                              
+                              // Calculate refund for the returned quantity and apply cap if needed
+                              let itemRefundCents = effectiveUnitCents * item.returnQty;
+                              if (needsCapping) {
+                                itemRefundCents = itemRefundCents * capRatio;
+                              }
+                              
                             return (
                               <div key={idx} className="flex justify-between text-sm">
                                 <span className="text-purple-700">{item.name} × {item.returnQty}</span>
                                 <span className="text-purple-600 font-medium">
-                                  €{(lineRefundCents / 100).toFixed(2)}
+                                    €{(Math.round(itemRefundCents) / 100).toFixed(2)}
                                 </span>
                               </div>
                             );
-                          })}
+                            });
+                          })()}
                           <div className="border-t border-purple-200 pt-2 mt-2 space-y-2">
                             {(() => {
                               const orderSubtotalCents = order.items.reduce((s, it) => s + (it.price * it.quantity), 0);
@@ -1437,39 +1862,111 @@ export default function OrdersPage() {
                               const pointsDiscountCents = ((order as any).bonusPointsRedeemed ? getPointsDiscountAmount((order as any).bonusPointsRedeemed) * 100 : 0);
                               const shippingCents = (order as any).shippingCosts || 0;
                               
-                              // Calculate refund for selected items
-                              const totalRefundCents = selectedItems.reduce((sum, item) => {
-                                const origLineTotal = item.price * item.quantity;
-                                const share = orderSubtotalCents > 0 ? Math.min(1, Math.max(0, origLineTotal / orderSubtotalCents)) : 0;
-                                const proratedDiscount = Math.round(discountCents * share);
-                                const proratedPoints = Math.round(pointsDiscountCents * share);
-                                const perUnitDeduction = Math.round(proratedDiscount / item.quantity) + Math.round(proratedPoints / item.quantity);
-                                const effectiveUnitCents = Math.max(0, item.price - perUnitDeduction);
+                              // Calculate refund for selected items with proper proportional distribution
+                              let totalRefundCents = selectedItems.reduce((sum, item) => {
+                                // Calculate the proportion of this item's original line total to the entire order
+                                const itemOriginalLineTotal = item.price * item.quantity; // Original line total for this item
+                                const itemShareOfOrder = orderSubtotalCents > 0 ? itemOriginalLineTotal / orderSubtotalCents : 0;
+                                
+                                // Calculate proportional discount and bonus points for this item's original line
+                                const itemLineDiscountCents = discountCents * itemShareOfOrder;
+                                const itemLinePointsCents = pointsDiscountCents * itemShareOfOrder;
+                                
+                                // Calculate per-unit discount and points
+                                const perUnitDiscountCents = itemLineDiscountCents / item.quantity;
+                                const perUnitPointsCents = itemLinePointsCents / item.quantity;
+                                
+                                // Calculate effective unit price
+                                const effectiveUnitCents = Math.max(0, item.price - perUnitDiscountCents - perUnitPointsCents);
+                                
+                                // Calculate refund for the returned quantity
                                 return sum + (effectiveUnitCents * item.returnQty);
                               }, 0);
                               
-                              // Check if all items are being returned
+                              // Check if all items are being returned (including previous returns)
                               const totalSelectedQuantity = selectedItems.reduce((sum, item) => sum + item.returnQty, 0);
                               const totalOrderQuantity = order.items.reduce((sum, item) => sum + item.quantity, 0);
-                              const isFullReturn = totalSelectedQuantity >= totalOrderQuantity;
                               
-                              const finalRefundCents = totalRefundCents + (isFullReturn ? shippingCents : 0);
+                              // Calculate total returned quantity across all previous returns
+                              let previousReturnedQuantity = 0;
+                              
+                              // Check against returnedItems from the order (already completed returns)
+                              if ((order as any).returnedItems && (order as any).returnedItems.length > 0) {
+                                previousReturnedQuantity += ((order as any).returnedItems || []).reduce((sum: number, item: any) => sum + Number(item.quantity), 0);
+                              }
+                              
+                              // Also check against returnedItems from the context (for backward compatibility)
+                              const orderReturnedItems = returnedItems[order._id] || [];
+                              orderReturnedItems.forEach(returnedItem => {
+                                previousReturnedQuantity += returnedItem.quantity;
+                              });
+                              
+                              // Debug logging
+                              console.log('Return calculation debug:', {
+                                orderNumber: order.orderNumber,
+                                totalOrderQuantity,
+                                previousReturnedQuantity,
+                                totalSelectedQuantity,
+                                totalReturnedQuantity: previousReturnedQuantity + totalSelectedQuantity,
+                                isFullReturn: (previousReturnedQuantity + totalSelectedQuantity) >= totalOrderQuantity
+                              });
+                              
+                              const totalReturnedQuantity = previousReturnedQuantity + totalSelectedQuantity;
+                              
+                              const isFullReturn = totalReturnedQuantity >= totalOrderQuantity;
+                              
+                              // Calculate total refund including shipping
+                              let finalRefundCents = totalRefundCents + (isFullReturn ? shippingCents : 0);
+                              
+                              // Simple cap: ensure we don't exceed the original order total
+                              const originalOrderTotalCents = Math.round(order.total * 100);
+                              finalRefundCents = Math.min(finalRefundCents, originalOrderTotalCents);
+                              
+                              // Debug logging for cap calculation
+                              console.log('Refund cap debug:', {
+                                orderNumber: order.orderNumber,
+                                totalRefundCents: totalRefundCents / 100,
+                                shippingCents: shippingCents / 100,
+                                isFullReturn,
+                                originalOrderTotalCents: originalOrderTotalCents / 100,
+                                finalRefundCents: Math.round(finalRefundCents) / 100,
+                                capApplied: (totalRefundCents + (isFullReturn ? shippingCents : 0)) > originalOrderTotalCents,
+                                returnedItemsCount: ((order as any).returnedItems || []).length,
+                                returnedItemsDetails: ((order as any).returnedItems || []).map((item: any) => `${item.name} x${item.quantity}`)
+                              });
+                              
+                              // Calculate individual components for display
+                              let shippingRefundCents = isFullReturn ? shippingCents : 0;
+                              let itemsRefundCents = totalRefundCents;
+                              
+                              // If we hit the cap, reduce shipping costs first
+                              if (finalRefundCents < (totalRefundCents + shippingRefundCents)) {
+                                const capReduction = (totalRefundCents + shippingRefundCents) - finalRefundCents;
+                                shippingRefundCents = Math.max(0, shippingRefundCents - capReduction);
+                                itemsRefundCents = finalRefundCents - shippingRefundCents;
+                              }
                               
                               return (
                                 <>
                                   <div className="flex justify-between text-sm text-purple-700">
                                     <span>Artikel:</span>
-                                    <span>€{(totalRefundCents / 100).toFixed(2)}</span>
+                                    <span>€{(Math.round(itemsRefundCents) / 100).toFixed(2)}</span>
                                   </div>
                                   {isFullReturn && shippingCents > 0 && (
                                     <div className="flex justify-between text-sm text-purple-700">
-                                      <span>Versandkosten:</span>
-                                      <span>€{(shippingCents / 100).toFixed(2)}</span>
+                                      <span>Versandkosten (alle Artikel zurückgesendet):</span>
+                                      <span>€{(shippingRefundCents / 100).toFixed(2)}</span>
+                                    </div>
+                                  )}
+                                  {!isFullReturn && shippingCents > 0 && (
+                                    <div className="flex justify-between text-sm text-purple-500">
+                                      <span>Versandkosten (nur bei vollständiger Rücksendung):</span>
+                                      <span>€0.00</span>
                                     </div>
                                   )}
                                   <div className="flex justify-between font-medium text-purple-800 border-t border-purple-200 pt-2">
                                     <span>Gesamtbetrag:</span>
-                                    <span>€{(finalRefundCents / 100).toFixed(2)}</span>
+                                    <span>€{(Math.round(finalRefundCents) / 100).toFixed(2)}</span>
                                   </div>
                                 </>
                               );
@@ -1507,7 +2004,10 @@ export default function OrdersPage() {
                       Abbrechen
                     </button>
                     <button
-                      disabled={returnSubmitting || Object.values(returnSelections).every(qty => qty === 0)}
+                      disabled={returnSubmitting || !order.items.some((it, idx) => {
+                        const qty = returnSelections[String(idx)] || 0;
+                        return qty > 0 && isItemAvailableForReturn(order, it);
+                      })}
                       onClick={async () => {
                         setReturnError(null);
                         const payloadItems = order.items
@@ -1516,7 +2016,7 @@ export default function OrdersPage() {
                             quantity: returnSelections[String(idx)] || 0, 
                             variations: it.variations || undefined 
                           }))
-                          .filter(it => it.quantity > 0);
+                          .filter(it => it.quantity > 0 && isItemAvailableForReturn(order, it));
                         
                         if (payloadItems.length === 0) {
                           setReturnError('Bitte mindestens einen Artikel auswählen.');

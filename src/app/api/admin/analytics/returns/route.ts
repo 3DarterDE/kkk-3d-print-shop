@@ -88,10 +88,27 @@ export async function GET(request: NextRequest) {
                 }
               }
               
-              // Add shipping costs if all items are being returned
+              // Add shipping costs if all items are being returned (including previous returns)
               const totalSelectedQuantity = acceptedItems.reduce((sum: number, item: any) => sum + item.quantity, 0);
               const totalOrderQuantity = order.items.reduce((sum: number, it: any) => sum + it.quantity, 0);
-              const isFullReturn = totalSelectedQuantity >= totalOrderQuantity;
+              
+              // Get all completed returns for this order to calculate total returned quantity
+              const allCompletedReturns = await ReturnRequest.find({ 
+                orderId: order._id.toString(), 
+                status: 'completed' 
+              }).lean();
+              
+              // Calculate total returned quantity across all completed returns
+              let totalReturnedQuantity = 0;
+              allCompletedReturns.forEach(returnDoc => {
+                returnDoc.items.forEach((item: any) => {
+                  if (item.accepted) {
+                    totalReturnedQuantity += item.quantity;
+                  }
+                });
+              });
+              
+              const isFullReturn = totalReturnedQuantity >= totalOrderQuantity;
               const shippingCents = Number(order.shippingCosts || 0);
               
               const finalRefundCents = itemsRefundCents + (isFullReturn ? shippingCents : 0);

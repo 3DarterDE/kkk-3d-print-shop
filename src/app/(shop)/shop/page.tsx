@@ -8,18 +8,13 @@ import SearchBar from "@/components/SearchBar";
 import CategoryDescriptionSection from "@/components/CategoryDescriptionSection";
 import { getOptimizedImageUrl, getContextualImageSize } from "@/lib/image-utils";
 import { useState, useEffect, useRef } from "react";
+import { useShopData } from '@/lib/contexts/ShopDataContext';
 import { useRouter } from "next/navigation";
 
 
 export const dynamic = 'force-dynamic';
 
-interface Category {
-  _id: string;
-  name: string;
-  slug: string;
-  description?: string;
-  subcategories?: Category[];
-}
+// Category interface removed - now using ShopDataContext types
 
 // Helper function for flexible search matching
 function flexibleSearchMatch(text: string, query: string): boolean {
@@ -41,45 +36,7 @@ function flexibleSearchMatch(text: string, query: string): boolean {
   return flexibleRegex.test(textLower);
 }
 
-async function fetchCategories(): Promise<Category[]> {
-  try {
-    const url = `/api/shop/categories`;
-    const response = await fetch(url, {
-      cache: 'no-store', // Always fetch fresh categories to reflect changes immediately
-      next: { revalidate: 0 } // No cache for categories
-    });
-    
-    if (!response.ok) {
-      return [];
-    }
-    
-    const data = await response.json();
-    return Array.isArray(data.categories) ? data.categories : [];
-  } catch (error) {
-    console.error('Failed to fetch categories:', error);
-    return [];
-  }
-}
-
-async function fetchBrands(): Promise<any[]> {
-  try {
-    const url = `/api/shop/brands`;
-    const response = await fetch(url, {
-      cache: 'no-store', // Always fetch fresh brands to reflect changes immediately
-      next: { revalidate: 0 } // No cache for brands
-    });
-
-    if (!response.ok) {
-      return [];
-    }
-    
-    const data = await response.json();
-    return Array.isArray(data) ? data : [];
-  } catch (error) {
-    console.error('Failed to fetch brands:', error);
-    return [];
-  }
-}
+// fetchCategories and fetchBrands functions removed - now using ShopDataContext
 
 async function fetchBrand(slug: string): Promise<any | null> {
   try {
@@ -105,9 +62,8 @@ async function fetchBrand(slug: string): Promise<any | null> {
 
 export default function ShopPage({ searchParams }: { searchParams: Promise<{ category?: string; subcategory?: string; brand?: string; search?: string; filter?: string }> }) {
   const router = useRouter();
+  const { filters: allFiltersFromContext, categories, brands } = useShopData();
   const [allProducts, setAllProducts] = useState<any[]>([]);
-  const [categories, setCategories] = useState<Category[]>([]);
-  const [brands, setBrands] = useState<any[]>([]);
   const [currentBrand, setCurrentBrand] = useState<any | null>(null);
   const [resolvedSearchParams, setResolvedSearchParams] = useState<{ category?: string; subcategory?: string; brand?: string; search?: string; filter?: string }>({});
   const [loading, setLoading] = useState(true);
@@ -116,13 +72,15 @@ export default function ShopPage({ searchParams }: { searchParams: Promise<{ cat
   const [priceRange, setPriceRange] = useState<{ min: number; max: number }>({ min: 0, max: 1000 });
   const [selectedDynamicFilters, setSelectedDynamicFilters] = useState<Record<string, string[]>>({});
   const [productFilters, setProductFilters] = useState<Record<string, any[]>>({});
-  const [allFilters, setAllFilters] = useState<any[]>([]);
   const [isPriceFilterModified, setIsPriceFilterModified] = useState(false);
   const [showTopSellers, setShowTopSellers] = useState(false);
   const [showSaleItems, setShowSaleItems] = useState(false);
   const [showNewItems, setShowNewItems] = useState(false);
   const [showAvailableOnly, setShowAvailableOnly] = useState(false);
   const [initialViewProducts, setInitialViewProducts] = useState<any[]>([]);
+  // Cross-filtering state
+  const [selectedBrandFilters, setSelectedBrandFilters] = useState<string[]>([]);
+  const [selectedCategoryFilters, setSelectedCategoryFilters] = useState<string[]>([]);
   // Mobile filter overlay state
   const [showMobileFilters, setShowMobileFilters] = useState(false);
   // Scroll state for mobile breadcrumb
@@ -158,17 +116,125 @@ export default function ShopPage({ searchParams }: { searchParams: Promise<{ cat
     }
   };
 
-  // Load all filters
-  const loadAllFilters = async () => {
-    try {
-      const response = await fetch('/api/shop/filters');
-      if (response.ok) {
-        const filters = await response.json();
-        setAllFilters(Array.isArray(filters) ? filters : []);
+  // Load all filters - REMOVED: Now using ShopDataContext
+
+  // Helper function to get available brands for a category with counts
+  const getAvailableBrandsForCategory = (categorySlug: string) => {
+    if (!categorySlug || !allProducts.length || !brands.length) return [];
+    
+    const category = categories.find(c => c.slug === categorySlug);
+    if (!category) return [];
+    
+    // Get products in this category
+    const categoryProducts = allProducts.filter((p: any) => {
+      const isDirectCategoryMatch = p.categoryId === category._id || p.category === categorySlug;
+      const isSubcategoryMatch = category.subcategories?.some(sub => 
+        p.subcategoryId === sub._id || (p.subcategoryIds && p.subcategoryIds.includes(sub._id))
+      );
+      return isDirectCategoryMatch || isSubcategoryMatch;
+    });
+    
+    // Count products per brand
+    const brandCounts: Record<string, number> = {};
+    categoryProducts.forEach(product => {
+      // Try multiple ways to match brands
+      const brandSlug = product.brand || product.brandId;
+      if (brandSlug) {
+        brandCounts[brandSlug] = (brandCounts[brandSlug] || 0) + 1;
       }
-    } catch (error) {
-      console.error('Failed to load filters:', error);
-    }
+      
+      // Also check if brand is in tags
+      if (product.tags && Array.isArray(product.tags)) {
+        product.tags.forEach((tag: string) => {
+          const matchingBrand = brands.find(b => b.slug === tag);
+          if (matchingBrand) {
+            brandCounts[tag] = (brandCounts[tag] || 0) + 1;
+          }
+        });
+      }
+    });
+    
+    // Return brands with counts, sorted by count (descending)
+    return brands
+      .filter(brand => brandCounts[brand.slug] > 0)
+      .map(brand => ({
+        ...brand,
+        productCount: brandCounts[brand.slug] || 0
+      }))
+      .sort((a, b) => b.productCount - a.productCount);
+  };
+
+  // Helper function to get available categories for a brand with counts
+  const getAvailableCategoriesForBrand = (brandSlug: string) => {
+    if (!brandSlug || !allProducts.length || !categories.length) return [];
+    
+    // Get products from this brand
+    const brandProducts = allProducts.filter((p: any) => 
+      p.brand === brandSlug || 
+      p.brandId === brandSlug ||
+      p.tags?.includes(brandSlug)
+    );
+    
+    // Count products per category (avoid double counting)
+    const categoryCounts: Record<string, Set<string>> = {};
+    
+    brandProducts.forEach(product => {
+      const productId = product._id;
+      
+      // Check direct category
+      if (product.categoryId) {
+        const category = categories.find(c => c._id === product.categoryId);
+        if (category) {
+          if (!categoryCounts[category.slug]) {
+            categoryCounts[category.slug] = new Set();
+          }
+          categoryCounts[category.slug].add(productId);
+        }
+      }
+      
+      // Check subcategories
+      if (product.subcategoryId) {
+        categories.forEach(category => {
+          const subcategory = category.subcategories?.find(sub => sub._id === product.subcategoryId);
+          if (subcategory) {
+            if (!categoryCounts[category.slug]) {
+              categoryCounts[category.slug] = new Set();
+            }
+            categoryCounts[category.slug].add(productId);
+          }
+        });
+      }
+      
+      // Check subcategoryIds array
+      if (product.subcategoryIds && product.subcategoryIds.length > 0) {
+        categories.forEach(category => {
+          const hasMatchingSubcategory = category.subcategories?.some(sub => 
+            product.subcategoryIds.includes(sub._id)
+          );
+          if (hasMatchingSubcategory) {
+            if (!categoryCounts[category.slug]) {
+              categoryCounts[category.slug] = new Set();
+            }
+            categoryCounts[category.slug].add(productId);
+          }
+        });
+      }
+    });
+    
+    // Convert Sets to counts
+    const finalCounts: Record<string, number> = {};
+    Object.keys(categoryCounts).forEach(categorySlug => {
+      finalCounts[categorySlug] = categoryCounts[categorySlug].size;
+    });
+    
+    // Return categories with counts, sorted by count (descending)
+    return categories
+      .filter(category => finalCounts[category.slug] > 0)
+      .map(category => ({
+        ...category,
+        productCount: finalCounts[category.slug] || 0
+      }))
+      .sort((a, b) => b.productCount - a.productCount);
   };
 
   // Resolve search params using both methods and also support /shop/<category>/<subcategory> path
@@ -269,34 +335,26 @@ export default function ShopPage({ searchParams }: { searchParams: Promise<{ cat
         const hasSearch = resolvedSearchParams.search && resolvedSearchParams.search.trim().length >= 2;
         
         let productsResponse;
-        let cats;
         
         if (hasSearch) {
           // Use full search API for search queries
-          [productsResponse, cats] = await Promise.all([
-            fetch(`/api/search/full?q=${encodeURIComponent(resolvedSearchParams.search!)}`, { 
-              cache: 'no-store',
-              next: { revalidate: 0 }
-            }),
-            fetchCategories()
-          ]);
+          productsResponse = await fetch(`/api/search/full?q=${encodeURIComponent(resolvedSearchParams.search!)}`, { 
+            cache: 'no-store',
+            next: { revalidate: 0 }
+          });
         } else {
           // Use regular products API for category/brand browsing
-          [productsResponse, cats] = await Promise.all([
-            fetch('/api/shop/products', { 
-              cache: 'no-store', // Always fetch fresh products to reflect stock changes immediately
-              next: { revalidate: 0 } // No cache for products
-            }),
-            fetchCategories()
-          ]);
+          productsResponse = await fetch('/api/shop/products', { 
+            cache: 'no-store', // Always fetch fresh products to reflect stock changes immediately
+            next: { revalidate: 0 } // No cache for products
+          });
         }
         
         const productsData = await productsResponse.json();
         const products = productsData.products || productsData;
         
-        // Set data immediately
+        // Set data immediately - categories and brands come from ShopDataContext
         setAllProducts(products);
-        setCategories(cats);
         // Initialize price range based on all products (will be updated when category changes)
         const calculatedRange = calculatePriceRange(products);
         setPriceRange(calculatedRange);
@@ -306,8 +364,7 @@ export default function ShopPage({ searchParams }: { searchParams: Promise<{ cat
 
         // Load filters in the background without blocking initial render
         Promise.all([
-          loadProductFilters(products),
-          loadAllFilters()
+          loadProductFilters(products)
         ]).catch((err) => {
           console.error('Failed to load filters (non-blocking):', err);
         });
@@ -557,8 +614,8 @@ export default function ShopPage({ searchParams }: { searchParams: Promise<{ cat
             return false; // Product doesn't have this filter at all
           }
           
-          // Get filter type from allFilters
-          const filterType = allFilters.find(f => f._id === filterId)?.type;
+          // Get filter type from allFiltersFromContext
+          const filterType = allFiltersFromContext.find(f => f._id === filterId)?.type;
           
           if (filterType === 'range') {
             // Range filter: check if any product value falls within the selected range
@@ -662,9 +719,13 @@ export default function ShopPage({ searchParams }: { searchParams: Promise<{ cat
     setShowNewItems(false);
     setShowAvailableOnly(false);
     
+    // Reset cross-filters when category/brand changes
+    setSelectedBrandFilters([]);
+    setSelectedCategoryFilters([]);
+    
     // Filters will be reloaded by the main useEffect hook
     setIsPriceFilterModified(false);
-  }, [resolvedSearchParams.category, resolvedSearchParams.search]);
+  }, [resolvedSearchParams.category, resolvedSearchParams.brand, resolvedSearchParams.search]);
 
   // Update price range when data is loaded or filters change
   useEffect(() => {
@@ -806,6 +867,35 @@ export default function ShopPage({ searchParams }: { searchParams: Promise<{ cat
       if (!hasBrand) return false;
     }
     
+    // Cross-filtering: Additional brand filters when on category page
+    if (selectedBrandFilters.length > 0) {
+      const matchesAnyBrand = selectedBrandFilters.some(brandSlug => 
+        p.brand === brandSlug || 
+        p.brandId === brandSlug ||
+        p.tags?.includes(brandSlug)
+      );
+      if (!matchesAnyBrand) return false;
+    }
+    
+    // Cross-filtering: Additional category filters when on brand page
+    if (selectedCategoryFilters.length > 0) {
+      const matchesAnyCategory = selectedCategoryFilters.some(categorySlug => {
+        const category = categories.find(c => c.slug === categorySlug);
+        if (!category) return false;
+        
+        // Check direct category match
+        const isDirectCategoryMatch = p.categoryId === category._id || p.category === categorySlug;
+        
+        // Check subcategory match
+        const isSubcategoryMatch = category.subcategories?.some(sub => 
+          p.subcategoryId === sub._id || (p.subcategoryIds && p.subcategoryIds.includes(sub._id))
+        );
+        
+        return isDirectCategoryMatch || isSubcategoryMatch;
+      });
+      if (!matchesAnyCategory) return false;
+    }
+    
     // Dynamic filters - Handle different filter types
     for (const [filterId, filterValues] of Object.entries(selectedDynamicFilters)) {
       if (filterValues && filterValues.length > 0) {
@@ -816,8 +906,8 @@ export default function ShopPage({ searchParams }: { searchParams: Promise<{ cat
           return false; // Product doesn't have this filter at all
         }
         
-        // Get filter type from allFilters
-        const filterType = allFilters.find(f => f._id === filterId)?.type;
+        // Get filter type from allFiltersFromContext
+        const filterType = allFiltersFromContext.find(f => f._id === filterId)?.type;
         
         if (filterType === 'range') {
           // Range filter: check if any product value falls within the selected range
@@ -921,7 +1011,7 @@ export default function ShopPage({ searchParams }: { searchParams: Promise<{ cat
           const productFilter = productFilterList.find((pf: any) => pf.filterId === filterId);
           if (!productFilter) return false;
 
-          const filterType = allFilters.find(f => f._id === filterId)?.type;
+          const filterType = allFiltersFromContext.find(f => f._id === filterId)?.type;
           if (filterType === 'range') {
             const minValue = parseFloat(filterValues[0]);
             const maxValue = parseFloat(filterValues[1]);
@@ -1054,8 +1144,8 @@ export default function ShopPage({ searchParams }: { searchParams: Promise<{ cat
               return false; // Product doesn't have this filter at all
             }
             
-            // Get filter type from allFilters
-            const filterType = allFilters.find(f => f._id === filterId)?.type;
+            // Get filter type from allFiltersFromContext
+            const filterType = allFiltersFromContext.find(f => f._id === filterId)?.type;
             
             if (filterType === 'range') {
               // Range filter: check if any product value falls within the selected range
@@ -1173,8 +1263,8 @@ export default function ShopPage({ searchParams }: { searchParams: Promise<{ cat
               return false; // Product doesn't have this filter at all
             }
             
-            // Get filter type from allFilters
-            const filterType = allFilters.find(f => f._id === filterId)?.type;
+            // Get filter type from allFiltersFromContext
+            const filterType = allFiltersFromContext.find(f => f._id === filterId)?.type;
             
             if (filterType === 'range') {
               // Range filter: check if any product value falls within the selected range
@@ -1282,7 +1372,7 @@ export default function ShopPage({ searchParams }: { searchParams: Promise<{ cat
   // Reset to first page when filters change
   useEffect(() => {
     setCurrentPage(1);
-  }, [resolvedSearchParams.category, resolvedSearchParams.brand, showTopSellers, showSaleItems, showNewItems, searchQuery, priceRange, selectedDynamicFilters]);
+  }, [resolvedSearchParams.category, resolvedSearchParams.brand, showTopSellers, showSaleItems, showNewItems, searchQuery, priceRange, selectedDynamicFilters, selectedBrandFilters, selectedCategoryFilters]);
 
   // Smooth scroll to top when page changes
   useEffect(() => {
@@ -1613,26 +1703,180 @@ export default function ShopPage({ searchParams }: { searchParams: Promise<{ cat
                 </div>
               </div>
               
-              {/* Dynamic Filters */}
-              <DynamicFilters
-                categoryId={categories.find(c => c.slug === resolvedSearchParams.category)?._id}
-                selectedFilters={selectedDynamicFilters}
-                onFilterChange={(filterId, values) => {
-                  setSelectedDynamicFilters(prev => ({
-                    ...prev,
-                    [filterId]: values
-                  }));
-                }}
-                productFilters={productFilters}
-                allProducts={allProducts}
-                currentCategoryProducts={filteredProducts}
-                priceRange={priceRange}
-                showTopSellers={showTopSellers}
-                showSaleItems={showSaleItems}
-                showNewItems={showNewItems}
-                showAvailableOnly={showAvailableOnly}
-                specialFilter={resolvedSearchParams.filter}
-              />
+              {/* Brand Filter - Show when on category page AND brands are available */}
+              {resolvedSearchParams.category && (() => {
+                const availableBrands = getAvailableBrandsForCategory(resolvedSearchParams.category);
+                if (availableBrands.length === 0) return null;
+                
+                return (
+                  <div>
+                    <div className="flex items-center justify-between mb-3">
+                      <h2 className="text-lg font-semibold">Marke</h2>
+                      {selectedBrandFilters.length > 0 && (
+                        <button
+                          onClick={() => setSelectedBrandFilters([])}
+                          className="text-sm text-blue-600 hover:text-blue-800 hover:underline transition-colors cursor-pointer"
+                        >
+                          Filter zurücksetzen
+                        </button>
+                      )}
+                    </div>
+                    <div className="space-y-2">
+                      {availableBrands.map((brand) => (
+                        <label key={brand._id} className="flex items-center cursor-pointer">
+                          <input
+                            type="checkbox"
+                            checked={selectedBrandFilters.includes(brand.slug)}
+                            onChange={(e) => {
+                              if (e.target.checked) {
+                                setSelectedBrandFilters(prev => [...prev, brand.slug]);
+                              } else {
+                                setSelectedBrandFilters(prev => prev.filter(slug => slug !== brand.slug));
+                              }
+                            }}
+                            className="rounded border-gray-300 text-blue-600 focus:ring-blue-500 cursor-pointer"
+                          />
+                          <span className="ml-2 text-sm text-gray-700">
+                            {brand.name}
+                          </span>
+                        </label>
+                      ))}
+                    </div>
+                    <div className="border-b border-gray-200 mt-2"></div>
+                  </div>
+                );
+              })()}
+
+              {/* Category Filter - Show when on brand page AND categories are available */}
+              {resolvedSearchParams.brand && (() => {
+                const availableCategories = getAvailableCategoriesForBrand(resolvedSearchParams.brand);
+                if (availableCategories.length === 0) return null;
+                
+                return (
+                  <div>
+                    <div className="flex items-center justify-between mb-3">
+                      <h2 className="text-lg font-semibold">Kategorie</h2>
+                      {selectedCategoryFilters.length > 0 && (
+                        <button
+                          onClick={() => setSelectedCategoryFilters([])}
+                          className="text-sm text-blue-600 hover:text-blue-800 hover:underline transition-colors cursor-pointer"
+                        >
+                          Filter zurücksetzen
+                        </button>
+                      )}
+                    </div>
+                    <div className="space-y-2">
+                      {availableCategories.map((category) => (
+                        <label key={category._id} className="flex items-center cursor-pointer">
+                          <input
+                            type="checkbox"
+                            checked={selectedCategoryFilters.includes(category.slug)}
+                            onChange={(e) => {
+                              if (e.target.checked) {
+                                setSelectedCategoryFilters(prev => [...prev, category.slug]);
+                              } else {
+                                setSelectedCategoryFilters(prev => prev.filter(slug => slug !== category.slug));
+                              }
+                            }}
+                            className="rounded border-gray-300 text-blue-600 focus:ring-blue-500 cursor-pointer"
+                          />
+                          <span className="ml-2 text-sm text-gray-700">
+                            {category.name}
+                          </span>
+                        </label>
+                      ))}
+                    </div>
+                    <div className="border-b border-gray-200 mt-2"></div>
+                  </div>
+                );
+              })()}
+
+              {/* Dynamic Filters - Only show if there are products for this brand */}
+              {(() => {
+                // For brand pages: only show if there are products from this brand
+                if (resolvedSearchParams.brand) {
+                  const brandProducts = allProducts.filter((p: any) => 
+                    p.brand === resolvedSearchParams.brand || 
+                    p.brandId === resolvedSearchParams.brand ||
+                    p.tags?.includes(resolvedSearchParams.brand)
+                  );
+                  
+                  // If no products for this brand, don't show dynamic filters
+                  if (brandProducts.length === 0) {
+                    return null;
+                  }
+                  
+                  return (
+                    <DynamicFilters
+                      categoryId={undefined}
+                      selectedFilters={selectedDynamicFilters}
+                      onFilterChange={(filterId, values) => {
+                        setSelectedDynamicFilters(prev => ({
+                          ...prev,
+                          [filterId]: values
+                        }));
+                      }}
+                      productFilters={productFilters}
+                      allProducts={allProducts}
+                      currentCategoryProducts={brandProducts}
+                      priceRange={priceRange}
+                      showTopSellers={showTopSellers}
+                      showSaleItems={showSaleItems}
+                      showNewItems={showNewItems}
+                      showAvailableOnly={showAvailableOnly}
+                      specialFilter={resolvedSearchParams.filter}
+                    />
+                  );
+                }
+                
+                // For category pages: always show dynamic filters
+                if (resolvedSearchParams.category) {
+                  return (
+                    <DynamicFilters
+                      categoryId={categories.find(c => c.slug === resolvedSearchParams.category)?._id}
+                      selectedFilters={selectedDynamicFilters}
+                      onFilterChange={(filterId, values) => {
+                        setSelectedDynamicFilters(prev => ({
+                          ...prev,
+                          [filterId]: values
+                        }));
+                      }}
+                      productFilters={productFilters}
+                      allProducts={allProducts}
+                      currentCategoryProducts={filteredProducts}
+                      priceRange={priceRange}
+                      showTopSellers={showTopSellers}
+                      showSaleItems={showSaleItems}
+                      showNewItems={showNewItems}
+                      showAvailableOnly={showAvailableOnly}
+                      specialFilter={resolvedSearchParams.filter}
+                    />
+                  );
+                }
+                
+                // For other pages: show normally
+                return (
+                  <DynamicFilters
+                    categoryId={undefined}
+                    selectedFilters={selectedDynamicFilters}
+                    onFilterChange={(filterId, values) => {
+                      setSelectedDynamicFilters(prev => ({
+                        ...prev,
+                        [filterId]: values
+                      }));
+                    }}
+                    productFilters={productFilters}
+                    allProducts={allProducts}
+                    currentCategoryProducts={allProducts}
+                    priceRange={priceRange}
+                    showTopSellers={showTopSellers}
+                    showSaleItems={showSaleItems}
+                    showNewItems={showNewItems}
+                    showAvailableOnly={showAvailableOnly}
+                    specialFilter={resolvedSearchParams.filter}
+                  />
+                );
+              })()}
               
               {/* Highlights Filter */}
               {(initialViewProducts.some(p => p.isTopSeller) || 
@@ -1974,26 +2218,180 @@ export default function ShopPage({ searchParams }: { searchParams: Promise<{ cat
               </div>
             </div>
             
-            {/* Dynamic Filters */}
-            <DynamicFilters
-              categoryId={categories.find(c => c.slug === resolvedSearchParams.category)?._id}
-              selectedFilters={selectedDynamicFilters}
-              onFilterChange={(filterId, values) => {
-                setSelectedDynamicFilters(prev => ({
-                  ...prev,
-                  [filterId]: values
-                }));
-              }}
-              productFilters={productFilters}
-              allProducts={allProducts}
-              currentCategoryProducts={filteredProducts}
-              priceRange={priceRange}
-              showTopSellers={showTopSellers}
-              showSaleItems={showSaleItems}
-              showNewItems={showNewItems}
-              showAvailableOnly={showAvailableOnly}
-              specialFilter={resolvedSearchParams.filter}
-            />
+            {/* Brand Filter - Show when on category page AND brands are available */}
+            {resolvedSearchParams.category && (() => {
+              const availableBrands = getAvailableBrandsForCategory(resolvedSearchParams.category);
+              if (availableBrands.length === 0) return null;
+              
+              return (
+                <div>
+                  <div className="flex items-center justify-between mb-3">
+                    <h2 className="text-lg font-semibold">Marke</h2>
+                    {selectedBrandFilters.length > 0 && (
+                      <button
+                        onClick={() => setSelectedBrandFilters([])}
+                        className="text-sm text-blue-600 hover:text-blue-800 hover:underline transition-colors cursor-pointer"
+                      >
+                        Filter zurücksetzen
+                      </button>
+                    )}
+                  </div>
+                  <div className="space-y-2">
+                    {availableBrands.map((brand) => (
+                      <label key={brand._id} className="flex items-center cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={selectedBrandFilters.includes(brand.slug)}
+                          onChange={(e) => {
+                            if (e.target.checked) {
+                              setSelectedBrandFilters(prev => [...prev, brand.slug]);
+                            } else {
+                              setSelectedBrandFilters(prev => prev.filter(slug => slug !== brand.slug));
+                            }
+                          }}
+                          className="rounded border-gray-300 text-blue-600 focus:ring-blue-500 cursor-pointer"
+                        />
+                        <span className="ml-2 text-sm text-gray-700">
+                          {brand.name}
+                        </span>
+                      </label>
+                    ))}
+                  </div>
+                  <div className="border-b border-gray-200 mt-2"></div>
+                </div>
+              );
+            })()}
+
+            {/* Category Filter - Show when on brand page AND categories are available */}
+            {resolvedSearchParams.brand && (() => {
+              const availableCategories = getAvailableCategoriesForBrand(resolvedSearchParams.brand);
+              if (availableCategories.length === 0) return null;
+              
+              return (
+                <div>
+                  <div className="flex items-center justify-between mb-3">
+                    <h2 className="text-lg font-semibold">Kategorie</h2>
+                    {selectedCategoryFilters.length > 0 && (
+                      <button
+                        onClick={() => setSelectedCategoryFilters([])}
+                        className="text-sm text-blue-600 hover:text-blue-800 hover:underline transition-colors cursor-pointer"
+                      >
+                        Filter zurücksetzen
+                      </button>
+                    )}
+                  </div>
+                  <div className="space-y-2">
+                    {availableCategories.map((category) => (
+                      <label key={category._id} className="flex items-center cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={selectedCategoryFilters.includes(category.slug)}
+                          onChange={(e) => {
+                            if (e.target.checked) {
+                              setSelectedCategoryFilters(prev => [...prev, category.slug]);
+                            } else {
+                              setSelectedCategoryFilters(prev => prev.filter(slug => slug !== category.slug));
+                            }
+                          }}
+                          className="rounded border-gray-300 text-blue-600 focus:ring-blue-500 cursor-pointer"
+                        />
+                        <span className="ml-2 text-sm text-gray-700">
+                          {category.name}
+                        </span>
+                      </label>
+                    ))}
+                  </div>
+                  <div className="border-b border-gray-200 mt-2"></div>
+                </div>
+              );
+            })()}
+
+            {/* Dynamic Filters - Only show if there are products for this brand */}
+            {(() => {
+              // For brand pages: only show if there are products from this brand
+              if (resolvedSearchParams.brand) {
+                const brandProducts = allProducts.filter((p: any) => 
+                  p.brand === resolvedSearchParams.brand || 
+                  p.brandId === resolvedSearchParams.brand ||
+                  p.tags?.includes(resolvedSearchParams.brand)
+                );
+                
+                // If no products for this brand, don't show dynamic filters
+                if (brandProducts.length === 0) {
+                  return null;
+                }
+                
+                return (
+                  <DynamicFilters
+                    categoryId={undefined}
+                    selectedFilters={selectedDynamicFilters}
+                    onFilterChange={(filterId, values) => {
+                      setSelectedDynamicFilters(prev => ({
+                        ...prev,
+                        [filterId]: values
+                      }));
+                    }}
+                    productFilters={productFilters}
+                    allProducts={allProducts}
+                    currentCategoryProducts={brandProducts}
+                    priceRange={priceRange}
+                    showTopSellers={showTopSellers}
+                    showSaleItems={showSaleItems}
+                    showNewItems={showNewItems}
+                    showAvailableOnly={showAvailableOnly}
+                    specialFilter={resolvedSearchParams.filter}
+                  />
+                );
+              }
+              
+              // For category pages: always show dynamic filters
+              if (resolvedSearchParams.category) {
+                return (
+                  <DynamicFilters
+                    categoryId={categories.find(c => c.slug === resolvedSearchParams.category)?._id}
+                    selectedFilters={selectedDynamicFilters}
+                    onFilterChange={(filterId, values) => {
+                      setSelectedDynamicFilters(prev => ({
+                        ...prev,
+                        [filterId]: values
+                      }));
+                    }}
+                    productFilters={productFilters}
+                    allProducts={allProducts}
+                    currentCategoryProducts={filteredProducts}
+                    priceRange={priceRange}
+                    showTopSellers={showTopSellers}
+                    showSaleItems={showSaleItems}
+                    showNewItems={showNewItems}
+                    showAvailableOnly={showAvailableOnly}
+                    specialFilter={resolvedSearchParams.filter}
+                  />
+                );
+              }
+              
+              // For other pages: show normally
+              return (
+                <DynamicFilters
+                  categoryId={undefined}
+                  selectedFilters={selectedDynamicFilters}
+                  onFilterChange={(filterId, values) => {
+                    setSelectedDynamicFilters(prev => ({
+                      ...prev,
+                      [filterId]: values
+                    }));
+                  }}
+                  productFilters={productFilters}
+                  allProducts={allProducts}
+                  currentCategoryProducts={allProducts}
+                  priceRange={priceRange}
+                  showTopSellers={showTopSellers}
+                  showSaleItems={showSaleItems}
+                  showNewItems={showNewItems}
+                  showAvailableOnly={showAvailableOnly}
+                  specialFilter={resolvedSearchParams.filter}
+                />
+              );
+            })()}
             
             {/* Highlights Filter - stable visibility and count based on initial view snapshot */}
             {(initialViewProducts.some(p => p.isTopSeller) || 
@@ -2132,7 +2530,7 @@ export default function ShopPage({ searchParams }: { searchParams: Promise<{ cat
                 {Object.entries(selectedDynamicFilters).map(([filterId, values]) => {
                   if (!values || values.length === 0) return null;
                   
-                  const filter = allFilters.find(f => f._id === filterId);
+                  const filter = allFiltersFromContext.find(f => f._id === filterId);
                   if (!filter) return null;
                   
                   if (filter.type === 'range') {
@@ -2488,7 +2886,7 @@ export default function ShopPage({ searchParams }: { searchParams: Promise<{ cat
           
           // Otherwise return main category
           return mainCategory || null;
-        })()}
+        })() as any}
         currentBrand={null}
       />
     )}

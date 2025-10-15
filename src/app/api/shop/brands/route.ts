@@ -10,7 +10,12 @@ export async function GET() {
       .sort({ sortOrder: 1, name: 1 })
       .lean();
     
-    return NextResponse.json(brands);
+    const result = NextResponse.json(brands);
+    
+    // Cache for 60 seconds (brands don't change often)
+    result.headers.set('Cache-Control', 'public, max-age=60');
+    
+    return result;
   } catch (error) {
     console.error('Error fetching brands:', error);
     return NextResponse.json({ error: 'Failed to fetch brands' }, { status: 500 });

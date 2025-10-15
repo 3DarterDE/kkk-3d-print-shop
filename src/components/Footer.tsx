@@ -109,7 +109,7 @@ export default function Footer() {
             <div className="mt-4">
               <h4 className="font-medium text-white mb-2">Kontakt</h4>
               <div className="text-sm text-gray-300">
-                <p>📧 service@3darterde.de</p>
+                <p>📧 service@3darter.de</p>
               </div>
             </div>
           </div>

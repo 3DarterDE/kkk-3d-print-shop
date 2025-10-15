@@ -189,6 +189,25 @@ export async function DELETE(
     const deletedProduct = await Product.findById(id).lean() as any;
     const deletedSortOrder = deletedProduct?.sortOrder || 0;
 
+    // Delete associated product filters first
+    try {
+      const ProductFilterSchema = new mongoose.Schema({
+        productId: String,
+        filterId: String,
+        filterName: String,
+        values: [String],
+        createdAt: Date,
+        updatedAt: Date
+      });
+      
+      const ProductFilterModel = mongoose.models.ProductFilter || mongoose.model('ProductFilter', ProductFilterSchema);
+      await ProductFilterModel.deleteMany({ productId: id });
+      console.log(`Deleted product filters for product ${id}`);
+    } catch (filterError) {
+      console.error('Error deleting product filters:', filterError);
+      // Continue with product deletion even if filter cleanup fails
+    }
+
     // Delete product from database
     await Product.findByIdAndDelete(id);
 

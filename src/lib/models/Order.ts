@@ -35,7 +35,7 @@ export interface IOrder extends Document {
   userId: string | null; // null for guest orders
   guestEmail?: string; // For guest orders
   guestName?: string; // For guest orders
-  status: 'pending' | 'processing' | 'shipped' | 'delivered' | 'cancelled' | 'return_requested' | 'return_completed';
+  status: 'pending' | 'processing' | 'shipped' | 'delivered' | 'cancelled' | 'return_requested' | 'partially_returned' | 'return_completed';
   subtotal: number; // Bestellwert vor Versandkosten und Rabatten
   shippingCosts: number; // Versandkosten in Cent
   total: number; // Endbetrag (subtotal + shippingCosts - discounts)
@@ -62,6 +62,14 @@ export interface IOrder extends Document {
   bonusPointsDeductedAt?: Date; // Wann die Bonuspunkte abgezogen wurden
   bonusPointsCreditedReturn?: number; // Bonuspunkte die bei Rücksendungen gutgeschrieben wurden
   bonusPointsCreditedReturnAt?: Date; // Wann die Bonuspunkte gutgeschrieben wurden
+  returnedItems?: Array<{
+    productId: string;
+    name: string;
+    quantity: number;
+    variations?: Record<string, string>;
+    returnRequestId: string;
+    returnedAt: Date;
+  }>; // Bereits zurückgesendete Artikel
   createdAt: Date;
   updatedAt: Date;
 }
@@ -121,7 +129,7 @@ const OrderSchema = new Schema<IOrder>({
   },
   status: { 
     type: String, 
-    enum: ['pending', 'processing', 'shipped', 'delivered', 'cancelled', 'return_requested', 'return_completed'],
+    enum: ['pending', 'processing', 'shipped', 'delivered', 'cancelled', 'return_requested', 'partially_returned', 'return_completed'],
     default: 'pending' 
   },
   subtotal: { 
@@ -172,7 +180,15 @@ const OrderSchema = new Schema<IOrder>({
   bonusPointsDeducted: { type: Number, default: 0 }, // Bonuspunkte die bei Rücksendungen abgezogen wurden
   bonusPointsDeductedAt: { type: Date }, // Wann die Bonuspunkte abgezogen wurden
   bonusPointsCreditedReturn: { type: Number, default: 0 }, // Bonuspunkte die bei Rücksendungen gutgeschrieben wurden
-  bonusPointsCreditedReturnAt: { type: Date } // Wann die Bonuspunkte gutgeschrieben wurden
+  bonusPointsCreditedReturnAt: { type: Date }, // Wann die Bonuspunkte gutgeschrieben wurden
+  returnedItems: [{
+    productId: { type: String, required: true },
+    name: { type: String, required: true },
+    quantity: { type: Number, required: true },
+    variations: { type: Schema.Types.Mixed },
+    returnRequestId: { type: String, required: true },
+    returnedAt: { type: Date, required: true }
+  }] // Bereits zurückgesendete Artikel
 }, {
   timestamps: true
 });

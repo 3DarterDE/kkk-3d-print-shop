@@ -29,43 +29,49 @@ export async function GET(
       return NextResponse.json({ error: 'Keine Berechtigung' }, { status: 403 });
     }
 
-    // Only allow credit note download for completed returns
-    if (order.status !== 'return_completed') {
-      return NextResponse.json({ error: 'Storno-Rechnung nur für abgeschlossene Rücksendungen verfügbar' }, { status: 400 });
+    // Allow credit note download for completed and partially returned orders
+    if (order.status !== 'return_completed' && order.status !== 'partially_returned') {
+      return NextResponse.json({ error: 'Storno-Rechnung nur für abgeschlossene oder teilweise zurückgesendete Bestellungen verfügbar' }, { status: 400 });
     }
 
-    // Find the return request by orderId (ObjectId)
-    const returnRequest = await ReturnRequest.findOne({ orderId: order._id.toString(), status: 'completed' }).lean();
-    if (!returnRequest) {
-      return NextResponse.json({ error: 'Rücksendung nicht gefunden' }, { status: 404 });
+    // Find ALL completed return requests for this order
+    const returnRequests = await ReturnRequest.find({ orderId: order._id.toString(), status: 'completed' }).lean();
+    if (!returnRequests || returnRequests.length === 0) {
+      return NextResponse.json({ error: 'Keine abgeschlossenen Rücksendungen gefunden' }, { status: 404 });
     }
 
-    // Check if PDF already exists in cache
-    const cacheDir = path.join(process.cwd(), 'cache', 'credit-notes');
-    const pdfPath = path.join(cacheDir, `storno-${order.orderNumber}.pdf`);
-    
-    try {
-      // Try to read cached PDF
-      const cachedPdf = await fs.readFile(pdfPath);
-      
-      // Return cached PDF
-      return new NextResponse(cachedPdf as any, {
-        headers: {
-          'Content-Type': 'application/pdf',
-          'Content-Disposition': `attachment; filename="storno-${order.orderNumber}.pdf"`,
-          'Content-Length': cachedPdf.length.toString(),
-          'Cache-Control': 'public, max-age=86400', // Cache for 24 hours
-        },
+    // Create a combined return request with all returned items
+    const allReturnedItems: any[] = [];
+    returnRequests.forEach(returnRequest => {
+      returnRequest.items.forEach((item: any) => {
+        if (item.accepted) {
+          allReturnedItems.push({
+            productId: item.productId,
+            name: item.name,
+            price: item.price,
+            quantity: item.quantity,
+            image: item.image,
+            variations: item.variations,
+            accepted: true
+          });
+        }
       });
-    } catch (error) {
-      // PDF not cached, generate new one
-    }
+    });
+
+    // Create a virtual return request with all returned items
+    const combinedReturnRequest = {
+      ...returnRequests[0], // Use first return as base
+      items: allReturnedItems
+    };
+
+    // Always generate fresh PDF to ensure it includes all returns
+    // (Cache is handled in the admin return processing)
 
     // Prepare accepted items for credit note with proper discount calculation
     const orderSubtotalCents = order.items.reduce((s: number, it: any) => s + (Number(it.price) * Number(it.quantity)), 0);
     const orderDiscountCents = Number(order.discountCents || 0);
     
-    const acceptedItems = returnRequest.items
+    const acceptedItems = combinedReturnRequest.items
       .filter((item: any) => item.accepted)
       .map((item: any) => {
         // Find original item in order to get original price
@@ -123,7 +129,7 @@ export async function GET(
     }
 
     // Create PDF
-    const doc = await generateCreditNotePDF(order, returnRequest, acceptedItems);
+    const doc = await generateCreditNotePDF(order, combinedReturnRequest, acceptedItems);
     
     // Generate PDF buffer
     const pdfBuffer = doc.output('arraybuffer');

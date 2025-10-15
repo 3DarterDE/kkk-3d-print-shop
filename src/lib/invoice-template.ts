@@ -364,7 +364,13 @@ export async function generateInvoicePDF(
   // Shipping costs - only show if shippingCosts is not null and > 0
   if (order.shippingCosts !== null && shippingCosts > 0) {
     doc.text('Versandkosten', totalsX + 6, lineY);
-    doc.text(formatCurrency(shippingCosts), totalsX + totalsBoxWidth - 6, lineY, { align: 'right' });
+    // For credit notes, show refund amount if shippingRefundCents is defined
+    if ((order as any).shippingRefundCents !== undefined) {
+      const refundAmount = (order as any).shippingRefundCents / 100;
+      doc.text(formatCurrency(refundAmount), totalsX + totalsBoxWidth - 6, lineY, { align: 'right' });
+    } else {
+      doc.text(formatCurrency(shippingCosts), totalsX + totalsBoxWidth - 6, lineY, { align: 'right' });
+    }
     lineY += 6;
   } else if (order.shippingCosts !== null) {
     doc.text('Versandkosten', totalsX + 6, lineY);

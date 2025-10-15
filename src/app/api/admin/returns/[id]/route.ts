@@ -118,10 +118,32 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
             return;
           }
 
-          // Calculate the ratio of returned items to total order
+          // Get all completed returns for this order first
+          const allCompletedReturns = await ReturnRequest.find({ 
+            orderId: returnDoc.orderId, 
+            status: 'completed' 
+          }).lean();
+
+          // Calculate the ratio of ALL returned items to total order (including previous returns)
           const orderSubtotalCents = orderDoc.items.reduce((s: number, it: any) => s + (Number(it.price) * Number(it.quantity)), 0);
-          let returnedItemsValueCents = 0;
+          let totalReturnedItemsValueCents = 0;
           
+          // Add value of all previously returned items
+          allCompletedReturns.forEach(prevReturn => {
+            prevReturn.items.forEach((item: any) => {
+              if (item.accepted) {
+                const originalItem = orderDoc.items.find((oi: any) => 
+                  oi.name === item.name && 
+                  JSON.stringify(oi.variations || {}) === JSON.stringify(item.variations || {})
+                );
+                if (originalItem) {
+                  totalReturnedItemsValueCents += Number(originalItem.price) * Number(item.quantity);
+                }
+              }
+            });
+          });
+          
+          // Add value of current return items
           for (const returnedItem of acceptedItems) {
             const originalItem = orderDoc.items.find((oi: any) => 
               oi.name === returnedItem.name && 
@@ -129,11 +151,15 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
             );
             
             if (originalItem) {
-              returnedItemsValueCents += Number(originalItem.price) * Number(returnedItem.quantity);
+              totalReturnedItemsValueCents += Number(originalItem.price) * Number(returnedItem.quantity);
             }
           }
           
-          const returnRatio = orderSubtotalCents > 0 ? returnedItemsValueCents / orderSubtotalCents : 0;
+          const totalReturnRatio = orderSubtotalCents > 0 ? totalReturnedItemsValueCents / orderSubtotalCents : 0;
+          
+          console.log(`Order ${orderDoc.orderNumber}: bonusPointsCredited=${orderDoc.bonusPointsCredited}, bonusPointsEarned=${orderDoc.bonusPointsEarned}, totalReturnRatio=${totalReturnRatio}`);
+          console.log(`Total returned items value: ${totalReturnedItemsValueCents} cents, Order subtotal: ${orderSubtotalCents} cents`);
+          console.log(`Accepted items for this return:`, acceptedItems.map(item => `${item.name} x${item.quantity}`));
           
           // Handle scheduled bonus points (not yet credited)
           if (!orderDoc.bonusPointsCredited) {
@@ -145,17 +171,32 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
 
               if (timer) {
                 const originalPoints = timer.pointsAwarded || 0;
-                const pointsToDeduct = Math.round(originalPoints * returnRatio);
-                const newPoints = Math.max(0, originalPoints - pointsToDeduct);
+                
+                // Calculate points to deduct based on current return items only
+                let currentReturnPointsToDeduct = 0;
+                for (const item of acceptedItems) {
+                  const originalItem = orderDoc.items.find((oi: any) => 
+                    oi.name === item.name && 
+                    JSON.stringify(oi.variations || {}) === JSON.stringify(item.variations || {})
+                  );
+                  
+                  if (originalItem) {
+                    const itemValueCents = Number(originalItem.price) * Number(item.quantity);
+                    const itemBonusPoints = Math.floor((itemValueCents / 100) * 3.5);
+                    currentReturnPointsToDeduct += itemBonusPoints;
+                  }
+                }
+                
+                const newPoints = Math.max(0, originalPoints - currentReturnPointsToDeduct);
 
-                if (newPoints <= 0) {
+                if (newPoints <= 0 || totalReturnRatio >= 1.0) {
                   // Full return - delete the timer completely
                   await AdminBonusPoints.deleteOne({ _id: timer._id });
                   orderDoc.bonusPointsEarned = 0;
                   orderDoc.bonusPointsScheduledAt = undefined;
                   console.log(`Vollständige Rücksendung: Alle geplanten Bonuspunkte (${originalPoints}) storniert für Bestellung ${orderDoc.orderNumber}`);
                 } else {
-                  // Partial return - reduce points proportionally
+                  // Partial return - reduce points by current return amount
                   timer.pointsAwarded = newPoints;
                   await timer.save();
                   orderDoc.bonusPointsEarned = newPoints;
@@ -169,21 +210,62 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
             }
           } else {
             // Points were already credited → deduct from user balance proportionally
-            const pointsToDeduct = await calculateReturnBonusPointsDeduction(
-              returnDoc.orderId,
-              acceptedItems
-            );
+            // Simple bonus points calculation: deduct points based on returned item value
+            let totalPointsToDeduct = 0;
             
-            if (pointsToDeduct > 0) {
-              await deductReturnBonusPoints(returnDoc.userId, returnDoc.orderId, pointsToDeduct);
-              console.log(`Bonuspunkte-Abzug bei Rücksendung: ${pointsToDeduct} Punkte von Benutzer ${returnDoc.userId} abgezogen`);
+            for (const item of acceptedItems) {
+              const originalItem = orderDoc.items.find((oi: any) => 
+                oi.name === item.name && 
+                JSON.stringify(oi.variations || {}) === JSON.stringify(item.variations || {})
+              );
+              
+              if (originalItem) {
+                // Calculate bonus points for this specific item (350% = 3.5x of item value)
+                const itemValueCents = Number(originalItem.price) * Number(item.quantity);
+                const itemBonusPoints = Math.floor((itemValueCents / 100) * 3.5);
+                totalPointsToDeduct += itemBonusPoints;
+                
+                console.log(`Artikel ${item.name}: ${itemValueCents/100}€ → ${itemBonusPoints} Bonuspunkte Abzug`);
+              }
             }
+            
+            console.log(`Gesamter Bonuspunkte-Abzug: ${totalPointsToDeduct} Punkte`);
+            
+            if (totalPointsToDeduct > 0) {
+              await deductReturnBonusPoints(returnDoc.userId, returnDoc.orderId, totalPointsToDeduct);
+              console.log(`Bonuspunkte-Abzug bei Rücksendung: ${totalPointsToDeduct} Punkte von Benutzer ${returnDoc.userId} abgezogen`);
+            }
+            
+            // Simple calculation: subtract deducted points from current earned points
+            const currentEarnedPoints = orderDoc.bonusPointsEarned || 0;
+            const newEarnedPoints = Math.max(0, currentEarnedPoints - totalPointsToDeduct);
+            
+            // If all items are returned, set to 0 regardless of rounding errors
+            if (totalReturnRatio >= 1.0) {
+              orderDoc.bonusPointsEarned = 0;
+            } else {
+              orderDoc.bonusPointsEarned = newEarnedPoints;
+            }
+            
+            console.log(`=== BONUSPUNKTE DEBUG ===`);
+            console.log(`Order ${orderDoc.orderNumber}:`);
+            console.log(`- Aktuelle Bonuspunkte: ${currentEarnedPoints}`);
+            console.log(`- Abzuziehende Punkte (current return): ${totalPointsToDeduct}`);
+            console.log(`- Berechnete neue Bonuspunkte: ${newEarnedPoints}`);
+            console.log(`- Total Return Ratio: ${totalReturnRatio}`);
+            console.log(`- Finale Bonuspunkte: ${orderDoc.bonusPointsEarned}`);
+            console.log(`- Order Status: ${orderDoc.status}`);
+            console.log(`- Bonus Points Credited: ${orderDoc.bonusPointsCredited}`);
+            console.log(`========================`);
+            
+            // Save the order to persist the bonus points changes
+            await orderDoc.save();
           }
 
           // Calculate and credit bonus points that were redeemed for this order
           const pointsToCredit = await calculateReturnBonusPointsCredit(
             returnDoc.orderId,
-            acceptedItems
+            acceptedItems // Use current accepted items for now
           );
 
           if (pointsToCredit > 0) {
@@ -235,9 +317,44 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
             });
           };
 
-          const creditNoteItems = acceptedItems.map((item: any) => {
+          // Get all completed returns for credit note
+          const allCompletedReturnsForCreditNote = await ReturnRequest.find({ 
+            orderId: returnDoc.orderId, 
+            status: 'completed' 
+          }).lean();
+
+          // Prepare ALL returned items for credit note (not just current return)
+          const allReturnedItemsForCreditNote: any[] = [];
+          
+          // Add all previously completed returns
+          allCompletedReturnsForCreditNote.forEach(prevReturn => {
+            prevReturn.items.forEach((item: any) => {
+              if (item.accepted) {
+                allReturnedItemsForCreditNote.push({
+                  name: item.name,
+                  quantity: item.quantity,
+                  variations: item.variations,
+                  price: item.price
+                });
+              }
+            });
+          });
+          
+          // Add current return items
+          acceptedItems.forEach((item: any) => {
             const orig = findOriginalLine(item.name, item.variations);
             const originalUnitPrice = orig ? Number(orig.price) : Number(returnDoc.items.find((it: any) => it.name === item.name)?.price || 0);
+            allReturnedItemsForCreditNote.push({
+              name: item.name,
+              quantity: item.quantity,
+              variations: item.variations,
+              price: originalUnitPrice
+            });
+          });
+
+          const creditNoteItems = allReturnedItemsForCreditNote.map((item: any) => {
+            const orig = findOriginalLine(item.name, item.variations);
+            const originalUnitPrice = orig ? Number(orig.price) : item.price;
             const originalLineTotal = originalUnitPrice * item.quantity;
             
             // Calculate discount per unit for display purposes
@@ -285,12 +402,16 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
           const creditNoteDoc = await generateCreditNotePDF(order, returnDoc, creditNoteItems);
           const pdfBuffer = creditNoteDoc.output('arraybuffer');
           
-          // Cache the credit note PDF
+          // Cache the credit note PDF with timestamp to ensure it's always updated
           const cacheDir = path.join(process.cwd(), 'cache', 'credit-notes');
-          const pdfPath = path.join(cacheDir, `storno-${order?.orderNumber || returnDoc.orderNumber}.pdf`);
+          const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+          const pdfPath = path.join(cacheDir, `storno-${order?.orderNumber || returnDoc.orderNumber}-${timestamp}.pdf`);
+          const latestPdfPath = path.join(cacheDir, `storno-${order?.orderNumber || returnDoc.orderNumber}-latest.pdf`);
           try {
             await fs.mkdir(cacheDir, { recursive: true });
             await fs.writeFile(pdfPath, Buffer.from(pdfBuffer));
+            // Also create a "latest" version for easy access
+            await fs.writeFile(latestPdfPath, Buffer.from(pdfBuffer));
           } catch (cacheError) {
             console.warn('Failed to cache credit note PDF:', cacheError);
           }
@@ -298,12 +419,30 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
           // Calculate total amount for credit note
           const itemsAmount = creditNoteItems.reduce((sum, item) => sum + item.total, 0);
           
+          // Get all completed returns for this order to calculate total returned quantity
+          const allCompletedReturns = await ReturnRequest.find({ 
+            orderId: returnDoc.orderId, 
+            status: 'completed' 
+          }).lean();
+          
           // Check if all items are being returned (for shipping refund)
+          // This includes all previous returns plus current return
           const totalSelectedQuantity = acceptedItems.reduce((sum, item) => sum + item.quantity, 0);
           const totalOrderQuantity = orderItems.reduce((sum, item) => sum + item.quantity, 0);
-          const isFullReturn = totalSelectedQuantity >= totalOrderQuantity;
           
-          // Add shipping costs if all items are being returned
+          // Calculate total returned quantity across all completed returns
+          let totalReturnedQuantity = 0;
+          allCompletedReturns.forEach(returnDoc => {
+            returnDoc.items.forEach((item: any) => {
+              if (item.accepted) {
+                totalReturnedQuantity += item.quantity;
+              }
+            });
+          });
+          
+          const isFullReturn = totalReturnedQuantity >= totalOrderQuantity;
+          
+          // Add shipping costs if all items are being returned (including previous returns)
           const shippingCents = Number(order?.shippingCosts || 0);
           const shippingAmount = isFullReturn ? (shippingCents / 100) : 0;
           
@@ -323,8 +462,89 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
         }
       }
 
-      // Also set order status -> return_completed
-      await Order.findByIdAndUpdate(returnDoc.orderId, { $set: { status: 'return_completed' } });
+      // Determine final order status based on whether all items are returned
+      const orderDoc = await Order.findById(returnDoc.orderId);
+      if (!orderDoc) {
+        console.error('Order not found for return completion');
+        return NextResponse.json({ error: 'Bestellung nicht gefunden' }, { status: 404 });
+      }
+
+      // Get all completed returns for this order to calculate total returned quantity
+      const allCompletedReturns = await ReturnRequest.find({ 
+        orderId: returnDoc.orderId, 
+        status: 'completed' 
+      }).lean();
+      
+      // Also include the current return if it's being completed
+      if (status === 'completed') {
+        const currentReturnExists = allCompletedReturns.some(r => r._id.toString() === (returnDoc._id as any).toString());
+        if (!currentReturnExists) {
+          allCompletedReturns.push({
+            ...returnDoc.toObject(),
+            _id: returnDoc._id as any,
+            items: returnDoc.items.filter((item: any) => item.accepted)
+          } as any);
+        }
+      }
+      
+      console.log(`Order ${orderDoc.orderNumber}: Found ${allCompletedReturns.length} completed returns:`, allCompletedReturns.map(r => `${r._id} (${r.items.map(i => `${i.name} x${i.quantity}`).join(', ')})`));
+      
+      // Calculate total returned quantity across all returns
+      let totalReturnedQuantity = 0;
+      allCompletedReturns.forEach(returnDoc => {
+        returnDoc.items.forEach((item: any) => {
+          if (item.accepted) {
+            totalReturnedQuantity += item.quantity;
+          }
+        });
+      });
+      
+      // Note: totalReturnedQuantity already includes current return if it was added to allCompletedReturns
+      // So we don't need to add currentReturnQuantity again
+      const totalWithCurrent = totalReturnedQuantity;
+      
+      // Calculate total original quantity
+      const totalOriginalQuantity = orderDoc.items.reduce((sum, item) => sum + item.quantity, 0);
+      
+      console.log(`Order ${orderDoc.orderNumber}: Quantity calculation debug:`, {
+        totalReturnedQuantity,
+        totalWithCurrent,
+        totalOriginalQuantity,
+        isComplete: totalWithCurrent >= totalOriginalQuantity
+      });
+      
+      // Update returnedItems array in order
+      const returnedItems: any[] = [];
+      allCompletedReturns.forEach(returnDoc => {
+        returnDoc.items.forEach((item: any) => {
+          if (item.accepted) {
+            returnedItems.push({
+              productId: item.productId,
+              name: item.name,
+              quantity: item.quantity,
+              variations: item.variations,
+              returnRequestId: returnDoc._id.toString(),
+              returnedAt: returnDoc.updatedAt
+            });
+          }
+        });
+      });
+      
+      console.log(`Order ${orderDoc.orderNumber}: Updating returnedItems with ${returnedItems.length} items:`, returnedItems.map(item => `${item.name} x${item.quantity}`));
+      
+      // Set order status based on whether all items are returned
+      const finalStatus = totalWithCurrent >= totalOriginalQuantity ? 'return_completed' : 'partially_returned';
+      
+      console.log(`Order ${orderDoc.orderNumber}: Setting status to ${finalStatus} (totalWithCurrent: ${totalWithCurrent}, totalOriginalQuantity: ${totalOriginalQuantity})`);
+      
+      await Order.findByIdAndUpdate(returnDoc.orderId, { 
+        $set: { 
+          status: finalStatus,
+          returnedItems: returnedItems
+        } 
+      });
+      
+      console.log(`Order ${orderDoc.orderNumber}: Successfully updated with ${returnedItems.length} returned items`);
     }
 
     await returnDoc.save();

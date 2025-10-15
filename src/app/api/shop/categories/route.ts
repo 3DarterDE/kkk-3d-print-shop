@@ -43,10 +43,15 @@ export async function GET() {
       }))
     }));
     
-    return NextResponse.json({ 
+    const result = NextResponse.json({ 
       categories: categoriesWithSubcategories,
       total: categoriesWithSubcategories.length 
     });
+
+    // Cache for 60 seconds (categories don't change often)
+    result.headers.set('Cache-Control', 'public, max-age=60');
+    
+    return result;
   } catch (error) {
     console.error("Failed to fetch categories:", error);
     return NextResponse.json({ error: "Failed to fetch categories" }, { status: 500 });

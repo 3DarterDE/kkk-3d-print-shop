@@ -7,6 +7,7 @@ import SearchBar from "./SearchBar";
 import CustomerButton from "./CustomerButton";
 import { useState, useEffect, useMemo, useCallback } from "react";
 import { useAuth } from '@/lib/hooks/useAuth';
+import { useShopData } from '@/lib/contexts/ShopDataContext';
 import { TiShoppingCart } from "react-icons/ti";
 import { withCursorPointer } from '@/lib/cursor-utils';
 import { useRouter } from "next/navigation";
@@ -34,16 +35,13 @@ interface Brand {
 
 export default function Navbar() {
   const { isAdmin } = useAuth();
+  const { categories, brands, loading: shopDataLoading } = useShopData();
   const count = useCartStore((s) => s.items.reduce((n, i) => n + i.quantity, 0));
   const [isScrolled, setIsScrolled] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isAdminMenuOpen, setIsAdminMenuOpen] = useState(false);
   const [isCartOpen, setIsCartOpen] = useState(false);
   const [isMounted, setIsMounted] = useState(false);
-  const [categories, setCategories] = useState<Category[]>([]);
-  const [brands, setBrands] = useState<Brand[]>([]);
-  const [isLoadingCategories, setIsLoadingCategories] = useState(true);
-  const [isLoadingBrands, setIsLoadingBrands] = useState(true);
   const [currentView, setCurrentView] = useState<'main' | 'categories' | 'brands'>('main');
   const [selectedCategory, setSelectedCategory] = useState<Category | null>(null);
   const [adminNotifications, setAdminNotifications] = useState({ pendingOrders: 0, pendingReturns: 0 });
@@ -128,34 +126,7 @@ export default function Navbar() {
     return () => clearInterval(interval);
   }, [fetchAdminNotifications]);
 
-  // Load categories and brands for mobile menu
-  useEffect(() => {
-    const fetchData = async () => {
-      try {
-        // Fetch categories
-        const categoriesResponse = await fetch('/api/shop/categories');
-        if (categoriesResponse.ok) {
-          const categoriesData = await categoriesResponse.json();
-          const categoriesArray = Array.isArray(categoriesData.categories) ? categoriesData.categories : [];
-          setCategories(categoriesArray);
-        }
-
-        // Fetch brands
-        const brandsResponse = await fetch('/api/shop/brands');
-        if (brandsResponse.ok) {
-          const brandsArray = await brandsResponse.json();
-          setBrands(Array.isArray(brandsArray) ? brandsArray : []);
-        }
-      } catch (error) {
-        console.error('Error fetching data:', error);
-      } finally {
-        setIsLoadingCategories(false);
-        setIsLoadingBrands(false);
-      }
-    };
-
-    fetchData();
-  }, []);
+  // Load categories and brands for mobile menu - REMOVED: Now using ShopDataContext
 
 
   return (
@@ -425,7 +396,7 @@ export default function Navbar() {
                     {/* Kategorien-Ansicht */}
                     {currentView === 'categories' && !selectedCategory && (
                       <>
-                        {isLoadingCategories ? (
+                        {shopDataLoading ? (
                           <div className="text-gray-500 px-4 py-2 text-sm">
                             Kategorien werden geladen...
                           </div>
@@ -484,7 +455,7 @@ export default function Navbar() {
                     {/* Marken-Ansicht */}
                     {currentView === 'brands' && (
                       <>
-                        {isLoadingBrands ? (
+                        {shopDataLoading ? (
                           <div className="text-gray-500 px-4 py-2 text-sm">
                             Marken werden geladen...
                           </div>

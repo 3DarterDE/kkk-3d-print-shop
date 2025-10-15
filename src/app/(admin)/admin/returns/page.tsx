@@ -52,6 +52,7 @@ export default function AdminReturnsPage() {
   const [selected, setSelected] = useState<ReturnRequest | null>(null);
   const [updating, setUpdating] = useState(false);
   const [orderForReturn, setOrderForReturn] = useState<any | null>(null);
+  const [alreadyReturnedItems, setAlreadyReturnedItems] = useState<any[]>([]);
 
   useEffect(() => {
     fetchList();
@@ -79,8 +80,41 @@ export default function AdminReturnsPage() {
       setSelected(data.returnRequest);
       // Set the order data directly from the API response
       setOrderForReturn(data.order);
+      
+      // Load already returned items for this order
+      if (data.order) {
+        await fetchAlreadyReturnedItems(data.order._id);
+      }
     } else {
       alert(data.error || 'Fehler beim Laden');
+    }
+  };
+
+  const fetchAlreadyReturnedItems = async (orderId: string) => {
+    try {
+      const res = await fetch(`/api/admin/returns?orderId=${orderId}&status=completed`);
+      const data = await res.json();
+      if (res.ok) {
+        const returnedItems: any[] = [];
+        data.returns.forEach((returnDoc: any) => {
+          returnDoc.items.forEach((item: any) => {
+            if (item.accepted) {
+              returnedItems.push({
+                productId: item.productId,
+                name: item.name,
+                quantity: item.quantity,
+                variations: item.variations,
+                returnRequestId: returnDoc._id,
+                returnedAt: returnDoc.updatedAt
+              });
+            }
+          });
+        });
+        setAlreadyReturnedItems(returnedItems);
+      }
+    } catch (error) {
+      console.error('Error fetching already returned items:', error);
+      setAlreadyReturnedItems([]);
     }
   };
 
@@ -109,6 +143,8 @@ export default function AdminReturnsPage() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Fehler beim Aktualisieren');
       setSelected(null);
+      setOrderForReturn(null);
+      setAlreadyReturnedItems([]);
       await fetchList();
       alert('Rücksendung abgeschlossen. Lagerbestand aktualisiert und E-Mail versendet.');
     } catch (e: any) {
@@ -126,6 +162,12 @@ export default function AdminReturnsPage() {
         return;
       }
       try {
+        // Use the order data that was already loaded from the return API
+        // This ensures we have the most up-to-date returnedItems
+        if (orderForReturn) {
+          return; // Already loaded from the return API
+        }
+        
         const res = await fetch(`/api/admin/orders?search=${encodeURIComponent(selected.orderNumber)}`);
         if (!res.ok) return;
         const data = await res.json();
@@ -138,7 +180,7 @@ export default function AdminReturnsPage() {
       }
     };
     fetchOrder();
-  }, [selected]);
+  }, [selected, orderForReturn]);
 
   // Helpers to compute prorated refund based on order discount and bonus points
   const getPointsDiscountAmount = (points: number) => {
@@ -191,10 +233,29 @@ export default function AdminReturnsPage() {
         .filter(it => it.accepted)
         .reduce((sum, it) => sum + Number(it.quantity), 0);
       const totalOrderQuantity = orderForReturn.items.reduce((sum: number, it: any) => sum + Number(it.quantity), 0);
-      const isFullReturn = totalSelectedQuantity >= totalOrderQuantity;
+      
+      // Calculate total returned quantity across all previous returns
+      let previousReturnedQuantity = 0;
+      
+      // Check against alreadyReturnedItems (from API)
+      previousReturnedQuantity += alreadyReturnedItems.reduce((sum: number, item: any) => sum + Number(item.quantity), 0);
+      
+      // Also check against orderForReturn.returnedItems (from order model)
+      if (orderForReturn.returnedItems && orderForReturn.returnedItems.length > 0) {
+        previousReturnedQuantity += orderForReturn.returnedItems.reduce((sum: number, item: any) => sum + Number(item.quantity), 0);
+      }
+      
+      const totalReturnedQuantity = previousReturnedQuantity + totalSelectedQuantity;
+      const isFullReturn = totalReturnedQuantity >= totalOrderQuantity;
       
       const shippingCents = Number(orderForReturn.shippingCosts || 0);
-      return itemsRefundCents + (isFullReturn ? shippingCents : 0);
+      let totalRefundCents = itemsRefundCents + (isFullReturn ? shippingCents : 0);
+      
+      // Simple cap: ensure we don't exceed the original order total
+      const originalOrderTotalCents = Math.round(orderForReturn.total * 100);
+      totalRefundCents = Math.min(totalRefundCents, originalOrderTotalCents);
+      
+      return totalRefundCents;
     }
     
     return itemsRefundCents;
@@ -436,7 +497,7 @@ export default function AdminReturnsPage() {
                   </div>
                 </div>
                 <button 
-                  onClick={() => setSelected(null)} 
+                  onClick={() => { setSelected(null); setOrderForReturn(null); setAlreadyReturnedItems([]); }} 
                   className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition-colors flex-shrink-0"
                 >
                   <span className="text-xl">✕</span>
@@ -446,11 +507,41 @@ export default function AdminReturnsPage() {
             {/* Modal Content */}
             <div className="p-4 sm:p-6 space-y-4 sm:space-y-6 max-h-[60vh] sm:max-h-[70vh] overflow-y-auto">
               {/* Items Section */}
+              {/* Already Returned Items */}
+              {alreadyReturnedItems && alreadyReturnedItems.length > 0 && (
+                <div className="mb-6">
+                  <h4 className="text-base sm:text-lg font-semibold text-gray-900 mb-3 sm:mb-4 flex items-center gap-2">
+                    <span>✅</span>
+                    Bereits zurückgesendete Artikel
+                  </h4>
+                  <div className="space-y-2">
+                    {alreadyReturnedItems.map((returnedItem: any, index: number) => (
+                      <div key={index} className="flex items-center gap-3 p-3 bg-gray-50 border border-gray-200 rounded-lg">
+                        <div className="flex-shrink-0">
+                          <span className="text-green-600 text-lg">✅</span>
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="font-medium text-gray-900">{returnedItem.name}</div>
+                          {returnedItem.variations && (
+                            <div className="flex flex-wrap gap-1 mt-1">
+                              {Object.entries(returnedItem.variations).map(([k,v]) => (
+                                <span key={k} className="inline-flex items-center px-2 py-1 rounded-md text-xs font-medium bg-gray-200 text-gray-700">
+                                  {k}: {String(v)}
+                                </span>
+                              ))}
+                            </div>
+                          )}
+                          <div className="text-sm text-gray-600 mt-1">
+                            Menge: {returnedItem.quantity} • Zurückgesendet: {new Date(returnedItem.returnedAt).toLocaleDateString('de-DE')}
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
               <div>
-                <h4 className="text-base sm:text-lg font-semibold text-gray-900 mb-3 sm:mb-4 flex items-center gap-2">
-                  <span>📦</span>
-                  Zurückgesendete Artikel
-                </h4>
                 <div className="space-y-3">
                   {selected.items.map((it) => (
                     <div key={it.productId} className={`flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-4 border-2 rounded-xl p-3 sm:p-4 transition-all ${
@@ -546,11 +637,26 @@ export default function AdminReturnsPage() {
                     const shippingCents = Number(orderForReturn.shippingCosts || 0);
                     
                     // Check if all items are being returned (for shipping refund)
+                    // This includes all previous returns plus current return
                     const totalSelectedQuantity = selected.items
                       .filter(it => it.accepted)
                       .reduce((sum, it) => sum + Number(it.quantity), 0);
                     const totalOrderQuantity = orderForReturn.items.reduce((sum: number, it: any) => sum + Number(it.quantity), 0);
-                    const isFullReturn = totalSelectedQuantity >= totalOrderQuantity;
+                    
+                    // Calculate total returned quantity across all previous returns
+                    let previousReturnedQuantity = 0;
+                    
+                    // Check against alreadyReturnedItems (from API)
+                    previousReturnedQuantity += alreadyReturnedItems.reduce((sum: number, item: any) => sum + Number(item.quantity), 0);
+                    
+                    // Also check against orderForReturn.returnedItems (from order model)
+                    if (orderForReturn.returnedItems && orderForReturn.returnedItems.length > 0) {
+                      previousReturnedQuantity += orderForReturn.returnedItems.reduce((sum: number, item: any) => sum + Number(item.quantity), 0);
+                    }
+                    
+                    const totalReturnedQuantity = previousReturnedQuantity + totalSelectedQuantity;
+                    
+                    const isFullReturn = totalReturnedQuantity >= totalOrderQuantity;
                     const includesShipping = isFullReturn && shippingCents > 0;
                     
                     const details = [];
@@ -616,7 +722,7 @@ export default function AdminReturnsPage() {
             {/* Modal Footer */}
             <div className="bg-gray-50 px-4 sm:px-6 py-3 sm:py-4 border-t border-gray-200 flex flex-col sm:flex-row justify-end gap-2 sm:gap-3">
               <button 
-                onClick={() => setSelected(null)} 
+                onClick={() => { setSelected(null); setOrderForReturn(null); setAlreadyReturnedItems([]); }} 
                 className="w-full sm:w-auto px-4 sm:px-6 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
               >
                 Abbrechen

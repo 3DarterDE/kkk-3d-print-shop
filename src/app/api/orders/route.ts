@@ -65,12 +65,17 @@ export async function GET(request: NextRequest) {
 
     const total = await Order.countDocuments({ userId: user._id.toString() });
 
-    return NextResponse.json({
+    const result = NextResponse.json({
       orders,
       total,
       page,
       limit
     });
+
+    // Cache for 10 seconds with stale-while-revalidate for 30 seconds
+    result.headers.set('Cache-Control', 'private, max-age=10, stale-while-revalidate=30');
+    
+    return result;
 
   } catch (error) {
     console.error('Error fetching orders:', error);

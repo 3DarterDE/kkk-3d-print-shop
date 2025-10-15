@@ -32,11 +32,32 @@ export async function generateCreditNotePDF(
   const originalSubtotal = acceptedItems.reduce((sum, it) => sum + (it.total / 100), 0);
   
   // Check if all items are being returned (for shipping refund)
+  // This includes all previous returns plus current return
   const totalSelectedQuantity = acceptedItems.reduce((sum, it) => sum + it.quantity, 0);
   const totalOrderQuantity = order.items.reduce((sum: number, it: any) => sum + it.quantity, 0);
-  const isFullReturn = totalSelectedQuantity >= totalOrderQuantity;
   
-  // Add shipping costs if all items are being returned
+  // Import ReturnRequest to check all completed returns
+  const { default: ReturnRequest } = await import('@/lib/models/Return');
+  
+  // Get all completed returns for this order to calculate total returned quantity
+  const allCompletedReturns = await ReturnRequest.find({ 
+    orderId: order._id.toString(), 
+    status: 'completed' 
+  }).lean();
+  
+  // Calculate total returned quantity across all completed returns
+  let totalReturnedQuantity = 0;
+  allCompletedReturns.forEach(returnDoc => {
+    returnDoc.items.forEach((item: any) => {
+      if (item.accepted) {
+        totalReturnedQuantity += item.quantity;
+      }
+    });
+  });
+  
+  const isFullReturn = totalReturnedQuantity >= totalOrderQuantity;
+  
+  // Add shipping costs if all items are being returned (including previous returns)
   const shippingCents = Number(order.shippingCosts || 0);
   const shippingAmount = isFullReturn ? (shippingCents / 100) : 0;
   
@@ -57,7 +78,8 @@ export async function generateCreditNotePDF(
     discountCents: totalDiscountCents, // Pass discount for display
     bonusPointsRedeemed: order.bonusPointsRedeemed, // Pass bonus points for display
     pointsDiscountOverrideCents: totalBonusPointsDiscountCents, // Prorated bonus points discount for display
-    shippingCosts: isFullReturn ? shippingCents : 0, // Include shipping costs only for full returns
+    shippingCosts: shippingCents, // Always show original shipping costs
+    shippingRefundCents: isFullReturn ? shippingCents : 0, // Only refund shipping costs for full returns
   } as any;
 
   // Use the invoice template with custom title and legal note

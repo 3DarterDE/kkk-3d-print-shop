@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
+import { useShopData } from '@/lib/contexts/ShopDataContext';
 import { withCursorPointer } from '@/lib/cursor-utils';
 
 interface Category {
@@ -13,9 +14,9 @@ interface Category {
   subcategories?: Category[];
   image?: string;
   imageSizes?: {
-    main: string;
-    thumb: string;
-    small: string;
+    thumb?: string;
+    main?: string;
+    small?: string;
   };
 }
 
@@ -38,34 +39,20 @@ export default function CategoryNavigation({
   showSaleItems = false,
   showNewItems = false
 }: CategoryNavigationProps) {
-  const [categories, setCategories] = useState<Category[]>([]);
+  const { categories, brands, loading: shopDataLoading } = useShopData();
   const [isVisible, setIsVisible] = useState(true);
   const [isHovered, setIsHovered] = useState(false);
   const [hoveredCategory, setHoveredCategory] = useState<string | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
   const [isBrandsHovered, setIsBrandsHovered] = useState(false);
   const [mounted, setMounted] = useState(false);
   const router = useRouter();
-
-  const [brands, setBrands] = useState<Array<{ _id: string; name: string; image?: string; imageSizes?: { thumb?: string; main?: string; small?: string }; slug: string }>>([]);
 
   // Set mounted state to prevent hydration mismatch
   useEffect(() => {
     setMounted(true);
   }, []);
 
-  useEffect(() => {
-    const loadBrands = async () => {
-      try {
-        const res = await fetch('/api/shop/brands');
-        if (res.ok) {
-          const data = await res.json();
-          setBrands(Array.isArray(data) ? data : []);
-        }
-      } catch {}
-    };
-    loadBrands();
-  }, []);
+  // Load brands - REMOVED: Now using ShopDataContext
   
 
   // Check if we're on shop page or in a category/brand
@@ -132,31 +119,7 @@ export default function CategoryNavigation({
 
 
 
-  // Fetch categories
-  useEffect(() => {
-    
-    const fetchCategories = async () => {
-      try {
-        const response = await fetch('/api/shop/categories');
-        
-        if (response.ok) {
-          const data = await response.json();
-          const categoriesArray = Array.isArray(data.categories) ? data.categories : [];
-          setCategories(categoriesArray);
-        } else {
-          console.error('Failed to fetch categories:', response.status);
-          setCategories([]);
-        }
-      } catch (error) {
-        console.error('Error fetching categories:', error);
-        setCategories([]);
-      } finally {
-        setIsLoading(false);
-      }
-    };
-
-    fetchCategories();
-  }, []);
+  // Fetch categories - REMOVED: Now using ShopDataContext
 
   // Handle scroll visibility
   useEffect(() => {
@@ -214,7 +177,7 @@ export default function CategoryNavigation({
             {/* Categories dropdown */}
             <div className="relative">
             <button
-              onMouseEnter={() => !isLoading && setIsHovered(true)}
+              onMouseEnter={() => !shopDataLoading && setIsHovered(true)}
               onMouseLeave={() => {
                 // Delay to allow mouse to move to dropdown
                 setTimeout(() => {
@@ -241,7 +204,7 @@ export default function CategoryNavigation({
             </button>
 
             {/* Dropdown menu */}
-          {isHovered && !isLoading && (
+          {isHovered && !shopDataLoading && (
             <div 
               className="category-dropdown absolute top-full left-0 bg-white border border-gray-200 rounded-md shadow-xl z-50 opacity-100 min-w-[600px]"
               onMouseEnter={() => setIsHovered(true)}

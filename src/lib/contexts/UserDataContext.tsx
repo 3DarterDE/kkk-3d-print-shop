@@ -1,5 +1,5 @@
 "use client";
-import React, { createContext, useContext, useState, useEffect, useCallback, useMemo } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useAuth } from '@/lib/hooks/useAuth';
 import { usePathname } from 'next/navigation';
 
@@ -90,7 +90,13 @@ export function UserDataProvider({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const [ordersLoaded, setOrdersLoaded] = useState(false);
 
+  // Request deduplication refs
+  const fetchingRef = useRef({ user: false, orders: false });
+  const sessionFetchedRef = useRef({ orders: false });
+
   const fetchUser = useCallback(async () => {
+    if (fetchingRef.current.user) return;
+    fetchingRef.current.user = true;
     try {
       const response = await fetch("/api/profile");
       const data = await response.json();
@@ -98,85 +104,62 @@ export function UserDataProvider({ children }: { children: React.ReactNode }) {
       setError(null);
     } catch (err) {
       setError(err as Error);
+    } finally {
+      fetchingRef.current.user = false;
     }
   }, []);
 
   const fetchOrders = useCallback(async () => {
+    if (fetchingRef.current.orders) return;
+    fetchingRef.current.orders = true;
     try {
       const response = await fetch("/api/orders");
       const data = await response.json();
       setOrders(data.orders || []);
       setOrdersLoaded(true);
+      sessionFetchedRef.current.orders = true;
     } catch (err) {
       console.error('Failed to fetch orders:', err);
       setOrdersLoaded(true);
+    } finally {
+      fetchingRef.current.orders = false;
     }
   }, []);
 
   useEffect(() => {
+    const pathnameRef = pathname; // Capture current pathname
+    
     const loadData = async () => {
-      // Wait for auth state to resolve to avoid flicker
-      if (authLoading) {
-        return;
-      }
-
-      // Skip entirely when not authenticated to avoid unnecessary API load
+      if (authLoading) return;
       if (!isAuthenticated) {
         setLoading(false);
         setOrdersLoaded(true);
         return;
       }
 
-      let blockedLoading = false;
-      try {
-        // Only fetch orders on pages that actually need them
-        const shouldFetchOrders = Boolean(
-          pathname && (
-            pathname.startsWith('/profile') ||
-            pathname.startsWith('/orders') ||
-            pathname.startsWith('/checkout') ||
-            pathname.startsWith('/account') ||
-            pathname.startsWith('/bonus')
-          )
-        );
+      const shouldFetchOrders = Boolean(
+        pathnameRef && (
+          pathnameRef.startsWith('/profile') ||
+          pathnameRef.startsWith('/orders') ||
+          pathnameRef.startsWith('/checkout') ||
+          pathnameRef.startsWith('/account') ||
+          pathnameRef.startsWith('/bonus')
+        )
+      );
 
-        if (shouldFetchOrders) {
-          // If orders are not yet loaded, block UI until both user and orders are fetched
-          if (!ordersLoaded) {
-            setLoading(true);
-            blockedLoading = true;
-            setOrdersLoaded(false);
-            await Promise.all([fetchUser(), fetchOrders()]);
-          } else {
-            // Orders are already available: show instantly and refresh in background
-            if (!user) {
-              // Ensure user is loaded, but don't block UI
-              fetchUser();
-            }
-            // Background refresh of orders without toggling loading
-            fetchOrders();
-          }
-        } else {
-          // Routes that don't need orders: ensure user is present
-          if (!user) {
-            setLoading(true);
-            blockedLoading = true;
-            await fetchUser();
-          } else {
-            // Optional background user refresh
-            // fetchUser();
-          }
-        }
-      } catch (err) {
-        setError(err as Error);
-      } finally {
-        if (blockedLoading) {
-          setLoading(false);
-        }
+      if (shouldFetchOrders && !sessionFetchedRef.current.orders) {
+        setLoading(true);
+        await Promise.all([fetchUser(), fetchOrders()]);
+        setLoading(false);
+      } else if (!user && !shouldFetchOrders) {
+        setLoading(true);
+        await fetchUser();
+        setLoading(false);
       }
     };
+    
     loadData();
-  }, [isAuthenticated, authLoading, pathname, fetchUser, fetchOrders, ordersLoaded, user]);
+  }, [isAuthenticated, authLoading, fetchUser, fetchOrders, user]);
 
   const refetchUser = useCallback(async () => {
     setLoading(true);

@@ -14,11 +14,15 @@ export async function GET(request: NextRequest) {
     const page = parseInt(searchParams.get('page') || '1');
     const limit = parseInt(searchParams.get('limit') || '20');
     const status = searchParams.get('status');
+    const orderId = searchParams.get('orderId');
     const skip = (page - 1) * limit;
 
     const filter: any = {};
     if (status && ['received','processing','completed','rejected'].includes(status)) {
       filter.status = status;
+    }
+    if (orderId) {
+      filter.orderId = orderId;
     }
 
     const [items, total] = await Promise.all([

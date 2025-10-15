@@ -40,7 +40,12 @@ export async function GET(request: NextRequest) {
       });
     });
 
-    return NextResponse.json({ returnedItemsByOrder });
+    const result = NextResponse.json({ returnedItemsByOrder });
+    
+    // Cache for 10 seconds
+    result.headers.set('Cache-Control', 'private, max-age=10');
+    
+    return result;
   } catch (error) {
     console.error('Error fetching user returns:', error);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });

@@ -17,7 +17,8 @@ export async function GET() {
   
   const orders = await Order.find({ userId: user._id.toString() }).sort({ createdAt: -1 }).limit(5).lean();
   // const addresses = await Address.find({ userId: user._id }).lean();
-  return NextResponse.json({
+  
+  const result = NextResponse.json({
     user: {
       name: user.name,
       salutation: user.salutation,
@@ -57,4 +58,9 @@ export async function GET() {
     orders: orders || [],
     addresses: [], // später ersetzen
   });
+
+  // Cache for 30 seconds
+  result.headers.set('Cache-Control', 'private, max-age=30');
+  
+  return result;
 }

@@ -34,7 +34,12 @@ export async function GET(request: NextRequest) {
     // TODO: Implement category-based filtering when product filters are set up
     const filters = await FilterModel.find({}).sort({ sortOrder: 1 });
     
-    return NextResponse.json(filters);
+    const result = NextResponse.json(filters);
+
+    // Cache for 60 seconds (filters ändern sich selten)
+    result.headers.set('Cache-Control', 'public, max-age=60');
+
+    return result;
   } catch (error) {
     console.error('Error fetching category filters:', error);
     return NextResponse.json({ error: 'Failed to fetch filters' }, { status: 500 });
