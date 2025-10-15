@@ -3,6 +3,7 @@ import React, { useEffect, useState, useRef } from "react";
 import Link from "next/link";
 import { useUserData } from "@/lib/contexts/UserDataContext";
 import { withCursorPointer } from '@/lib/cursor-utils';
+import { useToast } from '@/components/Toast';
 
 type Order = {
   _id: string;
@@ -52,6 +53,13 @@ type Order = {
   bonusPointsCredited?: boolean;
   bonusPointsCreditedAt?: string;
   bonusPointsScheduledAt?: string;
+  bonusPointsRedeemed?: number;
+  bonusPointsDeducted?: number;
+  bonusPointsDeductedAt?: string;
+  bonusPointsCreditedReturn?: number;
+  bonusPointsCreditedReturnAt?: string;
+  bonusPointsUnfrozen?: number;
+  bonusPointsUnfrozenAt?: string;
   discountCode?: string;
   discountCents?: number;
   createdAt: string;
@@ -67,6 +75,7 @@ type OrdersResponse = {
 
 export default function OrdersPage() {
   const { orders, loading, error, ordersLoaded, refetchOrders } = useUserData();
+  const { showToast, ToastContainer } = useToast();
   const [expandedOrder, setExpandedOrder] = useState<string | null>(null);
   const [returnModalOrderId, setReturnModalOrderId] = useState<string | null>(null);
   const [returnSelections, setReturnSelections] = useState<Record<string, number>>({});
@@ -443,6 +452,11 @@ export default function OrdersPage() {
 
   // Get return status text
   const getReturnStatusText = (order: any) => {
+    // Handle return_completed status first
+    if (order.status === 'return_completed') {
+      return 'Alle Artikel zurückgesendet';
+    }
+    
     if (order.status === 'delivered' || (order as any).status === 'partially_returned' || order.status === 'return_requested') {
       if (canReturnOrder(order)) {
         if (order.status === 'return_requested') {
@@ -1035,19 +1049,62 @@ export default function OrdersPage() {
                                                 );
                                               })()}
                                             </div>
-                                            <div className="text-sm text-slate-600 bg-blue-50 rounded p-2">
-                                              <span className="font-medium">
-                                                {(order as any).bonusPointsEarned > 0
-                                                  ? `Du hast ${order.bonusPointsEarned} Bonuspunkte für diese Bestellung erhalten`
-                                                  : (order.status === 'return_completed'
-                                                      ? 'Keine Bonuspunkte, da alle Artikel zurückgesendet wurden.'
-                                                      : 'Für diese Bestellung erhältst du keine Bonuspunkte.')}
-                                              </span>
-                                              {(order as any).bonusPointsRedeemed > 0 && (
-                                                <span className="block mt-1">
-                                                  und {((order as any).bonusPointsRedeemed)} Punkte eingelöst
+                                            {/* Erweiterte Bonuspunkte-Übersicht für Kunden */}
+                                            {(order.bonusPointsEarned || (order as any).bonusPointsRedeemed || (order as any).bonusPointsDeducted || (order as any).bonusPointsCreditedReturn) && (
+                                              <div className="text-sm bg-green-50 rounded-lg p-3 border border-green-200">
+                                                <div className="flex items-center gap-2 mb-2">
+                                                  <span className="text-green-600 text-lg">🎁</span>
+                                                  <span className="font-semibold text-green-800">Bonuspunkte-Übersicht</span>
+                                                </div>
+                                                <div className="space-y-1 text-xs">
+                                                  {order.bonusPointsEarned > 0 && (
+                                                    <div className="flex justify-between">
+                                                      <span className="text-gray-600">Verdiente Punkte:</span>
+                                                      <span className="font-medium text-green-600">+{order.bonusPointsEarned}</span>
+                                                    </div>
+                                                  )}
+                                                  {(order as any).bonusPointsRedeemed > 0 && (
+                                                    <div className="flex justify-between">
+                                                      <span className="text-gray-600">Eingelöste Punkte:</span>
+                                                      <span className="font-medium text-red-600">-{(order as any).bonusPointsRedeemed}</span>
+                                                    </div>
+                                                  )}
+                                                  {(order as any).bonusPointsDeducted > 0 && (
+                                                    <div className="flex justify-between">
+                                                      <span className="text-gray-600">Abgezogen (Rücksendung):</span>
+                                                      <span className="font-medium text-red-600">-{(order as any).bonusPointsDeducted}</span>
+                                                    </div>
+                                                  )}
+                                                  {(order as any).bonusPointsCreditedReturn > 0 && (
+                                                    <div className="flex justify-between">
+                                                      <span className="text-gray-600">Gutgeschrieben (Rücksendung):</span>
+                                                      <span className="font-medium text-green-600">+{(order as any).bonusPointsCreditedReturn}</span>
+                                                    </div>
+                                                  )}
+                                                  <div className="flex justify-between border-t pt-1 mt-1">
+                                                    <span className="text-gray-600">Status:</span>
+                                                    {order.bonusPointsCredited ? (
+                                                      <span className="font-medium text-green-600">✅ Gutgeschrieben</span>
+                                                    ) : order.bonusPointsEarned > 0 ? (
+                                                      <span className="font-medium text-yellow-600">⏳ Ausstehend</span>
+                                                    ) : (
+                                                      <span className="font-medium text-gray-600">-</span>
+                                                    )}
+                                                  </div>
+                                                </div>
+                                              </div>
+                                            )}
+                                            
+                                            {/* Fallback für Bestellungen ohne Bonuspunkte-Details */}
+                                            {!order.bonusPointsEarned && !(order as any).bonusPointsRedeemed && !(order as any).bonusPointsDeducted && !(order as any).bonusPointsCreditedReturn && (
+                                              <div className="text-sm text-slate-600 bg-blue-50 rounded p-2">
+                                                <span className="font-medium">
+                                                  {order.status === 'return_completed'
+                                                    ? 'Keine Bonuspunkte, da alle Artikel zurückgesendet wurden.'
+                                                    : 'Für diese Bestellung erhältst du keine Bonuspunkte.'}
                                                 </span>
-                                              )}
+                                              </div>
+                                            )}
                                               {(order.status === 'delivered' || order.status === 'return_requested' || (order as any).status === 'return_completed')
                                                 && (order as any).bonusPointsScheduledAt
                                                 && !(order as any).bonusPointsCredited
@@ -1125,17 +1182,16 @@ export default function OrdersPage() {
                                         </div>
 
                                       </div>
-                                    </div>
-                                  </td>
-                                </tr>
-                              )}
-                            </React.Fragment>
-                          );
-                        })}
-                      </tbody>
-                    </table>
+                                    </td>
+                                  </tr>
+                                )}
+                              </React.Fragment>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
                   </div>
-                </div>
 
                 {/* Mobile Card View */}
                 <div className="lg:hidden">
@@ -2043,7 +2099,7 @@ export default function OrdersPage() {
                             setReturnSelections({});
                             // Refresh orders to update the status immediately
                             await refetchOrders();
-                            alert('Rücksendung eingereicht. Du erhältst eine Bestätigungs-E-Mail.');
+                            showToast('Rücksendung eingereicht. Du erhältst eine Bestätigungs-E-Mail.', 'success');
                           }
                         } catch (e) {
                           setReturnError('Netzwerkfehler. Bitte erneut versuchen.');
@@ -2347,6 +2403,7 @@ export default function OrdersPage() {
           </div>
         </div>
       )}
+      <ToastContainer />
     </div>
   );
 }

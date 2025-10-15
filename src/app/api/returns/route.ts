@@ -5,6 +5,7 @@ import Order from '@/lib/models/Order';
 import ReturnRequest from '@/lib/models/Return';
 import User from '@/lib/models/User';
 import { sendReturnReceivedEmail } from '@/lib/email';
+import { freezeBonusPointsForReturn, calculateItemBonusPoints } from '@/lib/return-bonus-points';
 
 export async function POST(request: NextRequest) {
   try {
@@ -96,6 +97,9 @@ export async function POST(request: NextRequest) {
       const qty = Math.max(0, Math.min(Number(reqItem.quantity) || 0, availableQty));
       if (qty <= 0) continue;
       
+      // Calculate frozen bonus points for this item
+      const frozenBonusPoints = calculateItemBonusPoints(orderItem.price) * qty;
+      
       normalizedItems.push({
         productId: orderItem.productId,
         name: orderItem.name,
@@ -104,6 +108,9 @@ export async function POST(request: NextRequest) {
         image: orderItem.image,
         variations: orderItem.variations || undefined,
         accepted: false,
+        frozenBonusPoints: frozenBonusPoints,
+        refundPercentage: 100,
+        notReturned: false,
       });
     }
 
@@ -124,9 +131,23 @@ export async function POST(request: NextRequest) {
       items: normalizedItems,
       status: 'received',
       notes: typeof notes === 'string' ? notes : undefined,
+      timerPausedAt: new Date(),
     });
 
     await returnRequest.save();
+
+    // Freeze bonus points for this return
+    try {
+      await freezeBonusPointsForReturn(
+        order._id.toString(),
+        normalizedItems,
+        (returnRequest._id as any).toString()
+      );
+      console.log(`Bonuspunkte eingefroren für Rücksendung ${returnRequest._id}`);
+    } catch (freezeError) {
+      console.error('Fehler beim Einfrieren der Bonuspunkte:', freezeError);
+      // Don't fail the return request if bonus points freezing fails
+    }
 
     // Update order status -> return_requested (only if not already partially_returned)
     if (order.status !== 'partially_returned') {

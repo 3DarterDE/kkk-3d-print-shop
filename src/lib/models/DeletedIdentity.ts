@@ -14,7 +14,7 @@ const DeletedIdentitySchema = new Schema<IDeletedIdentity>({
   auth0Id: { type: String, index: true },
   // email field removed for DSGVO compliance
   reason: { type: String },
-  expiresAt: { type: Date, required: true, index: true },
+  expiresAt: { type: Date, required: true },
 }, { timestamps: true });
 
 // TTL index – documents expire automatically when expiresAt is reached

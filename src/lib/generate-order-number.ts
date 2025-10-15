@@ -1,16 +1,19 @@
 import { connectToDatabase } from '@/lib/mongodb';
 import Order from '@/lib/models/Order';
+import OrderCounter from '@/lib/models/OrderCounter';
+import { randomInt } from 'crypto';
 
 /**
- * Generates a unique order number using atomic operations
- * This prevents duplicate key errors when multiple orders are created simultaneously
+ * Generates a unique order number using atomic operations with random factor
+ * Format: 3DS-YYXXX-RRRR (Year + Sequential + Random)
+ * This prevents duplicate key errors and adds security through randomization
  */
 export async function generateUniqueOrderNumber(): Promise<string> {
   await connectToDatabase();
   
   let orderNumber: string;
   let attempts = 0;
-  const maxAttempts = 10;
+  const maxAttempts = 5;
   
   do {
     attempts++;
@@ -18,22 +21,18 @@ export async function generateUniqueOrderNumber(): Promise<string> {
     // Get the current year suffix
     const yearSuffix = new Date().getFullYear().toString().slice(-2);
     
-    // Try to find the highest existing order number for this year
-    const existingOrders = await Order.find({
-      orderNumber: { $regex: `^3DS-${yearSuffix}` }
-    }).sort({ orderNumber: -1 }).limit(1);
+    // Atomically increment yearly sequence (ensures 001, 002, 003, ... per year)
+    const counterDoc = await OrderCounter.findOneAndUpdate(
+      { yearSuffix },
+      { $inc: { seq: 1 } },
+      { upsert: true, new: true, setDefaultsOnInsert: true }
+    ).lean();
+    const nextNumber = counterDoc?.seq ?? 1;
     
-    let nextNumber = 1;
-    if (existingOrders.length > 0) {
-      // Extract the number from the highest order number
-      const lastOrderNumber = existingOrders[0].orderNumber;
-      const match = lastOrderNumber.match(/^3DS-\d{2}(\d{3})$/);
-      if (match) {
-        nextNumber = parseInt(match[1]) + 1;
-      }
-    }
+    // Generate crypto-secure 4-digit random number in range 1000–9999
+    const randomSuffix = randomInt(1000, 10000).toString();
     
-    orderNumber = `3DS-${yearSuffix}${String(nextNumber).padStart(3, '0')}`;
+    orderNumber = `3DS-${yearSuffix}${String(nextNumber).padStart(3, '0')}-${randomSuffix}`;
     
     // Check if this order number already exists (double-check for race conditions)
     const existingOrder = await Order.findOne({ orderNumber });

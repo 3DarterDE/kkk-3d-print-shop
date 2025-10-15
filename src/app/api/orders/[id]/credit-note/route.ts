@@ -136,6 +136,8 @@ export async function GET(
     
     // Cache the PDF for future requests
     try {
+      const cacheDir = path.join(process.cwd(), 'cache', 'credit-notes');
+      const pdfPath = path.join(cacheDir, `credit-note-${order.orderNumber}.pdf`);
       await fs.mkdir(cacheDir, { recursive: true });
       await fs.writeFile(pdfPath, Buffer.from(pdfBuffer));
     } catch (cacheError) {

@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useEffect, useState } from 'react';
+import { useToast } from '@/components/Toast';
 
 type ReturnItem = {
   productId: string;
@@ -9,6 +10,9 @@ type ReturnItem = {
   variations?: Record<string, string>;
   accepted?: boolean;
   image?: string;
+  frozenBonusPoints?: number;
+  refundPercentage?: number;
+  notReturned?: boolean;
 };
 
 type ReturnRequest = {
@@ -48,6 +52,7 @@ export default function AdminReturnsPage() {
   const [returns, setReturns] = useState<ReturnRequest[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const { showToast, ToastContainer } = useToast();
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [selected, setSelected] = useState<ReturnRequest | null>(null);
   const [updating, setUpdating] = useState(false);
@@ -126,6 +131,37 @@ export default function AdminReturnsPage() {
     });
   };
 
+  const toggleNotReturned = (productId: string) => {
+    if (!selected) return;
+    setSelected({
+      ...selected,
+      items: selected.items.map(it => {
+        if (it.productId === productId) {
+          const newNotReturned = !it.notReturned;
+          return { 
+            ...it, 
+            notReturned: newNotReturned,
+            accepted: newNotReturned ? false : it.accepted, // If not returned, can't be accepted
+            refundPercentage: newNotReturned ? 0 : it.refundPercentage
+          };
+        }
+        return it;
+      })
+    });
+  };
+
+  const updateRefundPercentage = (productId: string, percentage: number) => {
+    if (!selected) return;
+    setSelected({
+      ...selected,
+      items: selected.items.map(it => 
+        it.productId === productId 
+          ? { ...it, refundPercentage: percentage, notReturned: percentage === 0 }
+          : it
+      )
+    });
+  };
+
   const completeReturn = async () => {
     if (!selected) return;
     try {
@@ -134,7 +170,12 @@ export default function AdminReturnsPage() {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          items: selected.items.map(it => ({ productId: it.productId, accepted: !!it.accepted })),
+          items: selected.items.map(it => ({ 
+            productId: it.productId, 
+            accepted: !!it.accepted,
+            refundPercentage: it.refundPercentage || 100,
+            notReturned: !!it.notReturned
+          })),
           status: 'completed',
           notes: selected.notes || undefined,
           refund: selected.refund || undefined,
@@ -146,9 +187,9 @@ export default function AdminReturnsPage() {
       setOrderForReturn(null);
       setAlreadyReturnedItems([]);
       await fetchList();
-      alert('Rücksendung abgeschlossen. Lagerbestand aktualisiert und E-Mail versendet.');
+      showToast('Rücksendung abgeschlossen. Lagerbestand aktualisiert und E-Mail versendet.', 'success');
     } catch (e: any) {
-      alert(e.message || 'Fehler beim Aktualisieren');
+      showToast(e.message || 'Fehler beim Aktualisieren', 'error');
     } finally {
       setUpdating(false);
     }
@@ -219,12 +260,13 @@ export default function AdminReturnsPage() {
   const computeAcceptedRefundTotalCents = () => {
     if (!selected) return 0;
     
-    // Calculate refund for accepted items
+    // Calculate refund for accepted items (considering refund percentage)
     const itemsRefundCents = selected.items.reduce((sum, it: any) => {
       if (!it.accepted) return sum;
       const eff = computeEffectiveUnitCents(it);
       const qty = Number(it.quantity) || 0;
-      return sum + eff * qty;
+      const refundPercentage = it.refundPercentage || 100;
+      return sum + (eff * qty * (refundPercentage / 100));
     }, 0);
     
     // Add shipping costs if all items are being returned
@@ -573,6 +615,12 @@ export default function AdminReturnsPage() {
                               <span>📊</span>
                               Menge: <span className="font-medium">{it.quantity}</span>
                             </span>
+                            {it.frozenBonusPoints && it.frozenBonusPoints > 0 && (
+                              <span className="flex items-center gap-1 text-blue-600">
+                                <span>🧊</span>
+                                {it.frozenBonusPoints} Punkte eingefroren
+                              </span>
+                            )}
                           </div>
                         </div>
                       </div>
@@ -581,7 +629,7 @@ export default function AdminReturnsPage() {
                         <div className="flex-1 min-w-0">
                           <div className="text-sm">
                             {orderForReturn ? (
-                              <div className="space-y-1">
+                              <div className="space-y-2">
                                 <div className="text-gray-600">
                                   Erstattung/Stück: <span className="font-semibold text-green-700">€{(computeEffectiveUnitCents(it) / 100).toFixed(2)}</span>
                                 </div>
@@ -590,6 +638,39 @@ export default function AdminReturnsPage() {
                                     Erstattung gesamt: <span className="font-semibold text-green-700">€{((computeEffectiveUnitCents(it) * (Number(it.quantity) || 0)) / 100).toFixed(2)}</span>
                                   </div>
                                 )}
+                                
+                                {/* Refund Percentage Dropdown */}
+                                <div className="flex items-center gap-2">
+                                  <label className="text-xs text-gray-500">Erstattung:</label>
+                                  <select
+                                    value={it.refundPercentage || 100}
+                                    onChange={(e) => updateRefundPercentage(it.productId, Number(e.target.value))}
+                                    disabled={!!it.notReturned}
+                                    className="text-xs border border-gray-300 rounded px-2 py-1 focus:ring-1 focus:ring-blue-500 focus:border-transparent"
+                                  >
+                                    <option value={100}>100%</option>
+                                    <option value={60}>60% (Beschädigt)</option>
+                                    <option value={0}>0%</option>
+                                  </select>
+                                </div>
+                                
+                                {/* Not Returned Checkbox */}
+                                <div className="flex items-center gap-2">
+                                  <label className="inline-flex items-center gap-1 text-xs">
+                                    <input 
+                                      type="checkbox" 
+                                      checked={!!it.notReturned} 
+                                      onChange={() => toggleNotReturned(it.productId)}
+                                      className="w-3 h-3 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                                    />
+                                    <span className="text-gray-600">Nicht zurückgegeben</span>
+                                  </label>
+                                  {it.notReturned && (
+                                    <span className="text-xs text-blue-600 font-medium">
+                                      🧊 Punkte werden freigegeben und dokumentiert
+                                    </span>
+                                  )}
+                                </div>
                               </div>
                             ) : (
                               <div className="text-gray-400 flex items-center gap-2">
@@ -604,11 +685,12 @@ export default function AdminReturnsPage() {
                             it.accepted 
                               ? 'bg-green-100 border-green-300 text-green-800' 
                               : 'bg-gray-50 border-gray-300 text-gray-700 hover:bg-gray-100'
-                          }`}>
+                          } ${it.notReturned ? 'opacity-50 cursor-not-allowed' : ''}`}>
                             <input 
                               type="checkbox" 
                               checked={!!it.accepted} 
                               onChange={() => toggleAccepted(it.productId)}
+                              disabled={!!it.notReturned}
                               className="w-4 h-4 text-green-600 border-gray-300 rounded focus:ring-green-500"
                             />
                             <span className="font-medium text-sm sm:text-base">
@@ -677,6 +759,30 @@ export default function AdminReturnsPage() {
                     }
                     return null;
                   })()}
+                  
+                  {/* Bonuspunkte-Status für diese Bestellung */}
+                  {(orderForReturn.bonusPointsEarned || orderForReturn.bonusPointsDeducted) && (
+                    <div className="mt-3 p-3 bg-blue-50 rounded-lg border border-blue-200">
+                      <div className="flex items-center gap-2 mb-2">
+                        <span className="text-blue-600 text-lg">🧊</span>
+                        <span className="text-blue-800 font-semibold text-sm">Bonuspunkte-Status</span>
+                      </div>
+                      <div className="space-y-1 text-xs">
+                        {orderForReturn.bonusPointsEarned > 0 && (
+                          <div className="flex justify-between">
+                            <span className="text-gray-600">Aktuelle Punkte:</span>
+                            <span className="font-medium text-green-600">+{orderForReturn.bonusPointsEarned}</span>
+                          </div>
+                        )}
+                        {orderForReturn.bonusPointsDeducted > 0 && (
+                          <div className="flex justify-between">
+                            <span className="text-gray-600">Abgezogen (Rücksendungen):</span>
+                            <span className="font-medium text-red-600">-{orderForReturn.bonusPointsDeducted}</span>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )}
                 </div>
               )}
 
@@ -748,6 +854,7 @@ export default function AdminReturnsPage() {
           </div>
         </div>
       )}
+      <ToastContainer />
     </div>
   );
 }

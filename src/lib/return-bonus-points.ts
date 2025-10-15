@@ -1,5 +1,6 @@
 import Order from '@/lib/models/Order';
 import { IReturnItem } from '@/lib/models/Return';
+import { AdminBonusPoints } from '@/lib/models/AdminBonusPoints';
 
 /**
  * Berechnet die Bonuspunkte, die bei einer Rücksendung abgezogen werden sollen
@@ -193,6 +194,158 @@ export async function creditReturnBonusPoints(
     console.log(`Bonuspunkte-Gutschrift erfolgreich: ${pointsToCredit} Punkte an Benutzer ${userId} gutgeschrieben`);
   } catch (error) {
     console.error('Fehler beim Gutschreiben der Bonuspunkte:', error);
+    throw error;
+  }
+}
+
+/**
+ * Berechnet die Bonuspunkte für einen einzelnen Artikel (3.5% vom Artikelwert)
+ * @param itemPriceCents - Preis des Artikels in Cent
+ * @returns Anzahl der Bonuspunkte
+ */
+export function calculateItemBonusPoints(itemPriceCents: number): number {
+  return Math.floor((itemPriceCents / 100) * 3.5);
+}
+
+/**
+ * Friert Bonuspunkte für eine Rücksendung ein
+ * @param orderId - Die ID der Bestellung
+ * @param returnItems - Die zurückgesendeten Artikel
+ * @param returnRequestId - Die ID der Rücksendungsanfrage
+ */
+export async function freezeBonusPointsForReturn(
+  orderId: string,
+  returnItems: IReturnItem[],
+  returnRequestId: string
+): Promise<void> {
+  try {
+    const { connectToDatabase } = await import('@/lib/mongodb');
+    await connectToDatabase();
+    
+    // Finde den AdminBonusPoints Timer für diese Bestellung
+    const timer = await AdminBonusPoints.findOne({
+      orderId: orderId,
+      bonusPointsCredited: false
+    });
+    
+    if (!timer) {
+      console.log(`Kein Timer gefunden für Bestellung ${orderId}`);
+      return;
+    }
+    
+    let totalFrozenPoints = 0;
+    
+    // Berechne eingefrorene Punkte für jeden Artikel
+    for (const item of returnItems) {
+      const itemBonusPoints = calculateItemBonusPoints(item.price) * item.quantity;
+      totalFrozenPoints += itemBonusPoints;
+    }
+    
+    if (totalFrozenPoints > 0) {
+      // Reduziere die Punkte im Timer
+      timer.pointsAwarded = Math.max(0, timer.pointsAwarded - totalFrozenPoints);
+      
+      // Füge zu eingefrorenen Punkten hinzu
+      timer.frozenPoints = (timer.frozenPoints || 0) + totalFrozenPoints;
+      
+      // Füge Return Request ID hinzu
+      if (!timer.frozenBy) {
+        timer.frozenBy = [];
+      }
+      timer.frozenBy.push(returnRequestId);
+      
+      await timer.save();
+      
+      // WICHTIG: Auch die Order selbst aktualisieren
+      const order = await Order.findById(orderId);
+      if (order) {
+        order.bonusPointsEarned = Math.max(0, order.bonusPointsEarned - totalFrozenPoints);
+        await order.save();
+        console.log(`Order ${order.orderNumber}: bonusPointsEarned reduziert um ${totalFrozenPoints} auf ${order.bonusPointsEarned}`);
+      }
+      
+      console.log(`Bonuspunkte eingefroren: ${totalFrozenPoints} Punkte für Rücksendung ${returnRequestId}`);
+    }
+  } catch (error) {
+    console.error('Fehler beim Einfrieren der Bonuspunkte:', error);
+    throw error;
+  }
+}
+
+/**
+ * Gibt eingefrorene Bonuspunkte für eine Rücksendung frei
+ * @param orderId - Die ID der Bestellung
+ * @param returnItems - Die Artikel die nicht zurückgegeben wurden
+ * @param returnRequestId - Die ID der Rücksendungsanfrage
+ */
+export async function unfreezeBonusPointsForReturn(
+  orderId: string,
+  returnItems: IReturnItem[],
+  returnRequestId: string
+): Promise<void> {
+  try {
+    const { connectToDatabase } = await import('@/lib/mongodb');
+    const User = (await import('@/lib/models/User')).default;
+    await connectToDatabase();
+    
+    // Finde den AdminBonusPoints Timer für diese Bestellung (auch wenn bereits gutgeschrieben)
+    const timer = await AdminBonusPoints.findOne({
+      orderId: orderId
+    });
+    
+    if (!timer) {
+      console.log(`Kein Timer gefunden für Bestellung ${orderId}`);
+      return;
+    }
+    
+    let totalUnfrozenPoints = 0;
+    
+    // Berechne freizugebende Punkte für jeden Artikel
+    for (const item of returnItems) {
+      const itemBonusPoints = calculateItemBonusPoints(item.price) * item.quantity;
+      totalUnfrozenPoints += itemBonusPoints;
+    }
+    
+    if (totalUnfrozenPoints > 0) {
+      // Entferne Return Request ID aus frozenBy Array
+      if (timer.frozenBy) {
+        timer.frozenBy = timer.frozenBy.filter(id => id !== returnRequestId);
+      }
+      
+      // Reduziere eingefrorene Punkte
+      timer.frozenPoints = Math.max(0, (timer.frozenPoints || 0) - totalUnfrozenPoints);
+      
+      // WICHTIG: NICHT die Punkte wieder zum Timer hinzufügen!
+      // Der Kunde bekommt die Punkte direkt, daher bleiben sie aus dem Timer raus
+      // timer.pointsAwarded bleibt unverändert
+      
+      await timer.save();
+      
+      // WICHTIG: Order bonusPointsEarned erhöhen!
+      // Der Kunde bekommt die Punkte direkt UND sie werden in der Order wieder hinzugefügt
+      const order = await Order.findById(orderId);
+      if (order) {
+        order.bonusPointsEarned = (order.bonusPointsEarned || 0) + totalUnfrozenPoints;
+        order.bonusPointsUnfrozen = (order.bonusPointsUnfrozen || 0) + totalUnfrozenPoints;
+        order.bonusPointsUnfrozenAt = new Date();
+        await order.save();
+        console.log(`Order ${order.orderNumber}: bonusPointsEarned erhöht um ${totalUnfrozenPoints} auf ${order.bonusPointsEarned}`);
+        console.log(`Order ${order.orderNumber}: ${totalUnfrozenPoints} Punkte als "wieder freigegeben" dokumentiert`);
+      }
+      
+      // Schreibe die Punkte sofort dem User gut
+      const user = await User.findById(timer.userId);
+      if (user) {
+        user.bonusPoints = (user.bonusPoints || 0) + totalUnfrozenPoints;
+        await user.save();
+        
+        
+        console.log(`Bonuspunkte freigegeben und direkt gutgeschrieben: ${totalUnfrozenPoints} Punkte an Benutzer ${timer.userId}`);
+        console.log(`Order bonusPointsEarned wurde erhöht, Timer bleibt unverändert`);
+      }
+    }
+  } catch (error) {
+    console.error('Fehler beim Freigeben der Bonuspunkte:', error);
     throw error;
   }
 }

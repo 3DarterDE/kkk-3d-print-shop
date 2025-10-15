@@ -62,6 +62,8 @@ export interface IOrder extends Document {
   bonusPointsDeductedAt?: Date; // Wann die Bonuspunkte abgezogen wurden
   bonusPointsCreditedReturn?: number; // Bonuspunkte die bei Rücksendungen gutgeschrieben wurden
   bonusPointsCreditedReturnAt?: Date; // Wann die Bonuspunkte gutgeschrieben wurden
+  bonusPointsUnfrozen?: number; // Bonuspunkte die bei "nicht zurückgegeben" wieder freigegeben wurden
+  bonusPointsUnfrozenAt?: Date; // Wann die Bonuspunkte wieder freigegeben wurden
   returnedItems?: Array<{
     productId: string;
     name: string;
@@ -181,6 +183,8 @@ const OrderSchema = new Schema<IOrder>({
   bonusPointsDeductedAt: { type: Date }, // Wann die Bonuspunkte abgezogen wurden
   bonusPointsCreditedReturn: { type: Number, default: 0 }, // Bonuspunkte die bei Rücksendungen gutgeschrieben wurden
   bonusPointsCreditedReturnAt: { type: Date }, // Wann die Bonuspunkte gutgeschrieben wurden
+  bonusPointsUnfrozen: { type: Number, default: 0 }, // Bonuspunkte die bei "nicht zurückgegeben" wieder freigegeben wurden
+  bonusPointsUnfrozenAt: { type: Date }, // Wann die Bonuspunkte wieder freigegeben wurden
   returnedItems: [{
     productId: { type: String, required: true },
     name: { type: String, required: true },

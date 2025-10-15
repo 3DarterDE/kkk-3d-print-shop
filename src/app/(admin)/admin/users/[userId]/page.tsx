@@ -75,6 +75,16 @@ interface Order {
     emailSent?: boolean;
     emailSentAt?: string;
   }>;
+  bonusPointsEarned?: number;
+  bonusPointsCredited?: boolean;
+  bonusPointsCreditedAt?: string;
+  bonusPointsRedeemed?: number;
+  bonusPointsDeducted?: number;
+  bonusPointsDeductedAt?: string;
+  bonusPointsCreditedReturn?: number;
+  bonusPointsCreditedReturnAt?: string;
+  bonusPointsUnfrozen?: number;
+  bonusPointsUnfrozenAt?: string;
   createdAt: string;
   updatedAt: string;
 }
@@ -819,12 +829,46 @@ export default function UserDetailPage() {
                                         );
                                       })()}
                                     </div>
-                                    {(order as any).bonusPointsEarned > 0 && (
-                                      <div className="text-xs text-yellow-600 mt-2">
-                                        <span className="font-medium">Bonuspunkte erhalten: {(order as any).bonusPointsEarned}</span>
-                                        {(order as any).bonusPointsRedeemed > 0 && (
-                                          <span className="block">Bonuspunkte eingelöst: {(order as any).bonusPointsRedeemed}</span>
-                                        )}
+                                    {/* Erweiterte Bonuspunkte-Übersicht */}
+                                    {(order.bonusPointsEarned || order.bonusPointsRedeemed || order.bonusPointsDeducted || order.bonusPointsCreditedReturn) && (
+                                      <div className="mt-3 p-2 sm:p-3 bg-green-50 rounded-lg">
+                                        <p className="font-medium text-gray-700 mb-2 text-xs sm:text-sm">Bonuspunkte-Übersicht:</p>
+                                        <div className="space-y-1 text-xs sm:text-sm">
+                                          {(order.bonusPointsEarned || 0) > 0 && (
+                                            <div className="flex justify-between">
+                                              <span className="text-gray-600">Verdiente Punkte:</span>
+                                              <span className="font-medium text-green-600">+{order.bonusPointsEarned}</span>
+                                            </div>
+                                          )}
+                                          {(order.bonusPointsRedeemed || 0) > 0 && (
+                                            <div className="flex justify-between">
+                                              <span className="text-gray-600">Eingelöste Punkte:</span>
+                                              <span className="font-medium text-red-600">-{order.bonusPointsRedeemed}</span>
+                                            </div>
+                                          )}
+                                          {(order.bonusPointsDeducted || 0) > 0 && (
+                                            <div className="flex justify-between">
+                                              <span className="text-gray-600">Abgezogene Punkte (Rücksendung):</span>
+                                              <span className="font-medium text-red-600">-{order.bonusPointsDeducted}</span>
+                                            </div>
+                                          )}
+                                          {(order.bonusPointsCreditedReturn || 0) > 0 && (
+                                            <div className="flex justify-between">
+                                              <span className="text-gray-600">Gutgeschriebene Punkte (Rücksendung):</span>
+                                              <span className="font-medium text-green-600">+{order.bonusPointsCreditedReturn}</span>
+                                            </div>
+                                          )}
+                                          <div className="flex justify-between border-t pt-1 mt-1">
+                                            <span className="text-gray-600">Status:</span>
+                                            {order.bonusPointsCredited ? (
+                                              <span className="font-medium text-green-600">✅ Gutgeschrieben</span>
+                                            ) : (order.bonusPointsEarned || 0) > 0 ? (
+                                              <span className="font-medium text-yellow-600">⏳ Ausstehend</span>
+                                            ) : (
+                                              <span className="font-medium text-gray-600">-</span>
+                                            )}
+                                          </div>
+                                        </div>
                                       </div>
                                     )}
                                   </div>

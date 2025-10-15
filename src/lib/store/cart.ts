@@ -41,6 +41,9 @@ type CartState = {
   clearDiscount: () => void;
 };
 
+// Flag to prevent concurrent validation calls
+let isValidating = false;
+
 export const useCartStore = create<CartState>()(
   persist(
     (set, get) => {
@@ -146,9 +149,16 @@ export const useCartStore = create<CartState>()(
           }
         },
         validateItems: async () => {
+          // Prevent concurrent validation calls to avoid infinite loops
+          if (isValidating) {
+            console.log('Validation already in progress, skipping...');
+            return;
+          }
+
           const items = get().items;
           if (items.length === 0) return;
 
+          isValidating = true;
           try {
             const slugs = items.map(item => item.slug);
             const response = await fetch('/api/shop/validate-products', {
@@ -253,6 +263,9 @@ export const useCartStore = create<CartState>()(
 
           } catch (error) {
             console.error('Error validating cart items:', error);
+          } finally {
+            // Always reset the flag, even if there was an error
+            isValidating = false;
           }
         },
         updateItemPrice: (slug, newPrice) => {

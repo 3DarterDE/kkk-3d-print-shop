@@ -8,6 +8,9 @@ export interface IReturnItem {
   image?: string;
   variations?: Record<string, string>;
   accepted?: boolean; // admin decision per item
+  frozenBonusPoints?: number; // bonus points frozen for this item
+  refundPercentage?: number; // 100, 60, or 0
+  notReturned?: boolean; // article was not returned
 }
 
 export interface IReturnRequest extends Document {
@@ -26,6 +29,7 @@ export interface IReturnRequest extends Document {
     reference?: string; // provider reference or manual note
     amount?: number; // cents/euros depending on convention (use cents recommended)
   };
+  timerPausedAt?: Date; // when bonus points timer was paused
   createdAt: Date;
   updatedAt: Date;
 }
@@ -38,6 +42,9 @@ const ReturnItemSchema = new Schema<IReturnItem>({
   image: { type: String },
   variations: { type: Schema.Types.Mixed },
   accepted: { type: Boolean, default: false },
+  frozenBonusPoints: { type: Number, default: 0 },
+  refundPercentage: { type: Number, default: 100 },
+  notReturned: { type: Boolean, default: false },
 }, { _id: false });
 
 const ReturnRequestSchema = new Schema<IReturnRequest>({
@@ -60,6 +67,7 @@ const ReturnRequestSchema = new Schema<IReturnRequest>({
     reference: { type: String },
     amount: { type: Number },
   },
+  timerPausedAt: { type: Date },
 }, { timestamps: true });
 
 // Ensure schema updates in dev

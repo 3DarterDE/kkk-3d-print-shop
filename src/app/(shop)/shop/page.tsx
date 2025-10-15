@@ -1829,8 +1829,12 @@ export default function ShopPage({ searchParams }: { searchParams: Promise<{ cat
                   );
                 }
                 
-                // For category pages: always show dynamic filters
+                // For category pages: only show if there are products in this category
                 if (resolvedSearchParams.category) {
+                  if (filteredProducts.length === 0) {
+                    return null; // Hide DynamicFilters if no products in category
+                  }
+                  
                   return (
                     <DynamicFilters
                       categoryId={categories.find(c => c.slug === resolvedSearchParams.category)?._id}
@@ -2344,8 +2348,12 @@ export default function ShopPage({ searchParams }: { searchParams: Promise<{ cat
                 );
               }
               
-              // For category pages: always show dynamic filters
+              // For category pages: only show if there are products in this category
               if (resolvedSearchParams.category) {
+                if (filteredProducts.length === 0) {
+                  return null; // Hide DynamicFilters if no products in category
+                }
+                
                 return (
                   <DynamicFilters
                     categoryId={categories.find(c => c.slug === resolvedSearchParams.category)?._id}

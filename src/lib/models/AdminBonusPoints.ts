@@ -10,6 +10,8 @@ export interface IAdminBonusPoints {
   bonusPointsCredited: boolean; // Whether bonus points have been credited
   bonusPointsCreditedAt?: Date; // When bonus points were credited
   bonusPointsScheduledAt?: Date; // When bonus points should be credited (2 weeks after award)
+  frozenPoints?: number; // Points frozen due to returns
+  frozenBy?: string[]; // Array of Return Request IDs that froze points
   createdAt?: Date;
   updatedAt?: Date;
 }
@@ -48,7 +50,14 @@ const AdminBonusPointsSchema = new Schema<IAdminBonusPoints>({
   },
   bonusPointsScheduledAt: {
     type: Date
-  }
+  },
+  frozenPoints: {
+    type: Number,
+    default: 0
+  },
+  frozenBy: [{
+    type: String
+  }]
 }, { timestamps: true });
 
 // Index for efficient queries

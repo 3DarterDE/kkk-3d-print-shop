@@ -8,7 +8,7 @@ import User from '@/lib/models/User';
 import { sendReturnCompletedEmail } from '@/lib/email';
 import { generateCreditNotePDF } from '@/lib/credit-note-template';
 import AdminBonusPoints from '@/lib/models/AdminBonusPoints';
-import { calculateReturnBonusPointsDeduction, calculateReturnBonusPointsCredit, creditReturnBonusPoints, deductReturnBonusPoints } from '@/lib/return-bonus-points';
+import { calculateReturnBonusPointsDeduction, calculateReturnBonusPointsCredit, creditReturnBonusPoints, deductReturnBonusPoints, unfreezeBonusPointsForReturn } from '@/lib/return-bonus-points';
 import fs from 'fs/promises';
 import path from 'path';
 
@@ -69,7 +69,18 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
     await connectToDatabase();
 
     const payload = await request.json();
-    const { items, status, notes, refund } = payload as { items?: Array<{ productId: string; accepted: boolean; quantity?: number }>; status?: 'processing'|'completed'|'rejected'; notes?: string; refund?: { method?: string; reference?: string; amount?: number } };
+    const { items, status, notes, refund } = payload as { 
+      items?: Array<{ 
+        productId: string; 
+        accepted: boolean; 
+        quantity?: number;
+        refundPercentage?: number;
+        notReturned?: boolean;
+      }>; 
+      status?: 'processing'|'completed'|'rejected'; 
+      notes?: string; 
+      refund?: { method?: string; reference?: string; amount?: number } 
+    };
 
     const { id } = await params;
     const returnDoc = await ReturnRequest.findById(id);
@@ -82,6 +93,8 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
         if (update) {
           if (typeof update.accepted === 'boolean') it.accepted = update.accepted;
           if (typeof update.quantity === 'number' && update.quantity >= 0) it.quantity = Math.min(update.quantity, it.quantity);
+          if (typeof update.refundPercentage === 'number') it.refundPercentage = update.refundPercentage;
+          if (typeof update.notReturned === 'boolean') it.notReturned = update.notReturned;
         }
         return it;
       }) as any;
@@ -107,9 +120,21 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
     if (status === 'completed') {
       await incrementStockForAcceptedItems(returnDoc);
 
-      // Calculate and handle bonus points for returned items
+      // Handle bonus points for different return scenarios
       try {
         const acceptedItems = returnDoc.items.filter((item: any) => item.accepted);
+        const notReturnedItems = returnDoc.items.filter((item: any) => item.notReturned);
+        
+        // Handle items that were not returned - unfreeze and credit bonus points immediately
+        if (notReturnedItems.length > 0) {
+          await unfreezeBonusPointsForReturn(
+            returnDoc.orderId,
+            notReturnedItems,
+            (returnDoc._id as any).toString()
+          );
+          console.log(`Bonuspunkte freigegeben für nicht zurückgegebene Artikel: ${notReturnedItems.length} Artikel`);
+        }
+        
         if (acceptedItems.length > 0) {
           // Load order doc to get original order data
           const orderDoc = await Order.findById(returnDoc.orderId);
@@ -118,159 +143,22 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
             return;
           }
 
-          // Get all completed returns for this order first
-          const allCompletedReturns = await ReturnRequest.find({ 
-            orderId: returnDoc.orderId, 
-            status: 'completed' 
-          }).lean();
-
-          // Calculate the ratio of ALL returned items to total order (including previous returns)
-          const orderSubtotalCents = orderDoc.items.reduce((s: number, it: any) => s + (Number(it.price) * Number(it.quantity)), 0);
-          let totalReturnedItemsValueCents = 0;
+          // WICHTIG: Bei akzeptierten Artikeln (100% oder 60% Erstattung) 
+          // werden KEINE weiteren Punkte abgezogen, da sie bereits beim Einfrieren abgezogen wurden!
+          // Die eingefrorenen Punkte bleiben eingefroren (werden nicht gutgeschrieben)
           
-          // Add value of all previously returned items
-          allCompletedReturns.forEach(prevReturn => {
-            prevReturn.items.forEach((item: any) => {
-              if (item.accepted) {
-                const originalItem = orderDoc.items.find((oi: any) => 
-                  oi.name === item.name && 
-                  JSON.stringify(oi.variations || {}) === JSON.stringify(item.variations || {})
-                );
-                if (originalItem) {
-                  totalReturnedItemsValueCents += Number(originalItem.price) * Number(item.quantity);
-                }
-              }
-            });
-          });
+          console.log(`Akzeptierte Artikel: ${acceptedItems.length} Artikel - eingefrorene Punkte bleiben eingefroren`);
+          console.log(`Keine weiteren Punkte-Abzüge nötig, da bereits beim Einfrieren abgezogen`);
           
-          // Add value of current return items
-          for (const returnedItem of acceptedItems) {
-            const originalItem = orderDoc.items.find((oi: any) => 
-              oi.name === returnedItem.name && 
-              JSON.stringify(oi.variations || {}) === JSON.stringify(returnedItem.variations || {})
-            );
-            
-            if (originalItem) {
-              totalReturnedItemsValueCents += Number(originalItem.price) * Number(returnedItem.quantity);
-            }
-          }
-          
-          const totalReturnRatio = orderSubtotalCents > 0 ? totalReturnedItemsValueCents / orderSubtotalCents : 0;
-          
-          console.log(`Order ${orderDoc.orderNumber}: bonusPointsCredited=${orderDoc.bonusPointsCredited}, bonusPointsEarned=${orderDoc.bonusPointsEarned}, totalReturnRatio=${totalReturnRatio}`);
-          console.log(`Total returned items value: ${totalReturnedItemsValueCents} cents, Order subtotal: ${orderSubtotalCents} cents`);
-          console.log(`Accepted items for this return:`, acceptedItems.map(item => `${item.name} x${item.quantity}`));
-          
-          // Handle scheduled bonus points (not yet credited)
-          if (!orderDoc.bonusPointsCredited) {
-            try {
-              const timer = await AdminBonusPoints.findOne({
-                orderId: (orderDoc._id as any).toString(),
-                bonusPointsCredited: false
-              });
-
-              if (timer) {
-                const originalPoints = timer.pointsAwarded || 0;
-                
-                // Calculate points to deduct based on current return items only
-                let currentReturnPointsToDeduct = 0;
-                for (const item of acceptedItems) {
-                  const originalItem = orderDoc.items.find((oi: any) => 
-                    oi.name === item.name && 
-                    JSON.stringify(oi.variations || {}) === JSON.stringify(item.variations || {})
-                  );
-                  
-                  if (originalItem) {
-                    const itemValueCents = Number(originalItem.price) * Number(item.quantity);
-                    const itemBonusPoints = Math.floor((itemValueCents / 100) * 3.5);
-                    currentReturnPointsToDeduct += itemBonusPoints;
-                  }
-                }
-                
-                const newPoints = Math.max(0, originalPoints - currentReturnPointsToDeduct);
-
-                if (newPoints <= 0 || totalReturnRatio >= 1.0) {
-                  // Full return - delete the timer completely
-                  await AdminBonusPoints.deleteOne({ _id: timer._id });
-                  orderDoc.bonusPointsEarned = 0;
-                  orderDoc.bonusPointsScheduledAt = undefined;
-                  console.log(`Vollständige Rücksendung: Alle geplanten Bonuspunkte (${originalPoints}) storniert für Bestellung ${orderDoc.orderNumber}`);
-                } else {
-                  // Partial return - reduce points by current return amount
-                  timer.pointsAwarded = newPoints;
-                  await timer.save();
-                  orderDoc.bonusPointsEarned = newPoints;
-                  console.log(`Teilweise Rücksendung: Bonuspunkte reduziert von ${originalPoints} auf ${newPoints} für Bestellung ${orderDoc.orderNumber}`);
-                }
-                
-                await orderDoc.save();
-              }
-            } catch (timerErr) {
-              console.error('Fehler beim Anpassen der geplanten Bonuspunkte:', timerErr);
-            }
-          } else {
-            // Points were already credited → deduct from user balance proportionally
-            // Simple bonus points calculation: deduct points based on returned item value
-            let totalPointsToDeduct = 0;
-            
-            for (const item of acceptedItems) {
-              const originalItem = orderDoc.items.find((oi: any) => 
-                oi.name === item.name && 
-                JSON.stringify(oi.variations || {}) === JSON.stringify(item.variations || {})
-              );
-              
-              if (originalItem) {
-                // Calculate bonus points for this specific item (350% = 3.5x of item value)
-                const itemValueCents = Number(originalItem.price) * Number(item.quantity);
-                const itemBonusPoints = Math.floor((itemValueCents / 100) * 3.5);
-                totalPointsToDeduct += itemBonusPoints;
-                
-                console.log(`Artikel ${item.name}: ${itemValueCents/100}€ → ${itemBonusPoints} Bonuspunkte Abzug`);
-              }
-            }
-            
-            console.log(`Gesamter Bonuspunkte-Abzug: ${totalPointsToDeduct} Punkte`);
-            
-            if (totalPointsToDeduct > 0) {
-              await deductReturnBonusPoints(returnDoc.userId, returnDoc.orderId, totalPointsToDeduct);
-              console.log(`Bonuspunkte-Abzug bei Rücksendung: ${totalPointsToDeduct} Punkte von Benutzer ${returnDoc.userId} abgezogen`);
-            }
-            
-            // Simple calculation: subtract deducted points from current earned points
-            const currentEarnedPoints = orderDoc.bonusPointsEarned || 0;
-            const newEarnedPoints = Math.max(0, currentEarnedPoints - totalPointsToDeduct);
-            
-            // If all items are returned, set to 0 regardless of rounding errors
-            if (totalReturnRatio >= 1.0) {
-              orderDoc.bonusPointsEarned = 0;
-            } else {
-              orderDoc.bonusPointsEarned = newEarnedPoints;
-            }
-            
-            console.log(`=== BONUSPUNKTE DEBUG ===`);
-            console.log(`Order ${orderDoc.orderNumber}:`);
-            console.log(`- Aktuelle Bonuspunkte: ${currentEarnedPoints}`);
-            console.log(`- Abzuziehende Punkte (current return): ${totalPointsToDeduct}`);
-            console.log(`- Berechnete neue Bonuspunkte: ${newEarnedPoints}`);
-            console.log(`- Total Return Ratio: ${totalReturnRatio}`);
-            console.log(`- Finale Bonuspunkte: ${orderDoc.bonusPointsEarned}`);
-            console.log(`- Order Status: ${orderDoc.status}`);
-            console.log(`- Bonus Points Credited: ${orderDoc.bonusPointsCredited}`);
-            console.log(`========================`);
-            
-            // Save the order to persist the bonus points changes
-            await orderDoc.save();
-          }
-
-          // Calculate and credit bonus points that were redeemed for this order
+          // Nur noch die Gutschrift für eingelöste Bonuspunkte berechnen
           const pointsToCredit = await calculateReturnBonusPointsCredit(
             returnDoc.orderId,
-            acceptedItems // Use current accepted items for now
+            acceptedItems
           );
 
           if (pointsToCredit > 0) {
             await creditReturnBonusPoints(returnDoc.userId, returnDoc.orderId, pointsToCredit);
-            console.log(`Bonuspunkte-Gutschrift: ${pointsToCredit} Punkte für Rücksendung von Bestellung ${returnDoc.orderNumber}`);
+            console.log(`Bonuspunkte-Gutschrift für eingelöste Punkte: ${pointsToCredit} Punkte für Rücksendung von Bestellung ${returnDoc.orderNumber}`);
           }
         }
       } catch (bonusPointsError) {
@@ -416,8 +304,15 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
             console.warn('Failed to cache credit note PDF:', cacheError);
           }
 
-          // Calculate total amount for credit note
-          const itemsAmount = creditNoteItems.reduce((sum, item) => sum + item.total, 0);
+          // Calculate total amount for credit note based on refund percentages
+          const itemsAmount = creditNoteItems.reduce((sum, item) => {
+            const refundPercentage = returnDoc.items.find((ri: any) => 
+              ri.name === item.name && 
+              JSON.stringify(ri.variations || {}) === JSON.stringify(item.variations || {})
+            )?.refundPercentage || 100;
+            
+            return sum + (item.total * (refundPercentage / 100));
+          }, 0);
           
           // Get all completed returns for this order to calculate total returned quantity
           const allCompletedReturns = await ReturnRequest.find({ 
@@ -448,7 +343,7 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
           
           const totalAmount = itemsAmount + shippingAmount;
           
-          // Default refund amount to discounted total if not explicitly provided
+          // Default refund amount to calculated total if not explicitly provided
           // Convert totalAmount (in euros) to cents for storage
           if (!returnDoc.refund || typeof returnDoc.refund.amount !== 'number' || isNaN(returnDoc.refund.amount)) {
             (returnDoc as any).refund = { ...(returnDoc.refund || {}), amount: Math.round(totalAmount * 100) };

@@ -77,7 +77,7 @@ export default function GuestDataDeletionPage() {
                 onChange={(e) => setFormData(prev => ({ ...prev, orderNumber: e.target.value }))}
                 className="w-full px-4 py-3 border border-gray-300 rounded-lg shadow-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                 required
-                placeholder="z.B. 3DS-25001"
+                placeholder="z.B. 3DS-25001-1234"
               />
             </div>
 

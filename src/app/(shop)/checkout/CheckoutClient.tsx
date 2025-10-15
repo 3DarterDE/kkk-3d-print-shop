@@ -217,12 +217,15 @@ export default function CheckoutClient({ initialIsLoggedIn, initialFormData, ini
     }
   }, [redeemPoints, availablePoints, total]);
 
-  // Validate cart items on mount to ensure prices are current
+  // Validate cart items once on mount to ensure prices are current
+  // Note: CartValidationProvider also runs validation on mount, but this ensures
+  // validation happens even if the provider hasn't run yet
   useEffect(() => {
     if (items.length > 0) {
       validateItems();
     }
-  }, [items.length, validateItems]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // Only run once on mount, not on every items change
 
   const handleInputChange = (field: string, value: string | boolean) => {
     if (field.includes('.')) {
