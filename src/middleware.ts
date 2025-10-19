@@ -1,5 +1,5 @@
 import type { NextRequest } from 'next/server';
-import { auth0 } from '@/lib/auth0';
+import { auth0 } from '@/lib/auth0-edge';
 import { NextResponse } from 'next/server';
 import { ensureCsrfCookie } from '@/lib/csrf';
 
