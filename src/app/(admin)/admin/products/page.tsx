@@ -256,9 +256,10 @@ export default function ProductsPage() {
 
   const toggleProductActive = async (productId: string, newStatus: boolean) => {
     try {
+      const csrf = document.cookie.split('; ').find(c => c.startsWith('csrf_token='))?.split('=')[1] || '';
       const response = await fetch(`/api/admin/products/${productId}`, {
         method: "PUT",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", 'x-csrf-token': csrf },
         body: JSON.stringify({ isActive: newStatus }),
       });
 
@@ -279,7 +280,8 @@ export default function ProductsPage() {
     if (!confirm("Are you sure you want to delete this product?")) return;
     
     try {
-      await fetch(`/api/admin/products/${id}`, { method: "DELETE" });
+      const csrf = document.cookie.split('; ').find(c => c.startsWith('csrf_token='))?.split('=')[1] || '';
+      await fetch(`/api/admin/products/${id}`, { method: "DELETE", headers: { 'x-csrf-token': csrf } });
       fetchProducts();
     } catch (error) {
       console.error("Failed to delete product:", error);
@@ -334,7 +336,7 @@ export default function ProductsPage() {
       // Automatically adjust basic stock data when variations are present
       inStock: hasVariations ? false : formData.inStock,
       stockQuantity: hasVariations ? 0 : parseInt(formData.stockQuantity) || 0,
-      images: uploadedFiles.filter(url => url.includes('/uploads/images/')),
+      images: uploadedFiles,
       imageSizes: uploadedImageSizes,
       videos: uploadedFiles.filter(url => url.includes('/uploads/videos/')),
       videoThumbnails: uploadedThumbnails,
@@ -365,15 +367,17 @@ export default function ProductsPage() {
     try {
       let response;
       if (editingProduct) {
+        const csrf = document.cookie.split('; ').find(c => c.startsWith('csrf_token='))?.split('=')[1] || '';
         response = await fetch(`/api/admin/products/${editingProduct._id}`, {
           method: "PUT",
-          headers: { "Content-Type": "application/json" },
+          headers: { "Content-Type": "application/json", 'x-csrf-token': csrf },
           body: JSON.stringify(productData),
         });
       } else {
+        const csrf = document.cookie.split('; ').find(c => c.startsWith('csrf_token='))?.split('=')[1] || '';
         response = await fetch("/api/admin/products", {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers: { "Content-Type": "application/json", 'x-csrf-token': csrf },
           body: JSON.stringify(productData),
         });
       }
@@ -390,8 +394,10 @@ export default function ProductsPage() {
       
       // Always delete existing product filters first
       console.log('Deleting existing product filters for product:', productId);
+      const csrf2 = document.cookie.split('; ').find(c => c.startsWith('csrf_token='))?.split('=')[1] || '';
       const deleteResponse = await fetch(`/api/admin/product-filters?productId=${productId}`, {
-        method: 'DELETE'
+        method: 'DELETE',
+        headers: { 'x-csrf-token': csrf2 }
       });
       console.log('Delete response:', deleteResponse.ok);
       if (deleteResponse.ok) {
@@ -612,8 +618,8 @@ export default function ProductsPage() {
           
           setUploadedImageSizes(prev => [...prev, {
             main: mainImage?.url || data.url,
-            thumb: thumbImage?.url || data.url.replace('.webp', '_thumb.webp'),
-            small: smallImage?.url || data.url.replace('.webp', '_small.webp')
+            thumb: thumbImage?.url || data.url,
+            small: smallImage?.url || data.url
           }]);
         }
         if (type === "video" && data.thumbnailUrl) {
@@ -671,7 +677,7 @@ export default function ProductsPage() {
       
       if (type === "image") {
         setUploadedImageSizes(prev => prev.filter((_, index) => {
-          const imageUrls = uploadedFiles.filter(url => url.includes('/uploads/images/'));
+          const imageUrls = uploadedFiles;
           const fileIndex = imageUrls.indexOf(fileUrl);
           return index !== fileIndex;
         }));
@@ -1489,7 +1495,7 @@ export default function ProductsPage() {
                           className="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
                         />
                         <div className="mt-4 grid grid-cols-4 gap-4">
-                          {uploadedFiles.filter(url => url.includes('/uploads/images/')).map((url, index) => (
+                          {uploadedFiles.map((url, index) => (
                             <div 
                               key={index} 
                               className="relative cursor-move"

@@ -56,17 +56,47 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json();
-    const schema = z.object({
+    const imageSizeSchema = z.object({ main: z.string().min(1).optional(), thumb: z.string().min(1).optional(), small: z.string().min(1).optional() });
+    const variationSchema = z.object({
       name: z.string().min(1),
+      options: z.array(z.object({
+        value: z.string().min(1),
+        priceAdjustment: z.number().int().nonnegative().optional(),
+        inStock: z.boolean().optional(),
+        stockQuantity: z.number().int().nonnegative().optional(),
+      })).default([]),
+    });
+    const schema = z.object({
+      title: z.string().min(1),
+      sku: z.string().min(1),
       slug: z.string().min(1),
-      price: z.number().nonnegative(),
+      description: z.string().optional().default(''),
+      price: z.number().int().nonnegative(),
+      offerPrice: z.number().int().nonnegative().optional(),
+      isOnSale: z.boolean().optional(),
+      isTopSeller: z.boolean().optional(),
+      category: z.string().min(1),
+      categoryId: z.string().optional(),
+      subcategoryId: z.string().optional().nullable(),
+      subcategoryIds: z.array(z.string()).optional().default([]),
+      brand: z.string().optional().nullable(),
+      tags: z.array(z.string()).optional().default([]),
+      inStock: z.boolean().optional(),
       stockQuantity: z.number().int().nonnegative().optional(),
+      images: z.array(z.string()).optional().default([]),
+      imageSizes: z.array(imageSizeSchema).optional().default([]),
+      videos: z.array(z.string()).optional().default([]),
+      videoThumbnails: z.array(z.string()).optional().default([]),
+      properties: z.array(z.object({ name: z.string().min(1), value: z.string().min(1) })).optional().default([]),
+      variations: z.array(variationSchema).optional().default([]),
+      recommendedProducts: z.array(z.string()).optional().default([]),
       sortOrder: z.number().int().nonnegative().optional(),
-      properties: z.array(z.any()).optional(),
+      createdAt: z.union([z.date(), z.string(), z.number()]).optional(),
+      updatedAt: z.union([z.date(), z.string(), z.number()]).optional(),
     });
     const parsed = schema.safeParse(body);
     if (!parsed.success) {
-      return NextResponse.json({ error: 'Invalid request body', details: parsed.error.flatten() }, { status: 400 });
+      return NextResponse.json({ error: 'Invalid request body', details: parsed.error.flatten().fieldErrors }, { status: 400 });
     }
     await connectToDatabase();
     
@@ -77,15 +107,13 @@ export async function POST(request: NextRequest) {
     }
     
     // Create product with explicit sortOrder and properties
-    const productData = {
-      ...parsed.data,
-      sortOrder: Number(body.sortOrder),
-      properties: body.properties || []
-    };
+    const productData = { ...parsed.data } as any;
+    if (productData.sortOrder === undefined) {
+      const count = await Product.countDocuments();
+      productData.sortOrder = count;
+    }
     
-    // Use insertOne to ensure sortOrder is saved
-    const result = await Product.collection.insertOne(productData);
-    const product = await Product.findById(result.insertedId);
+    const product = await Product.create(productData);
     
     // Invalidate cache for shop page and top sellers APIs
     revalidatePath('/shop');

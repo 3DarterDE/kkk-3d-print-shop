@@ -70,7 +70,7 @@ export async function PUT(
         const filename = fileUrl.split('/').pop();
         if (!filename) continue;
 
-        const isImage = fileUrl.includes('/uploads/images/');
+        const isImage = fileUrl.includes('/uploads/images/') || fileUrl.includes('res.cloudinary.com');
         const isVideo = fileUrl.includes('/uploads/videos/');
         const fileType = isImage ? 'images' : isVideo ? 'videos' : 'images'; // fallback to images
         const filePath = join(process.cwd(), 'public', 'uploads', fileType, filename);
@@ -165,7 +165,7 @@ export async function DELETE(
         if (!filename) continue;
 
         // Determine file type and construct path
-        const isImage = fileUrl.includes('/uploads/images/');
+        const isImage = fileUrl.includes('/uploads/images/') || fileUrl.includes('res.cloudinary.com');
         const isVideo = fileUrl.includes('/uploads/videos/');
         const isThumbnail = fileUrl.includes('/uploads/thumbnails/');
         const fileType = isImage ? 'images' : isVideo ? 'videos' : isThumbnail ? 'thumbnails' : 'images'; // fallback to images

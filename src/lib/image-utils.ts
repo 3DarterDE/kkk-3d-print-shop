@@ -71,6 +71,10 @@ function getSizeSuffix(size: ImageSize): string {
  */
 export function generateSrcSet(imageUrl: string): string {
   if (!imageUrl) return '';
+  // For Cloudinary URLs, we rely on eager transforms or f_auto and skip manual srcset
+  if (imageUrl.includes('res.cloudinary.com')) {
+    return '';
+  }
   
   const baseUrl = imageUrl.replace('.webp', '');
   

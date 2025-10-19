@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { requireAdmin } from '@/lib/auth';
 import { connectToDatabase } from '@/lib/mongodb';
 import Brand from '@/lib/models/Brand';
-import { convertToWebp, generateThumbnail } from '@/lib/image-utils';
+import { cloudinary, getCloudinaryFolderForType, getImageEagerTransforms } from '@/lib/cloudinary';
 import { verifyCsrfFromRequest } from '@/lib/csrf';
 import { rateLimitRequest, getClientIP } from '@/lib/rate-limit';
 
@@ -38,28 +38,30 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'File size must be less than 10MB' }, { status: 400 });
     }
 
+    // Block SVG entirely
+    if (file.type === 'image/svg+xml' || (file.name && file.name.toLowerCase().endsWith('.svg'))) {
+      return NextResponse.json({ error: 'SVG files are not allowed' }, { status: 400 });
+    }
+
     if (!brandId) {
       return NextResponse.json({ error: 'No brand ID provided' }, { status: 400 });
     }
 
-    // Convert to WebP
-    const webpBuffer = await convertToWebp(file);
-    
-    // Generate different sizes
-    const mainImage = await generateThumbnail(webpBuffer, 400, 400);
-    const thumbImage = await generateThumbnail(webpBuffer, 150, 150);
-    const smallImage = await generateThumbnail(webpBuffer, 80, 80);
-
-    // Save images to public/uploads/brands/
-    const timestamp = Date.now();
-    const filename = `brand_${timestamp}`;
-    
-    const mainPath = `/uploads/brands/${filename}_main.webp`;
-    const thumbPath = `/uploads/brands/${filename}_thumb.webp`;
-    const smallPath = `/uploads/brands/${filename}_small.webp`;
-
-    // In a real app, you'd save these to a file system or cloud storage
-    // For now, we'll just return the paths
+    // Upload to Cloudinary with eager transforms
+    const folder = getCloudinaryFolderForType('brand');
+    const arrayBuffer = await file.arrayBuffer();
+    const buffer = Buffer.from(arrayBuffer);
+    const upload = await new Promise<any>((resolve, reject) => {
+      const stream = cloudinary.uploader.upload_stream(
+        { folder, resource_type: 'image', eager: [
+          { width: 400, height: 400, crop: 'cover', fetch_format: 'webp', quality: 'auto' },
+          { width: 150, height: 150, crop: 'cover', fetch_format: 'webp', quality: 'auto' },
+          { width: 80, height: 80, crop: 'cover', fetch_format: 'webp', quality: 'auto' },
+        ] },
+        (error, result) => (error ? reject(error) : resolve(result))
+      );
+      stream.end(buffer);
+    });
 
     await connectToDatabase();
     
@@ -69,20 +71,17 @@ export async function POST(request: NextRequest) {
     }
 
     // Update brand with image paths
-    brand.image = mainPath;
+    const eager = upload.eager || [];
+    brand.image = upload.secure_url;
     brand.imageSizes = {
-      main: mainPath,
-      thumb: thumbPath,
-      small: smallPath
-    };
+      main: eager[0]?.secure_url || upload.secure_url,
+      thumb: eager[1]?.secure_url || upload.secure_url,
+      small: eager[2]?.secure_url || upload.secure_url,
+    } as any;
 
     await brand.save();
 
-    return NextResponse.json({
-      success: true,
-      image: mainPath,
-      imageSizes: brand.imageSizes
-    });
+    return NextResponse.json({ success: true, image: brand.image, imageSizes: brand.imageSizes });
 
   } catch (error) {
     console.error('Error uploading brand image:', error);
