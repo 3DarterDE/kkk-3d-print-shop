@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { connectToDatabase } from '@/lib/mongodb';
 import Category from '@/lib/models/Category';
-import { cloudinary, getCloudinaryFolderForType, getImageEagerTransforms, slugifyName } from '@/lib/cloudinary';
+import { cloudinary, getCloudinaryFolderForType, getImageEagerTransforms, slugifyName, extractPublicIdFromUrl } from '@/lib/cloudinary';
 import path from 'path';
 import { requireAdmin } from '@/lib/auth';
 import { verifyCsrfFromRequest } from '@/lib/csrf';
@@ -42,9 +42,9 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'SVG files are not allowed' }, { status: 400 });
     }
 
-    // Validate file size (max 10MB)
-    if (file.size > 10 * 1024 * 1024) {
-      return NextResponse.json({ error: 'File size must be less than 10MB' }, { status: 400 });
+    // Validate file size (max 20MB)
+    if (file.size > 20 * 1024 * 1024) {
+      return NextResponse.json({ error: 'File size must be less than 20MB' }, { status: 400 });
     }
 
     await connectToDatabase();
@@ -53,6 +53,15 @@ export async function POST(request: NextRequest) {
     const category = await Category.findById(categoryId);
     if (!category) {
       return NextResponse.json({ error: 'Category not found' }, { status: 404 });
+    }
+
+    // If category already had an image, delete it from Cloudinary first
+    const existing = await Category.findById(categoryId).lean<{ image?: string }>();
+    if (existing?.image && existing.image.includes('res.cloudinary.com')) {
+      const pid = extractPublicIdFromUrl(existing.image);
+      if (pid) {
+        try { await cloudinary.uploader.destroy(pid, { resource_type: 'image' }); } catch {}
+      }
     }
 
     // Upload to Cloudinary with eager transforms

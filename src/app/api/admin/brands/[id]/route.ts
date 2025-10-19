@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { connectToDatabase } from '@/lib/mongodb';
 import Brand from '@/lib/models/Brand';
+import { cloudinary, extractPublicIdFromUrl } from '@/lib/cloudinary';
 import { requireAdmin } from '@/lib/auth';
 
 export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
@@ -73,11 +74,15 @@ export async function DELETE(request: NextRequest, { params }: { params: Promise
       return NextResponse.json({ error: 'Brand not found' }, { status: 404 });
     }
 
-    // Soft delete - set isActive to false
-    brand.isActive = false;
-    await brand.save();
-
-    return NextResponse.json({ message: 'Brand deleted successfully' });
+    // Hard delete: remove Cloudinary image if present, then delete document
+    if (brand.image && brand.image.includes('res.cloudinary.com')) {
+      const pid = extractPublicIdFromUrl(brand.image);
+      if (pid) {
+        try { await cloudinary.uploader.destroy(pid, { resource_type: 'image' }); } catch {}
+      }
+    }
+    await Brand.findByIdAndDelete(id);
+    return NextResponse.json({ message: 'Brand permanently deleted' });
   } catch (error) {
     console.error('Error deleting brand:', error);
     return NextResponse.json({ error: 'Failed to delete brand' }, { status: 500 });

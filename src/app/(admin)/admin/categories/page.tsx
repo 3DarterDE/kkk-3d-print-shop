@@ -142,8 +142,10 @@ export default function CategoriesPage() {
         imageFormData.append("image", categoryImage);
         imageFormData.append("categoryId", savedCategory._id);
 
+        const csrf = document.cookie.split('; ').find(c => c.startsWith('csrf_token='))?.split('=')[1] || '';
         const imageResponse = await fetch("/api/admin/categories/upload-image", {
           method: "POST",
+          headers: { 'x-csrf-token': csrf },
           body: imageFormData,
         });
 

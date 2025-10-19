@@ -81,7 +81,8 @@ export default function BrandsPage() {
       const imgFD = new FormData();
       imgFD.append("image", imageFile);
       imgFD.append("brandId", saved._id);
-      await fetch("/api/admin/brands/upload-image", { method: "POST", body: imgFD });
+      const csrf = document.cookie.split('; ').find(c => c.startsWith('csrf_token='))?.split('=')[1] || '';
+      await fetch("/api/admin/brands/upload-image", { method: "POST", headers: { 'x-csrf-token': csrf }, body: imgFD });
     }
     setShowForm(false);
     setEditing(null);
@@ -231,7 +232,8 @@ export default function BrandsPage() {
                             onClick={async () => {
                               if (confirm('Bild wirklich löschen?')) {
                                 try {
-                                  await fetch(`/api/admin/brands/${editing._id}/delete-image`, { method: 'DELETE' });
+                              const csrf = document.cookie.split('; ').find(c => c.startsWith('csrf_token='))?.split('=')[1] || '';
+                              await fetch(`/api/admin/brands/${editing._id}/delete-image`, { method: 'DELETE', headers: { 'x-csrf-token': csrf } });
                                   fetchBrands();
                                   setEditing({ ...editing, image: undefined, imageSizes: undefined });
                                 } catch (error) {

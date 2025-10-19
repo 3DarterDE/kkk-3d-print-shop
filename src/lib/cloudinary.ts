@@ -42,4 +42,21 @@ export function slugifyName(name: string) {
   return base || 'file';
 }
 
+export function extractPublicIdFromUrl(url: string): string | null {
+  try {
+    const u = new URL(url);
+    const parts = u.pathname.split('/');
+    const idx = parts.findIndex((p) => p === 'upload');
+    if (idx === -1) return null;
+    const rest = parts.slice(idx + 1); // could be v123..., folder, name.ext
+    // Drop version if present
+    const afterVersion = rest[0]?.startsWith('v') ? rest.slice(1) : rest;
+    if (afterVersion.length === 0) return null;
+    const joined = afterVersion.join('/');
+    return joined.replace(/\.[a-z0-9]+$/i, '');
+  } catch {
+    return null;
+  }
+}
+
 

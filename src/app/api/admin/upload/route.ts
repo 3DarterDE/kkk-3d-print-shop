@@ -18,8 +18,8 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'SVG files are not allowed' }, { status: 400 });
     }
 
-    // Check file size (50MB limit)
-    const maxSize = 50 * 1024 * 1024; // 50MB
+    // Check file size (20MB limit)
+    const maxSize = 20 * 1024 * 1024; // 20MB
     if (file.size > maxSize) {
       return NextResponse.json({ error: "File too large. Maximum size is 50MB." }, { status: 413 });
     }
