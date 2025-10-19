@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { connectToDatabase } from '@/lib/mongodb';
 import Category from '@/lib/models/Category';
-import { cloudinary, getCloudinaryFolderForType, getImageEagerTransforms } from '@/lib/cloudinary';
+import { cloudinary, getCloudinaryFolderForType, getImageEagerTransforms, slugifyName } from '@/lib/cloudinary';
 import path from 'path';
 import { requireAdmin } from '@/lib/auth';
 import { verifyCsrfFromRequest } from '@/lib/csrf';
@@ -59,9 +59,10 @@ export async function POST(request: NextRequest) {
     const folder = getCloudinaryFolderForType('category');
     const arrayBuffer = await file.arrayBuffer();
     const buffer = Buffer.from(arrayBuffer);
+    const publicId = `${slugifyName(file.name)}-${Date.now()}`;
     const upload = await new Promise<any>((resolve, reject) => {
       const stream = cloudinary.uploader.upload_stream(
-        { folder, resource_type: 'image', eager: getImageEagerTransforms() },
+        { folder, public_id: publicId, use_filename: false, unique_filename: false, overwrite: true, resource_type: 'image', eager: getImageEagerTransforms() },
         (error, result) => (error ? reject(error) : resolve(result))
       );
       stream.end(buffer);

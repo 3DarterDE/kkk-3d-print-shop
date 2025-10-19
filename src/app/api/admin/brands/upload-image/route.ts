@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { requireAdmin } from '@/lib/auth';
 import { connectToDatabase } from '@/lib/mongodb';
 import Brand from '@/lib/models/Brand';
-import { cloudinary, getCloudinaryFolderForType, getImageEagerTransforms } from '@/lib/cloudinary';
+import { cloudinary, getCloudinaryFolderForType, getImageEagerTransforms, slugifyName } from '@/lib/cloudinary';
 import { verifyCsrfFromRequest } from '@/lib/csrf';
 import { rateLimitRequest, getClientIP } from '@/lib/rate-limit';
 
@@ -51,9 +51,10 @@ export async function POST(request: NextRequest) {
     const folder = getCloudinaryFolderForType('brand');
     const arrayBuffer = await file.arrayBuffer();
     const buffer = Buffer.from(arrayBuffer);
+    const publicId = `${slugifyName(file.name)}-${Date.now()}`;
     const upload = await new Promise<any>((resolve, reject) => {
       const stream = cloudinary.uploader.upload_stream(
-        { folder, resource_type: 'image', eager: [
+        { folder, public_id: publicId, use_filename: false, unique_filename: false, overwrite: true, resource_type: 'image', eager: [
           { width: 400, height: 400, crop: 'cover', fetch_format: 'webp', quality: 'auto' },
           { width: 150, height: 150, crop: 'cover', fetch_format: 'webp', quality: 'auto' },
           { width: 80, height: 80, crop: 'cover', fetch_format: 'webp', quality: 'auto' },

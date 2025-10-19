@@ -33,4 +33,13 @@ export function getImageEagerTransforms() {
   ];
 }
 
+export function slugifyName(name: string) {
+  const base = (name || '')
+    .toLowerCase()
+    .replace(/\.[a-z0-9]+$/i, '') // drop extension
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/(^-|-$)/g, '');
+  return base || 'file';
+}
+
 

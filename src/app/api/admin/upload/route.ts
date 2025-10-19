@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { cloudinary, getCloudinaryFolderForType, getImageEagerTransforms } from '@/lib/cloudinary';
+import { cloudinary, getCloudinaryFolderForType, getImageEagerTransforms, slugifyName } from '@/lib/cloudinary';
 import { join } from "path";
 import { existsSync } from "fs";
 
@@ -33,8 +33,9 @@ export async function POST(request: NextRequest) {
     const folder = getCloudinaryFolderForType(type === 'image' ? 'image' : 'video');
     const arrayBuffer = await file.arrayBuffer();
     const buffer = Buffer.from(arrayBuffer);
+    const publicId = `${slugifyName(file.name)}-${Date.now()}`;
     const upload = await new Promise<any>((resolve, reject) => {
-      const options: any = { folder, resource_type: type === 'image' ? 'image' : 'video' };
+      const options: any = { folder, public_id: publicId, use_filename: false, unique_filename: false, overwrite: true, resource_type: type === 'image' ? 'image' : 'video' };
       if (type === 'image') options.eager = getImageEagerTransforms();
       const stream = cloudinary.uploader.upload_stream(options, (error, result) => (error ? reject(error) : resolve(result)));
       stream.end(buffer);
