@@ -30,6 +30,19 @@ export function ensureCsrfCookie(request: NextRequest, res?: NextResponse) {
   return { token, response: r };
 }
 
+export function generateNonce(): string {
+  const c: any = (globalThis as any).crypto;
+  if (c && typeof c.randomUUID === 'function') {
+    return c.randomUUID().replace(/-/g, '');
+  }
+  if (c && typeof c.getRandomValues === 'function') {
+    const arr = new Uint8Array(16);
+    c.getRandomValues(arr);
+    return toHex(arr);
+  }
+  return `${Date.now().toString(36)}.${Math.random().toString(36).slice(2, 8)}`;
+}
+
 export function methodNeedsCsrf(method: string) {
   const m = method.toUpperCase();
   return m === 'POST' || m === 'PUT' || m === 'PATCH' || m === 'DELETE';

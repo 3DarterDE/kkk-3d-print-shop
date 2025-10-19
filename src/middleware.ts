@@ -1,7 +1,7 @@
 import type { NextRequest } from 'next/server';
-import { auth0 } from '@/lib/auth0-edge';
+import { auth0 } from '@/lib/auth0';
 import { NextResponse } from 'next/server';
-import { ensureCsrfCookie } from '@/lib/csrf';
+import { ensureCsrfCookie, generateNonce } from '@/lib/csrf';
 
 export async function middleware(request: NextRequest) {
   // Let Auth0 v4 SDK handle auth routes & session management
@@ -9,6 +9,15 @@ export async function middleware(request: NextRequest) {
   
   // If user is authenticated but not verified, redirect to /activate on the server
   const url = request.nextUrl.clone();
+
+  // Enforce HTTPS in production
+  if (process.env.NODE_ENV === 'production') {
+    const proto = request.headers.get('x-forwarded-proto');
+    if (proto && proto !== 'https') {
+      url.protocol = 'https:';
+      return NextResponse.redirect(url, { status: 308 });
+    }
+  }
 
   // Allowlist paths: activation page, API routes, auth routes, Next internals, public assets
   const isAllowed =
@@ -50,27 +59,11 @@ export async function middleware(request: NextRequest) {
   // Ensure CSRF token cookie exists for all pages/APIs (Edge-compatible)
   const ensured = ensureCsrfCookie(request, response);
   response = ensured.response;
-
-  // Generate CSP nonce and attach CSP header with nonce for scripts
-  const c: any = (globalThis as any).crypto;
-  const nonce = c && typeof c.randomUUID === 'function' ? c.randomUUID().replace(/-/g, '') : Math.random().toString(36).slice(2);
-  response.headers.set(
-    'Content-Security-Policy',
-    [
-      "default-src 'self'",
-      "base-uri 'self'",
-      "frame-ancestors 'none'",
-      // Allow dev HMR/runtime eval only in development
-      `script-src 'self' 'nonce-${nonce}' https://cdn.auth0.com ${process.env.NODE_ENV === 'development' ? "'unsafe-eval'" : ''}`,
-      "style-src 'self' 'unsafe-inline'",
-      "img-src 'self' data: blob: https:",
-      // Allow Sentry ingest + websockets for HMR in dev
-      `connect-src 'self' https://*.auth0.com https://*.auth0cdn.com https://*.sentry.io https://*.ingest.sentry.io https://*.ingest.de.sentry.io ${process.env.NODE_ENV === 'development' ? "ws: wss:" : ''}`,
-      "font-src 'self' data:",
-      "form-action 'self'",
-    ].join('; ')
-  );
-  response.headers.set('x-csp-nonce', nonce);
+  
+  // Generate CSP nonce for this request
+  const nonce = generateNonce();
+  response.headers.set('x-nonce', nonce);
+  
   return response;
 }
 
