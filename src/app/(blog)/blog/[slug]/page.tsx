@@ -3,6 +3,7 @@ import path from "node:path";
 import matter from "gray-matter";
 import { remark } from "remark";
 import html from "remark-html";
+import createDOMPurify from "isomorphic-dompurify";
 import { notFound } from "next/navigation";
 
 export const revalidate = 86400;
@@ -24,7 +25,9 @@ export default async function BlogPost({ params }: { params: { slug: string } })
   const src = fs.readFileSync(filePath, "utf8");
   const { content, data } = matter(src);
   const processed = await remark().use(html).process(content);
-  const contentHtml = processed.toString();
+  const rawHtml = processed.toString();
+  const DOMPurify = createDOMPurify();
+  const contentHtml = DOMPurify.sanitize(rawHtml, { USE_PROFILES: { html: true } });
   return (
     <article className="prose mx-auto px-4 py-10">
       <h1>{data.title || slug}</h1>

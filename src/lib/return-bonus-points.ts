@@ -219,14 +219,18 @@ export async function freezeBonusPointsForReturn(
   returnRequestId: string
 ): Promise<void> {
   try {
+    console.log(`DEBUG: freezeBonusPointsForReturn aufgerufen für Order ${orderId}, Return ${returnRequestId}`);
+    console.log(`DEBUG: Return Items:`, returnItems.map(item => ({ name: item.name, price: item.price, quantity: item.quantity, frozenPoints: item.frozenBonusPoints })));
+    
     const { connectToDatabase } = await import('@/lib/mongodb');
     await connectToDatabase();
     
-    // Finde den AdminBonusPoints Timer für diese Bestellung
+    // Finde den AdminBonusPoints Timer für diese Bestellung (auch wenn bereits gutgeschrieben)
     const timer = await AdminBonusPoints.findOne({
-      orderId: orderId,
-      bonusPointsCredited: false
+      orderId: orderId
     });
+    
+    console.log(`DEBUG: Timer gefunden:`, timer ? { orderId: timer.orderId, pointsAwarded: timer.pointsAwarded, bonusPointsCredited: timer.bonusPointsCredited } : 'Kein Timer gefunden');
     
     if (!timer) {
       console.log(`Kein Timer gefunden für Bestellung ${orderId}`);
@@ -239,32 +243,65 @@ export async function freezeBonusPointsForReturn(
     for (const item of returnItems) {
       const itemBonusPoints = calculateItemBonusPoints(item.price) * item.quantity;
       totalFrozenPoints += itemBonusPoints;
+      console.log(`DEBUG: Item ${item.name}: ${item.price} Cent * ${item.quantity} = ${itemBonusPoints} Punkte`);
     }
     
+    console.log(`DEBUG: Gesamt eingefrorene Punkte: ${totalFrozenPoints}`);
+    
     if (totalFrozenPoints > 0) {
-      // Reduziere die Punkte im Timer
-      timer.pointsAwarded = Math.max(0, timer.pointsAwarded - totalFrozenPoints);
-      
-      // Füge zu eingefrorenen Punkten hinzu
-      timer.frozenPoints = (timer.frozenPoints || 0) + totalFrozenPoints;
-      
-      // Füge Return Request ID hinzu
-      if (!timer.frozenBy) {
-        timer.frozenBy = [];
+      // Prüfe ob Timer bereits abgelaufen und Punkte gutgeschrieben wurden
+      if (timer.bonusPointsCredited) {
+        console.log(`Timer für Bestellung ${orderId} bereits abgelaufen und gutgeschrieben. Ziehe Punkte direkt vom User ab.`);
+        
+        // Ziehe die Punkte direkt vom User ab
+        const User = (await import('@/lib/models/User')).default;
+        const user = await User.findById(timer.userId);
+        if (user) {
+          user.bonusPoints = Math.max(0, (user.bonusPoints || 0) - totalFrozenPoints);
+          await user.save();
+          console.log(`Bonuspunkte direkt vom User abgezogen: ${totalFrozenPoints} Punkte`);
+        }
+        
+        // Aktualisiere die Order
+        const order = await Order.findById(orderId);
+        if (order) {
+          order.bonusPointsEarned = Math.max(0, order.bonusPointsEarned - totalFrozenPoints);
+          order.bonusPointsDeducted = (order.bonusPointsDeducted || 0) + totalFrozenPoints;
+          order.bonusPointsDeductedAt = new Date();
+          await order.save();
+          console.log(`Order ${order.orderNumber}: bonusPointsEarned reduziert um ${totalFrozenPoints} auf ${order.bonusPointsEarned}`);
+        }
+      } else {
+        // Timer noch nicht abgelaufen - normale Einfrierung
+        console.log(`DEBUG: Timer noch nicht abgelaufen. Führe normale Einfrierung durch.`);
+        console.log(`DEBUG: Vor Einfrierung - pointsAwarded: ${timer.pointsAwarded}, frozenPoints: ${timer.frozenPoints || 0}`);
+        
+        timer.pointsAwarded = Math.max(0, timer.pointsAwarded - totalFrozenPoints);
+        
+        // Füge zu eingefrorenen Punkten hinzu
+        timer.frozenPoints = (timer.frozenPoints || 0) + totalFrozenPoints;
+        
+        // Füge Return Request ID hinzu
+        if (!timer.frozenBy) {
+          timer.frozenBy = [];
+        }
+        timer.frozenBy.push(returnRequestId);
+        
+        await timer.save();
+        
+        console.log(`DEBUG: Nach Einfrierung - pointsAwarded: ${timer.pointsAwarded}, frozenPoints: ${timer.frozenPoints}`);
+        
+        // WICHTIG: Auch die Order selbst aktualisieren
+        const order = await Order.findById(orderId);
+        if (order) {
+          console.log(`DEBUG: Order vor Update - bonusPointsEarned: ${order.bonusPointsEarned}`);
+          order.bonusPointsEarned = Math.max(0, order.bonusPointsEarned - totalFrozenPoints);
+          await order.save();
+          console.log(`Order ${order.orderNumber}: bonusPointsEarned reduziert um ${totalFrozenPoints} auf ${order.bonusPointsEarned}`);
+        }
+        
+        console.log(`Bonuspunkte eingefroren: ${totalFrozenPoints} Punkte für Rücksendung ${returnRequestId}`);
       }
-      timer.frozenBy.push(returnRequestId);
-      
-      await timer.save();
-      
-      // WICHTIG: Auch die Order selbst aktualisieren
-      const order = await Order.findById(orderId);
-      if (order) {
-        order.bonusPointsEarned = Math.max(0, order.bonusPointsEarned - totalFrozenPoints);
-        await order.save();
-        console.log(`Order ${order.orderNumber}: bonusPointsEarned reduziert um ${totalFrozenPoints} auf ${order.bonusPointsEarned}`);
-      }
-      
-      console.log(`Bonuspunkte eingefroren: ${totalFrozenPoints} Punkte für Rücksendung ${returnRequestId}`);
     }
   } catch (error) {
     console.error('Fehler beim Einfrieren der Bonuspunkte:', error);
@@ -307,41 +344,64 @@ export async function unfreezeBonusPointsForReturn(
     }
     
     if (totalUnfrozenPoints > 0) {
-      // Entferne Return Request ID aus frozenBy Array
-      if (timer.frozenBy) {
-        timer.frozenBy = timer.frozenBy.filter(id => id !== returnRequestId);
-      }
-      
-      // Reduziere eingefrorene Punkte
-      timer.frozenPoints = Math.max(0, (timer.frozenPoints || 0) - totalUnfrozenPoints);
-      
-      // WICHTIG: NICHT die Punkte wieder zum Timer hinzufügen!
-      // Der Kunde bekommt die Punkte direkt, daher bleiben sie aus dem Timer raus
-      // timer.pointsAwarded bleibt unverändert
-      
-      await timer.save();
-      
-      // WICHTIG: Order bonusPointsEarned erhöhen!
-      // Der Kunde bekommt die Punkte direkt UND sie werden in der Order wieder hinzugefügt
-      const order = await Order.findById(orderId);
-      if (order) {
-        order.bonusPointsEarned = (order.bonusPointsEarned || 0) + totalUnfrozenPoints;
-        order.bonusPointsUnfrozen = (order.bonusPointsUnfrozen || 0) + totalUnfrozenPoints;
-        order.bonusPointsUnfrozenAt = new Date();
-        await order.save();
-        console.log(`Order ${order.orderNumber}: bonusPointsEarned erhöht um ${totalUnfrozenPoints} auf ${order.bonusPointsEarned}`);
-        console.log(`Order ${order.orderNumber}: ${totalUnfrozenPoints} Punkte als "wieder freigegeben" dokumentiert`);
-      }
-      
-      // Schreibe die Punkte sofort dem User gut
-      const user = await User.findById(timer.userId);
-      if (user) {
-        user.bonusPoints = (user.bonusPoints || 0) + totalUnfrozenPoints;
-        await user.save();
+      // Prüfe ob Timer bereits abgelaufen und Punkte gutgeschrieben wurden
+      if (timer.bonusPointsCredited) {
+        console.log(`Timer für Bestellung ${orderId} bereits abgelaufen. Gebe Punkte direkt an User zurück.`);
         
+        // Schreibe die Punkte sofort dem User gut
+        const user = await User.findById(timer.userId);
+        if (user) {
+          user.bonusPoints = (user.bonusPoints || 0) + totalUnfrozenPoints;
+          await user.save();
+          console.log(`Bonuspunkte direkt an User zurückgegeben: ${totalUnfrozenPoints} Punkte`);
+        }
         
-        console.log(`Bonuspunkte freigegeben und direkt gutgeschrieben: ${totalUnfrozenPoints} Punkte an Benutzer ${timer.userId}`);
-        console.log(`Order bonusPointsEarned wurde erhöht, Timer bleibt unverändert`);
+        // Aktualisiere die Order - WICHTIG: NICHT bonusPointsEarned erhöhen!
+        // Der User bekommt die Punkte direkt, daher sollen sie NICHT nochmal über den Timer gutgeschrieben werden
+        const order = await Order.findById(orderId);
+        if (order) {
+          // Nur dokumentieren, dass Punkte freigegeben wurden
+          order.bonusPointsUnfrozen = (order.bonusPointsUnfrozen || 0) + totalUnfrozenPoints;
+          order.bonusPointsUnfrozenAt = new Date();
+          await order.save();
+          console.log(`Order ${order.orderNumber}: ${totalUnfrozenPoints} Punkte als "wieder freigegeben" dokumentiert (NICHT in bonusPointsEarned)`);
+        }
+      } else {
+        // Timer noch nicht abgelaufen - normale Freigabe
+        // Entferne Return Request ID aus frozenBy Array
+        if (timer.frozenBy) {
+          timer.frozenBy = timer.frozenBy.filter(id => id !== returnRequestId);
+        }
+        
+        // Reduziere eingefrorene Punkte
+        timer.frozenPoints = Math.max(0, (timer.frozenPoints || 0) - totalUnfrozenPoints);
+        
+        // WICHTIG: NICHT die Punkte wieder zum Timer hinzufügen!
+        // Der Kunde bekommt die Punkte direkt, daher bleiben sie aus dem Timer raus
+        // timer.pointsAwarded bleibt unverändert
+        
+        await timer.save();
+        
+        // WICHTIG: Order bonusPointsEarned NICHT erhöhen!
+        // Der Kunde bekommt die Punkte direkt, daher sollen sie NICHT nochmal über den Timer gutgeschrieben werden
+        const order = await Order.findById(orderId);
+        if (order) {
+          // Nur dokumentieren, dass Punkte freigegeben wurden
+          order.bonusPointsUnfrozen = (order.bonusPointsUnfrozen || 0) + totalUnfrozenPoints;
+          order.bonusPointsUnfrozenAt = new Date();
+          await order.save();
+          console.log(`Order ${order.orderNumber}: ${totalUnfrozenPoints} Punkte als "wieder freigegeben" dokumentiert (NICHT in bonusPointsEarned)`);
+        }
+        
+        // Schreibe die Punkte sofort dem User gut
+        const user = await User.findById(timer.userId);
+        if (user) {
+          user.bonusPoints = (user.bonusPoints || 0) + totalUnfrozenPoints;
+          await user.save();
+          
+          console.log(`Bonuspunkte freigegeben und direkt gutgeschrieben: ${totalUnfrozenPoints} Punkte an Benutzer ${timer.userId}`);
+          console.log(`Order bonusPointsEarned wurde erhöht, Timer bleibt unverändert`);
+        }
       }
     }
   } catch (error) {

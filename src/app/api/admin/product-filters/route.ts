@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { connectToDatabase } from '@/lib/mongodb';
 import { ProductFilter } from '@/lib/models/Filter';
 import mongoose from 'mongoose';
+import { z } from 'zod';
 
 export async function GET(request: NextRequest) {
   try {
@@ -36,7 +37,12 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     await connectToDatabase();
-    const data = await request.json();
+    const schema = z.object({ productId: z.string().min(1), filterId: z.string().min(1), filterName: z.string().min(1), values: z.array(z.string()).default([]) });
+    const parsed = schema.safeParse(await request.json());
+    if (!parsed.success) {
+      return NextResponse.json({ error: 'Invalid request body', details: parsed.error.flatten() }, { status: 400 });
+    }
+    const data = parsed.data as any;
     
     const ProductFilterSchema = new mongoose.Schema({
       productId: String,
@@ -66,8 +72,12 @@ export async function POST(request: NextRequest) {
 export async function PUT(request: NextRequest) {
   try {
     await connectToDatabase();
-    const data = await request.json();
-    const { _id, ...updateData } = data;
+    const schema = z.object({ _id: z.string().min(1), productId: z.string().min(1).optional(), filterId: z.string().min(1).optional(), filterName: z.string().min(1).optional(), values: z.array(z.string()).optional() });
+    const parsed = schema.safeParse(await request.json());
+    if (!parsed.success) {
+      return NextResponse.json({ error: 'Invalid request body', details: parsed.error.flatten() }, { status: 400 });
+    }
+    const { _id, ...updateData } = parsed.data as any;
     
     const ProductFilterSchema = new mongoose.Schema({
       productId: String,

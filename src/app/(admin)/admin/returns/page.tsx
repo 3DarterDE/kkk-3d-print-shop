@@ -25,7 +25,7 @@ type ReturnRequest = {
   status: 'received'|'processing'|'completed'|'rejected';
   createdAt: string;
   updatedAt: string;
-  notes?: string;
+  notes?: string; // customer return reason
   refund?: { method?: string; reference?: string; amount?: number };
 };
 
@@ -400,6 +400,12 @@ export default function AdminReturnsPage() {
                       </th>
                       <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
                         <div className="flex items-center gap-2">
+                          <span>💬</span>
+                          Rücksendegrund
+                        </div>
+                      </th>
+                      <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
+                        <div className="flex items-center gap-2">
                           <span>🏷️</span>
                           Status
                         </div>
@@ -440,6 +446,20 @@ export default function AdminReturnsPage() {
                           <div className="flex items-center gap-2">
                             <span className="text-sm text-gray-700">{r.items.length}</span>
                             <span className="text-xs text-gray-500">Artikel</span>
+                          </div>
+                        </td>
+                        <td className="px-6 py-4">
+                          <div className="max-w-xs">
+                            {r.notes ? (
+                              <div className="text-sm text-gray-700 bg-gray-50 p-2 rounded-lg border">
+                                <div className="flex items-start gap-2">
+                                  <span className="text-gray-500 text-xs mt-0.5">💬</span>
+                                  <span className="line-clamp-2">{r.notes}</span>
+                                </div>
+                              </div>
+                            ) : (
+                              <span className="text-xs text-gray-400 italic">Kein Grund angegeben</span>
+                            )}
                           </div>
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap">
@@ -493,6 +513,21 @@ export default function AdminReturnsPage() {
                           <span className="text-sm text-gray-700">{r.items.length} Artikel</span>
                         </div>
                       </div>
+                      
+                      {/* Return Reason */}
+                      {r.notes && (
+                        <div className="mb-3">
+                          <div className="flex items-start gap-2">
+                            <span className="text-gray-500 text-sm mt-0.5">💬</span>
+                            <div className="flex-1">
+                              <div className="text-xs text-gray-500 mb-1">Rücksendegrund:</div>
+                              <div className="text-sm text-gray-700 bg-gray-50 p-2 rounded-lg border">
+                                {r.notes}
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      )}
                       
                       <div className="flex items-center justify-between">
                         <div className="text-xs text-gray-500">
@@ -548,6 +583,23 @@ export default function AdminReturnsPage() {
             </div>
             {/* Modal Content */}
             <div className="p-4 sm:p-6 space-y-4 sm:space-y-6 max-h-[60vh] sm:max-h-[70vh] overflow-y-auto">
+              {/* Customer Return Reason */}
+              {selected.notes && (
+                <div className="bg-blue-50 border border-blue-200 rounded-xl p-4">
+                  <div className="flex items-start gap-3">
+                    <div className="flex-shrink-0">
+                      <span className="text-blue-600 text-lg">💬</span>
+                    </div>
+                    <div className="flex-1">
+                      <h4 className="text-sm font-semibold text-blue-800 mb-2">Rücksendegrund des Kunden</h4>
+                      <div className="text-sm text-blue-700 bg-white p-3 rounded-lg border border-blue-100">
+                        {selected.notes}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+              
               {/* Items Section */}
               {/* Already Returned Items */}
               {alreadyReturnedItems && alreadyReturnedItems.length > 0 && (

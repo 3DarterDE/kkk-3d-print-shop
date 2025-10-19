@@ -39,7 +39,7 @@ interface User {
 interface Order {
   _id: string;
   orderNumber: string;
-  status: 'pending' | 'processing' | 'shipped' | 'delivered' | 'cancelled' | 'return_requested' | 'return_completed';
+  status: 'pending' | 'processing' | 'shipped' | 'delivered' | 'cancelled' | 'return_requested' | 'partially_returned' | 'return_completed';
   total: number;
   items: Array<{
     productId: string;
@@ -912,7 +912,7 @@ export default function UserDetailPage() {
                                 {/* Action Buttons */}
                                 <div className="mt-4 pt-3 border-t border-gray-200">
                                   <div className="flex flex-col sm:flex-row gap-2">
-                                    {order.status === 'delivered' || order.status === 'return_completed' ? (
+                                    {order.status === 'delivered' || order.status === 'partially_returned' || order.status === 'return_completed' ? (
                                       <>
                                         <button
                                           onClick={(e) => {

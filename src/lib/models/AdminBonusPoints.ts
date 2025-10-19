@@ -30,7 +30,7 @@ const AdminBonusPointsSchema = new Schema<IAdminBonusPoints>({
   pointsAwarded: {
     type: Number,
     required: true,
-    min: 1
+    min: 0
   },
   reason: {
     type: String,

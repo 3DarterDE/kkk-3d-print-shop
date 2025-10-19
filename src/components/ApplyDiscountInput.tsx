@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { withCursorPointer } from '@/lib/cursor-utils';
 
 type CartLine = { price: number; quantity: number };
@@ -11,16 +11,20 @@ export default function ApplyDiscountInput({
   discountCents,
   onApplied,
   onCleared,
+  redeemPoints = false,
 }: {
   items: CartLine[];
   discountCode: string | null;
   discountCents: number;
   onApplied: (code: string, cents: number) => void;
   onCleared: () => void;
+  redeemPoints?: boolean;
 }) {
   const [code, setCode] = useState<string>(discountCode || '');
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
+  const [showExclusiveMessage, setShowExclusiveMessage] = useState(false);
+  const [hadDiscountBefore, setHadDiscountBefore] = useState(false);
 
   const apply = async () => {
     const trimmed = code.trim();
@@ -43,6 +47,7 @@ export default function ApplyDiscountInput({
       }
       onApplied(data.code, data.discountCents);
       setMessage('Code angewendet');
+      setHadDiscountBefore(true);
     } catch (e) {
       setMessage('Fehler bei der Prüfung');
     } finally {
@@ -54,7 +59,26 @@ export default function ApplyDiscountInput({
     setCode('');
     onCleared();
     setMessage(null);
+    setShowExclusiveMessage(false);
+    setHadDiscountBefore(false);
   };
+
+  // Zeige Exklusiv-Nachricht wenn Bonuspunkte aktiv sind und ein Code angewendet war
+  useEffect(() => {
+    if (redeemPoints && hadDiscountBefore && discountCents === 0) {
+      setShowExclusiveMessage(true);
+      setMessage(null); // Entferne "Code angewendet" Nachricht
+    } else if (!redeemPoints) {
+      setShowExclusiveMessage(false);
+    }
+  }, [redeemPoints, discountCents, hadDiscountBefore]);
+
+  // Reset message when discountCents changes to 0
+  useEffect(() => {
+    if (discountCents === 0 && !redeemPoints) {
+      setMessage(null);
+    }
+  }, [discountCents, redeemPoints]);
 
   return (
     <div>
@@ -76,8 +100,13 @@ export default function ApplyDiscountInput({
           </button>
         )}
       </div>
-      {message && (
-        <div className={`mt-2 text-xs ${discountCents > 0 ? 'text-green-700' : 'text-gray-600'}`}>{message}</div>
+      {showExclusiveMessage && (
+        <div className="mt-2 text-xs text-orange-600">
+          Nur eine Rabattart kann aktiv sein. Bonuspunkte wurden aktiviert, Rabattcode wurde entfernt.
+        </div>
+      )}
+      {message && !showExclusiveMessage && (
+        <div className={`mt-2 text-xs ${discountCents > 0 && !redeemPoints ? 'text-green-700' : 'text-gray-600'}`}>{message}</div>
       )}
     </div>
   );

@@ -91,6 +91,7 @@ export default function OrdersPage() {
   const [returnedItems, setReturnedItems] = useState<Record<string, any[]>>({});
   const [pendingReturns, setPendingReturns] = useState<Record<string, Record<string, number>>>({});
   const [pendingReturnsLoaded, setPendingReturnsLoaded] = useState<Set<string>>(new Set());
+  const [returnAvailability, setReturnAvailability] = useState<Record<string, any[]>>({});
   const [creditNoteDownloading, setCreditNoteDownloading] = useState<string | null>(null);
   const [downloadAttempts, setDownloadAttempts] = useState<Record<string, { count: number; resetTime: number }>>({});
   
@@ -187,6 +188,56 @@ export default function OrdersPage() {
 
     loadReturnedItems();
   }, []);
+
+  // Load return availability for orders
+  useEffect(() => {
+    const loadReturnAvailability = async () => {
+      if (orders.length === 0) return;
+      
+      // Filter orders that can have returns
+      const ordersNeedingAvailability = orders.filter(order => 
+        (order.status === 'delivered' || (order as any).status === 'partially_returned' || order.status === 'return_requested') &&
+        !returnAvailability[order._id]
+      );
+      
+      if (ordersNeedingAvailability.length === 0) return;
+      
+      try {
+        // Load availability for each order
+        const availabilityPromises = ordersNeedingAvailability.map(async (order) => {
+          const cacheKey = `availability-${order._id}`;
+          const cachedData = getCachedData(cacheKey, 30000);
+          
+          if (cachedData) {
+            return { orderId: order._id, data: cachedData };
+          }
+          
+          const response = await fetch(`/api/returns/availability?orderId=${order._id}`);
+          if (response.ok) {
+            const data = await response.json();
+            setCachedData(cacheKey, data.itemAvailability);
+            return { orderId: order._id, data: data.itemAvailability };
+          }
+          return null;
+        });
+        
+        const results = await Promise.all(availabilityPromises);
+        const newAvailability: Record<string, any[]> = {};
+        
+        results.forEach(result => {
+          if (result) {
+            newAvailability[result.orderId] = result.data;
+          }
+        });
+        
+        setReturnAvailability(prev => ({ ...prev, ...newAvailability }));
+      } catch (error) {
+        console.error('Error loading return availability:', error);
+      }
+    };
+
+    loadReturnAvailability();
+  }, [orders, returnAvailability]);
 
   // Load pending returns for orders - BATCH VERSION
   useEffect(() => {
@@ -391,7 +442,17 @@ export default function OrdersPage() {
 
   // Helper function to check if an item is available for return (not already returned or requested)
   const isItemAvailableForReturn = (order: any, item: any) => {
-    // Calculate total already returned quantity for this specific item
+    // Use the new availability API data if available
+    const orderAvailability = returnAvailability[order._id];
+    if (orderAvailability) {
+      const itemAvailability = orderAvailability.find(avail => avail.productId === item.productId);
+      if (itemAvailability) {
+        console.log(`isItemAvailableForReturn (API) for ${item.name}:`, itemAvailability);
+        return itemAvailability.isAvailable;
+      }
+    }
+    
+    // Fallback to old logic if API data not available
     let alreadyReturnedQty = 0;
     
     // Check against returnedItems from the order (already completed returns) - this is the primary source
@@ -420,6 +481,19 @@ export default function OrdersPage() {
     
     // Calculate total unavailable quantity (returned + requested)
     const totalUnavailableQty = alreadyReturnedQty + alreadyRequested;
+    
+    // Debug logging
+    console.log(`isItemAvailableForReturn (fallback) for ${item.name}:`, {
+      productId: item.productId,
+      originalQuantity: item.quantity,
+      alreadyReturnedQty,
+      alreadyRequested,
+      totalUnavailableQty,
+      availableQty: item.quantity - totalUnavailableQty,
+      isAvailable: item.quantity > totalUnavailableQty,
+      orderReturnedItems: (order as any).returnedItems,
+      pendingReturns: orderPendingReturns
+    });
     
     // Check if there's still available quantity
     return item.quantity > totalUnavailableQty;
@@ -1050,7 +1124,7 @@ export default function OrdersPage() {
                                               })()}
                                             </div>
                                             {/* Erweiterte Bonuspunkte-Übersicht für Kunden */}
-                                            {(order.bonusPointsEarned || (order as any).bonusPointsRedeemed || (order as any).bonusPointsDeducted || (order as any).bonusPointsCreditedReturn) && (
+                                            {(order.bonusPointsEarned || (order as any).bonusPointsRedeemed || (order as any).bonusPointsDeducted || (order as any).bonusPointsCreditedReturn || (order as any).status === 'return_requested' || (order as any).status === 'partially_returned') && (
                                               <div className="text-sm bg-green-50 rounded-lg p-3 border border-green-200">
                                                 <div className="flex items-center gap-2 mb-2">
                                                   <span className="text-green-600 text-lg">🎁</span>
@@ -1069,16 +1143,12 @@ export default function OrdersPage() {
                                                       <span className="font-medium text-red-600">-{(order as any).bonusPointsRedeemed}</span>
                                                     </div>
                                                   )}
-                                                  {(order as any).bonusPointsDeducted > 0 && (
+                                                  {((order as any).status === 'return_requested' || (order as any).status === 'partially_returned') && (
                                                     <div className="flex justify-between">
-                                                      <span className="text-gray-600">Abgezogen (Rücksendung):</span>
-                                                      <span className="font-medium text-red-600">-{(order as any).bonusPointsDeducted}</span>
-                                                    </div>
-                                                  )}
-                                                  {(order as any).bonusPointsCreditedReturn > 0 && (
-                                                    <div className="flex justify-between">
-                                                      <span className="text-gray-600">Gutgeschrieben (Rücksendung):</span>
-                                                      <span className="font-medium text-green-600">+{(order as any).bonusPointsCreditedReturn}</span>
+                                                      <span className="text-gray-600">Rücksendung:</span>
+                                                      <span className="font-medium text-blue-600">
+                                                        {order.status === 'return_requested' ? '📦 Angekündigt' : '📦 Teilweise zurückgesendet'}
+                                                      </span>
                                                     </div>
                                                   )}
                                                   <div className="flex justify-between border-t pt-1 mt-1">
@@ -1689,7 +1759,21 @@ export default function OrdersPage() {
                                   return null;
                                 })()}
                                 {(() => {
-                                  // Calculate total already returned quantity for this specific item
+                                  // Use the new availability API data if available
+                                  const orderAvailability = returnAvailability[order._id];
+                                  if (orderAvailability) {
+                                    const itemAvailability = orderAvailability.find(avail => avail.productId === item.productId);
+                                    if (itemAvailability && itemAvailability.alreadyReturnedQty > 0) {
+                                      return (
+                                        <span className="text-blue-600 font-medium">
+                                          Verfügbar: {itemAvailability.availableQty}×
+                                        </span>
+                                      );
+                                    }
+                                    return null;
+                                  }
+                                  
+                                  // Fallback to old logic
                                   let alreadyReturnedQty = 0;
                                   
                                   // Check against returnedItems from the order (already completed returns) - this is the primary source
@@ -1840,6 +1924,78 @@ export default function OrdersPage() {
                       {returnReason.length}/500 Zeichen
                     </div>
                   </div>
+
+                  {/* Bonus Points Impact */}
+                  {(() => {
+                    const selectedItems = order.items
+                      .map((it, idx) => ({ ...it, returnQty: returnSelections[String(idx)] || 0 }))
+                      .filter(it => it.returnQty > 0 && isItemAvailableForReturn(order, it));
+                    
+                    if (selectedItems.length === 0) return null;
+                    
+                    // Calculate bonus points that will be frozen
+                    const totalFrozenPoints = selectedItems.reduce((sum, item) => {
+                      const itemBonusPoints = Math.floor((item.price / 100) * 3.5);
+                      return sum + (itemBonusPoints * item.returnQty);
+                    }, 0);
+                    
+                    // Calculate total bonus points for the entire order (if kept)
+                    const totalOrderBonusPoints = order.items.reduce((sum, item) => {
+                      const itemBonusPoints = Math.floor((item.price / 100) * 3.5);
+                      return sum + (itemBonusPoints * item.quantity);
+                    }, 0);
+                    
+                    // Calculate bonus points that could be credited back (if any were redeemed)
+                    const bonusPointsRedeemed = (order as any).bonusPointsRedeemed || 0;
+                    let potentialCreditedPoints = 0;
+                    
+                    if (bonusPointsRedeemed > 0) {
+                      const selectedItemsValue = selectedItems.reduce((sum, item) => {
+                        return sum + (item.price * item.returnQty);
+                      }, 0);
+                      const orderSubtotalCents = order.items.reduce((s, it) => s + (it.price * it.quantity), 0);
+                      const returnRatio = orderSubtotalCents > 0 ? selectedItemsValue / orderSubtotalCents : 0;
+                      potentialCreditedPoints = Math.round(bonusPointsRedeemed * returnRatio);
+                    }
+                    
+                    return (
+                      <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                        <h4 className="font-medium text-blue-800 mb-3 flex items-center gap-2">
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1" />
+                          </svg>
+                          Bonuspunkte-Auswirkung
+                        </h4>
+                        <div className="space-y-2 text-sm">
+                          <div className="flex justify-between items-center">
+                            <span className="text-blue-700">Bonuspunkte für gesamte Bestellung:</span>
+                            <span className="font-medium text-green-600">+{totalOrderBonusPoints} Punkte</span>
+                          </div>
+                          <div className="text-xs text-blue-600">
+                            Diese Punkte würdest du erhalten, wenn du alle Artikel behältst
+                          </div>
+                          <div className="flex justify-between items-center">
+                            <span className="text-blue-700">Eingefrorene Punkte:</span>
+                            <span className="font-medium text-red-600">-{totalFrozenPoints} Punkte</span>
+                          </div>
+                          <div className="text-xs text-blue-600">
+                            Diese Punkte werden eingefroren, da du diese Artikel zurücksenden möchtest. Falls du die Artikel doch behältst oder nicht zurücksendest, bekommst du die eingefrorenen Punkte nach 30 Tagen automatisch gutgeschrieben.
+                          </div>
+                          {potentialCreditedPoints > 0 && (
+                            <>
+                              <div className="flex justify-between items-center">
+                                <span className="text-blue-700">Mögliche Rückerstattung:</span>
+                                <span className="font-medium text-green-600">+{potentialCreditedPoints} Punkte</span>
+                              </div>
+                              <div className="text-xs text-blue-600">
+                                Falls Bonuspunkte eingelöst wurden, werden diese anteilig zurückerstattet
+                              </div>
+                            </>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })()}
 
                   {/* Summary */}
                   {(() => {
@@ -2087,7 +2243,7 @@ export default function OrdersPage() {
                             body: JSON.stringify({ 
                               orderId: order._id, 
                               items: payloadItems,
-                              reason: returnReason.trim() || undefined
+                              notes: returnReason.trim() || undefined
                             })
                           });
                           const data = await res.json();
@@ -2097,6 +2253,23 @@ export default function OrdersPage() {
                             setReturnModalOrderId(null);
                             setReturnReason('');
                             setReturnSelections({});
+                            // Clear pending returns cache for this order to force reload
+                            setPendingReturns(prev => {
+                              const updated = { ...prev };
+                              delete updated[order._id];
+                              return updated;
+                            });
+                            setPendingReturnsLoaded(prev => {
+                              const updated = new Set(prev);
+                              updated.delete(order._id);
+                              return updated;
+                            });
+                            // Clear return availability cache for this order to force reload
+                            setReturnAvailability(prev => {
+                              const updated = { ...prev };
+                              delete updated[order._id];
+                              return updated;
+                            });
                             // Refresh orders to update the status immediately
                             await refetchOrders();
                             showToast('Rücksendung eingereicht. Du erhältst eine Bestätigungs-E-Mail.', 'success');

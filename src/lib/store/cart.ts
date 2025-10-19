@@ -29,6 +29,8 @@ type CartState = {
   items: CartItem[];
   discountCode: string | null;
   discountCents: number;
+  redeemPoints: boolean;
+  pointsToRedeem: number;
   addItem: (item: CartItem) => void;
   removeItem: (slug: string, variations?: Record<string, string>) => void;
   updateQuantity: (slug: string, variations: Record<string, string> | undefined, newQuantity: number) => void;
@@ -39,6 +41,8 @@ type CartState = {
   syncFromStorage: () => void;
   setDiscount: (code: string, cents: number) => void;
   clearDiscount: () => void;
+  setRedeemPoints: (redeem: boolean, points?: number) => void;
+  clearRedeemPoints: () => void;
 };
 
 // Flag to prevent concurrent validation calls
@@ -51,6 +55,8 @@ export const useCartStore = create<CartState>()(
         items: [],
         discountCode: null,
         discountCents: 0,
+        redeemPoints: false,
+        pointsToRedeem: 0,
         addItem: (item) => {
           // Debug logging
           console.log('Adding item to cart:', item);
@@ -138,7 +144,7 @@ export const useCartStore = create<CartState>()(
           });
         },
         clear: () => {
-          set({ items: [], discountCode: null, discountCents: 0 });
+          set({ items: [], discountCode: null, discountCents: 0, redeemPoints: false, pointsToRedeem: 0 });
           // Ensure persisted cart is fully cleared across reloads/tabs
           try {
             if (typeof window !== 'undefined') {
@@ -294,10 +300,35 @@ export const useCartStore = create<CartState>()(
           }
         },
         setDiscount: (code, cents) => {
-          set({ discountCode: code.trim().toUpperCase(), discountCents: Math.max(0, Math.floor(cents)) });
+          // Wenn Rabattcode angewendet wird, Bonuspunkte deaktivieren
+          set({ 
+            discountCode: code.trim().toUpperCase(), 
+            discountCents: Math.max(0, Math.floor(cents)),
+            redeemPoints: false,
+            pointsToRedeem: 0
+          });
         },
         clearDiscount: () => {
           set({ discountCode: null, discountCents: 0 });
+        },
+        setRedeemPoints: (redeem, points = 0) => {
+          // Wenn Bonuspunkte aktiviert werden, Rabattcode sofort löschen
+          if (redeem) {
+            set({ 
+              redeemPoints: true, 
+              pointsToRedeem: points,
+              discountCode: null,
+              discountCents: 0
+            });
+          } else {
+            set({ 
+              redeemPoints: false, 
+              pointsToRedeem: 0
+            });
+          }
+        },
+        clearRedeemPoints: () => {
+          set({ redeemPoints: false, pointsToRedeem: 0 });
         }
       };
     },

@@ -3,9 +3,23 @@ import { requireAdmin } from '@/lib/auth';
 import { connectToDatabase } from '@/lib/mongodb';
 import Brand from '@/lib/models/Brand';
 import { convertToWebp, generateThumbnail } from '@/lib/image-utils';
+import { verifyCsrfFromRequest } from '@/lib/csrf';
+import { rateLimitRequest, getClientIP } from '@/lib/rate-limit';
 
 export async function POST(request: NextRequest) {
   try {
+    const ip = getClientIP(request);
+    const rl = await rateLimitRequest(`admin:upload:${ip}`, 20, 60 * 1000);
+    if (!rl.success) {
+      const res = NextResponse.json({ error: 'Too many requests' }, { status: 429 });
+      res.headers.set('Retry-After', Math.max(0, Math.ceil((rl.resetTime - Date.now()) / 1000)).toString());
+      return res;
+    }
+
+    const csrfOk = await verifyCsrfFromRequest(request);
+    if (!csrfOk) {
+      return NextResponse.json({ error: 'Invalid CSRF token' }, { status: 403 });
+    }
     const { response } = await requireAdmin();
     if (response) return response;
 
@@ -15,6 +29,13 @@ export async function POST(request: NextRequest) {
 
     if (!file) {
       return NextResponse.json({ error: 'No file provided' }, { status: 400 });
+    }
+    // Validate MIME and size
+    if (!file.type.startsWith('image/')) {
+      return NextResponse.json({ error: 'File must be an image' }, { status: 400 });
+    }
+    if (file.size > 10 * 1024 * 1024) {
+      return NextResponse.json({ error: 'File size must be less than 10MB' }, { status: 400 });
     }
 
     if (!brandId) {

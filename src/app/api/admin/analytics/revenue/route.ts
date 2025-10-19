@@ -3,6 +3,7 @@ import { requireAdmin } from '@/lib/auth';
 import { connectToDatabase } from '@/lib/mongodb';
 import Order from '@/lib/models/Order';
 import ReturnRequest from '@/lib/models/Return';
+import Review from '@/lib/models/Review';
 
 export async function GET(request: NextRequest) {
   try {
@@ -49,7 +50,7 @@ export async function GET(request: NextRequest) {
     }
 
     // Main statistics
-    const [revenueStats, paymentMethodStats, discountStats, bonusStats, prevRevenue, trendData, returnsData] = await Promise.all([
+    const [revenueStats, paymentMethodStats, discountStats, bonusStats, reviewStats, prevRevenue, trendData, returnsData] = await Promise.all([
       // Total revenue and order stats
       Order.aggregate([
         { $match: matchStage },
@@ -97,7 +98,20 @@ export async function GET(request: NextRequest) {
           $group: {
             _id: null,
             totalPointsEarned: { $sum: '$bonusPointsEarned' },
-            totalPointsRedeemed: { $sum: '$bonusPointsRedeemed' }
+            totalPointsRedeemed: { $sum: '$bonusPointsRedeemed' },
+            totalPointsUnfrozen: { $sum: '$bonusPointsUnfrozen' },
+            totalPointsCreditedReturn: { $sum: '$bonusPointsCreditedReturn' }
+          }
+        }
+      ]),
+
+      // Review bonus points statistics
+      Review.aggregate([
+        { $match: Object.keys(dateFilter).length > 0 ? { createdAt: dateFilter } : {} },
+        {
+          $group: {
+            _id: null,
+            totalReviewPoints: { $sum: '$bonusPointsAwarded' }
           }
         }
       ]),
@@ -222,7 +236,13 @@ export async function GET(request: NextRequest) {
 
     const bonus = bonusStats[0] || {
       totalPointsEarned: 0,
-      totalPointsRedeemed: 0
+      totalPointsRedeemed: 0,
+      totalPointsUnfrozen: 0,
+      totalPointsCreditedReturn: 0
+    };
+
+    const review = reviewStats[0] || {
+      totalReviewPoints: 0
     };
 
     // Calculate trend percentage
@@ -259,14 +279,17 @@ export async function GET(request: NextRequest) {
           avgDiscount: discount.discountCount > 0 ? (discount.totalDiscounts / discount.discountCount) / 100 : 0 // Convert cents to euros
         },
         bonusPoints: {
-          earned: bonus.totalPointsEarned,
+          earned: bonus.totalPointsEarned + bonus.totalPointsUnfrozen + review.totalReviewPoints,
           redeemed: bonus.totalPointsRedeemed,
           earnedValue: null, // Cannot calculate exact value due to tiered redemption system
-          redeemedValue: bonus.totalPointsRedeemed >= 5000 ? 50 : 
-                        bonus.totalPointsRedeemed >= 4000 ? 35 :
-                        bonus.totalPointsRedeemed >= 3000 ? 20 :
-                        bonus.totalPointsRedeemed >= 2000 ? 10 :
-                        bonus.totalPointsRedeemed >= 1000 ? 5 : 0
+          redeemedValue: null, // Cannot calculate exact value due to tiered redemption system
+          // Breakdown for transparency
+          breakdown: {
+            fromOrders: bonus.totalPointsEarned,
+            unfrozen: bonus.totalPointsUnfrozen,
+            fromReviews: review.totalReviewPoints,
+            creditedFromReturns: bonus.totalPointsCreditedReturn
+          }
         },
         paymentMethods: paymentMethodStats.map(pm => ({
           method: pm._id || 'Unbekannt',

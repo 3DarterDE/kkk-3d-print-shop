@@ -3,17 +3,37 @@ import { cookies } from 'next/headers';
 import { connectToDatabase } from '@/lib/mongodb';
 import User from '@/lib/models/User';
 import { auth0 } from '@/lib/auth0';
+import { verifyCsrfFromRequest } from '@/lib/csrf';
+import { profileUpdateBody } from '@/lib/validation';
+import { rateLimitRequest, getClientIP } from '@/lib/rate-limit';
 
 export async function PUT(request: NextRequest) {
   try {
+    // Rate limit by client IP
+    const ip = getClientIP(request);
+    const rl = await rateLimitRequest(`profile:${ip}`, 10, 60 * 1000);
+    if (!rl.success) {
+      const res = NextResponse.json({ error: 'Too many requests' }, { status: 429 });
+      res.headers.set('Retry-After', Math.max(0, Math.ceil((rl.resetTime - Date.now()) / 1000)).toString());
+      return res;
+    }
+
+    // CSRF check
+    const csrfOk = await verifyCsrfFromRequest(request);
+    if (!csrfOk) {
+      return NextResponse.json({ error: 'Invalid CSRF token' }, { status: 403 });
+    }
     await cookies();
     const session = await auth0.getSession();
     if (!session?.user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const body = await request.json();
-    const { salutation, firstName, lastName, address, billingAddress, useSameAddress, paymentMethod } = body;
+    const parsed = profileUpdateBody.safeParse(await request.json());
+    if (!parsed.success) {
+      return NextResponse.json({ error: 'Invalid request body', details: parsed.error.flatten() }, { status: 400 });
+    }
+    const { salutation, firstName, lastName, address, billingAddress, useSameAddress, paymentMethod } = parsed.data as any;
     
 
     await connectToDatabase();

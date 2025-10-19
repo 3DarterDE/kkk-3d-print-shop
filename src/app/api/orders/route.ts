@@ -7,6 +7,9 @@ import { Product } from '@/lib/models/Product';
 import { sendOrderConfirmationEmail } from '@/lib/email';
 import { User } from '@/lib/models/User';
 import { generateUniqueOrderNumber } from '@/lib/generate-order-number';
+import { verifyCsrfFromRequest } from '@/lib/csrf';
+import { orderBody } from '@/lib/validation';
+import { rateLimitRequest, getClientIP } from '@/lib/rate-limit';
 
 // Function to reduce stock for products and variations
 async function reduceStock(items: any[]) {
@@ -88,14 +91,32 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
+    // Rate limit by client IP
+    const ip = getClientIP(request);
+    const rl = await rateLimitRequest(`orders:${ip}`, 5, 60 * 1000);
+    if (!rl.success) {
+      const res = NextResponse.json({ error: 'Too many requests' }, { status: 429 });
+      res.headers.set('Retry-After', Math.max(0, Math.ceil((rl.resetTime - Date.now()) / 1000)).toString());
+      return res;
+    }
+
+    // CSRF check
+    const csrfOk = await verifyCsrfFromRequest(request);
+    if (!csrfOk) {
+      return NextResponse.json({ error: 'Invalid CSRF token' }, { status: 403 });
+    }
+
     const { user, response } = await requireUser();
     
     if (!user) {
       return response!;
     }
 
-    const body = await request.json();
-    const { items, shippingAddress, billingAddress, paymentMethod, redeemPoints, pointsToRedeem, newsletterSubscribed, discountCode } = body;
+    const parsed = orderBody.safeParse(await request.json());
+    if (!parsed.success) {
+      return NextResponse.json({ error: 'Invalid request body', details: parsed.error.flatten() }, { status: 400 });
+    }
+    const { items, shippingAddress, billingAddress, paymentMethod, redeemPoints, pointsToRedeem, newsletterSubscribed, discountCode } = parsed.data as any;
 
     if (!items || !Array.isArray(items) || items.length === 0) {
       return NextResponse.json({ error: 'No items provided' }, { status: 400 });
@@ -192,8 +213,9 @@ export async function POST(request: NextRequest) {
       return 0;
     };
 
-    const pointsDiscountCents = redeemPoints && pointsToRedeem ? getPointsDiscount(pointsToRedeem, totalWithShippingCents - appliedDiscountCents) : 0;
-    const totalCents = Math.max(0, totalWithShippingCents - appliedDiscountCents - pointsDiscountCents);
+    const pointsDiscountCents = redeemPoints && pointsToRedeem ? getPointsDiscount(pointsToRedeem, totalWithShippingCents) : 0;
+    // Entweder-oder Logik: Nur eine Rabattart kann angewendet werden
+    const totalCents = Math.max(0, totalWithShippingCents - Math.max(appliedDiscountCents, pointsDiscountCents));
 
     const bonusPointsEarned = Math.floor((subtotalCents / 100) * 3.5); // 350% vom ursprünglichen Bestellwert (in Punkten)
 
@@ -205,15 +227,22 @@ export async function POST(request: NextRequest) {
       subtotal: subtotalCents / 100,
       shippingCosts: shippingCents,
       total: totalCents / 100,
-      // Persist discounts (prices are cents in items)
-      ...(appliedDiscountCents > 0 ? { discountId: appliedDiscountId, discountCode: appliedDiscountCode, discountCents: appliedDiscountCents } : {}),
+      // Persist discounts (prices are cents in items) - nur die höhere Rabattart speichern
+      ...(appliedDiscountCents >= pointsDiscountCents && appliedDiscountCents > 0 ? { 
+        discountId: appliedDiscountId, 
+        discountCode: appliedDiscountCode, 
+        discountCents: appliedDiscountCents 
+      } : {}),
+      ...(pointsDiscountCents > appliedDiscountCents && pointsDiscountCents > 0 ? {
+        bonusPointsRedeemed: pointsToRedeem,
+        bonusPointsDiscountCents: pointsDiscountCents
+      } : {}),
       shippingAddress: shippingAddress,
       billingAddress: billingAddress && billingAddress.street && billingAddress.houseNumber && billingAddress.city && billingAddress.postalCode ? billingAddress : shippingAddress,
       paymentMethod: paymentMethod || 'card',
       paymentStatus: 'pending',
       bonusPointsEarned: bonusPointsEarned,
       bonusPointsCredited: false,
-      bonusPointsRedeemed: redeemPoints ? pointsToRedeem : 0,
       status: 'pending'
     });
 
@@ -237,8 +266,8 @@ export async function POST(request: NextRequest) {
     // Reduce stock for all items in the order
     await reduceStock(items);
 
-    // Increment discount global uses if applied
-    if (appliedDiscountCode) {
+    // Increment discount global uses if applied (nur wenn Rabattcode-Rabatt höher ist als Bonuspunkte-Rabatt)
+    if (appliedDiscountCents >= pointsDiscountCents && appliedDiscountCode) {
       try {
         await DiscountCode.updateOne(
           { code: appliedDiscountCode },
@@ -249,8 +278,8 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // Deduct bonus points if redeemed
-    if (redeemPoints && pointsToRedeem > 0) {
+    // Deduct bonus points if redeemed (nur wenn Bonuspunkte-Rabatt höher ist als Rabattcode)
+    if (pointsDiscountCents > appliedDiscountCents && redeemPoints && pointsToRedeem > 0) {
       const userData = await User.findById(user._id.toString());
       if (userData && userData.bonusPoints >= pointsToRedeem) {
         userData.bonusPoints -= pointsToRedeem;
@@ -276,10 +305,10 @@ export async function POST(request: NextRequest) {
           shippingCosts: shippingCents,
           total: totalCents / 100,
           bonusPointsEarned: bonusPointsEarned,
-          pointsRedeemed: redeemPoints ? pointsToRedeem : 0,
-          pointsDiscount: pointsDiscountCents,
-          discountCode: appliedDiscountCode,
-          discountCents: discountCode ? appliedDiscountCents : 0,
+          pointsRedeemed: pointsDiscountCents > appliedDiscountCents ? pointsToRedeem : 0,
+          pointsDiscount: pointsDiscountCents > appliedDiscountCents ? pointsDiscountCents : 0,
+          discountCode: appliedDiscountCents >= pointsDiscountCents ? appliedDiscountCode : '',
+          discountCents: appliedDiscountCents >= pointsDiscountCents ? appliedDiscountCents : 0,
           shippingAddress: shippingAddress,
           billingAddress: billingAddress && billingAddress.street && billingAddress.houseNumber && billingAddress.city && billingAddress.postalCode ? billingAddress : shippingAddress,
           paymentMethod: paymentMethod || 'card'

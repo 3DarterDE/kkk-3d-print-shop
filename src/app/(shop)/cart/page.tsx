@@ -15,14 +15,16 @@ export default function CartPage() {
   const discountCents = useCartStore((s) => s.discountCents);
   const setDiscount = useCartStore((s) => s.setDiscount);
   const clearDiscount = useCartStore((s) => s.clearDiscount);
+  const redeemPoints = useCartStore((s) => s.redeemPoints);
+  const pointsToRedeem = useCartStore((s) => s.pointsToRedeem);
+  const setRedeemPoints = useCartStore((s) => s.setRedeemPoints);
+  const clearRedeemPoints = useCartStore((s) => s.clearRedeemPoints);
   const removeItem = useCartStore((state) => state.removeItem);
   const updateQuantity = useCartStore((state) => state.updateQuantity);
   const clear = useCartStore((state) => state.clear);
   const validateItems = useCartStore((state) => state.validateItems);
   const [isValidating, setIsValidating] = useState(false);
   const [validationMessage, setValidationMessage] = useState("");
-  const [redeemPoints, setRedeemPoints] = useState(false);
-  const [selectedPointsToRedeem, setSelectedPointsToRedeem] = useState(0);
   const [randomProducts, setRandomProducts] = useState<any[]>([]);
   const [cartInitialized, setCartInitialized] = useState(false);
   const [productsLoaded, setProductsLoaded] = useState(false);
@@ -119,20 +121,28 @@ export default function CartPage() {
       // Berechne Gesamtbetrag inklusive Versandkosten für Bonuspunkte-Berechnung
       const totalWithShipping = total + (total < 8000 ? 495 : 0);
       const bestDiscount = getBestAvailableDiscount(availablePoints, totalWithShipping);
-      if (bestDiscount && selectedPointsToRedeem !== bestDiscount.points) {
-        setSelectedPointsToRedeem(bestDiscount.points);
+      if (bestDiscount && pointsToRedeem !== bestDiscount.points) {
+        setRedeemPoints(true, bestDiscount.points);
       }
     }
   }, [redeemPoints, availablePoints, total]);
 
+  // Bonuspunkte deaktivieren wenn Benutzer sich ausloggt
+  useEffect(() => {
+    if (!user && redeemPoints) {
+      clearRedeemPoints();
+    }
+  }, [user, redeemPoints, clearRedeemPoints]);
+
   // Berechne Gesamtbetrag inklusive Versandkosten für Bonuspunkte-Berechnung
   const totalWithShipping = total + (total < 8000 ? 495 : 0);
-  const pointsDiscountInCents = redeemPoints && selectedPointsToRedeem > 0 ? getPointsDiscount(selectedPointsToRedeem, totalWithShipping) : 0;
+  const pointsDiscountInCents = redeemPoints && pointsToRedeem > 0 ? getPointsDiscount(pointsToRedeem, totalWithShipping) : 0;
   
   // Versandkosten berechnen: unter 80€ = 4,95€, ab 80€ kostenlos
   const shippingCosts = total < 8000 ? 495 : 0; // 8000 Cent = 80€, 495 Cent = 4,95€
   const subtotalAfterDiscount = Math.max(0, total - pointsDiscountInCents);
-  const finalTotal = Math.max(0, totalWithShipping - pointsDiscountInCents);
+  // Entweder-oder Logik: Nur eine Rabattart kann angewendet werden
+  const finalTotal = Math.max(0, totalWithShipping - Math.max(discountCents, pointsDiscountInCents));
 
   // Create a stable validation function
   const validateCart = useCallback(async () => {
@@ -437,127 +447,16 @@ export default function CartPage() {
                   </h3>
                   
                   <div className="space-y-4 mb-6">
-                    <div className="flex justify-between text-gray-600">
-                      <span>Zwischensumme ({totalQuantity} Artikel)</span>
-                      <span>{(total / 100).toFixed(2)} €</span>
-                    </div>
                     
-                    {/* Bonuspunkte Hinweis */}
-                    {user ? (
-                      <div className="bg-blue-50 rounded-lg p-3 mb-4">
+                    {/* Warnung wenn beide Rabattarten aktiv sind */}
+                    {redeemPoints && discountCents > 0 && (
+                      <div className="bg-orange-50 border border-orange-200 rounded-lg p-3 mb-4">
                         <div className="flex items-center">
-                          <span className="text-sm text-blue-800 font-medium">
-                            Du erhältst {Math.floor(total / 100 * 3.5)} Bonuspunkte für diese Bestellung
-                          </span>
-                          <div className="relative group ml-2">
-                            <svg className="w-4 h-4 text-blue-600 cursor-help" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                            </svg>
-                            {/* Tooltip */}
-                            <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-3 py-2 bg-gray-900 text-white text-xs rounded-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 z-10 max-w-[80vw] sm:max-w-xs whitespace-normal break-words text-center">
-                              Du erhältst weitere Bonuspunkte für das Bewerten der Produkte nach der Lieferung
-                              {/* Tooltip arrow */}
-                              <div className="absolute top-full left-1/2 transform -translate-x-1/2 border-4 border-transparent border-t-gray-900"></div>
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                    ) : userLoading ? null : (
-                      <div className="bg-amber-50 rounded-lg p-3 mb-4">
-                        <div className="flex items-center">
-                          <span className="text-sm text-amber-800 font-medium">
-                            <button
-                              onClick={() => {
-                                // Open Auth0 login in popup
-                                const w = 500;
-                                const h = 650;
-                                const dualScreenLeft = window.screenLeft !== undefined ? window.screenLeft : (window as any).screenX;
-                                const dualScreenTop = window.screenTop !== undefined ? window.screenTop : (window as any).screenY;
-                                const width = window.innerWidth ? window.innerWidth : document.documentElement.clientWidth ? document.documentElement.clientWidth : screen.width;
-                                const height = window.innerHeight ? window.innerHeight : document.documentElement.clientHeight ? document.documentElement.clientHeight : screen.height;
-                                const systemZoom = width / window.screen.availWidth;
-                                const left = (width - w) / 2 / systemZoom + dualScreenLeft;
-                                const top = (height - h) / 2 / systemZoom + dualScreenTop;
-
-                                // Get current page path for returnTo
-                                const currentPath = encodeURIComponent(window.location.pathname + window.location.search);
-                                const returnTo = encodeURIComponent('/auth/popup-complete?next=' + currentPath);
-
-                                const popup = window.open(
-                                  `/api/auth/login?prompt=login&max_age=0&returnTo=${returnTo}`,
-                                  '_blank',
-                                  `scrollbars=yes, width=${w}, height=${h}, top=${top}, left=${left}`
-                                );
-
-                                // Fallback if popup was blocked
-                                if (!popup || popup.closed) {
-                                  window.location.assign(`/api/auth/login?prompt=login&max_age=0&returnTo=${returnTo}`);
-                                  return;
-                                }
-
-                                if (popup) {
-                                  // Listen for completion message
-                                  const onMessage = async (event: MessageEvent) => {
-                                    if (event.origin !== window.location.origin) return;
-                                    if (event.data.type === 'auth:popup-complete') {
-                                      window.removeEventListener('message', onMessage);
-                                      // Refresh user data
-                                      window.location.reload();
-                                    }
-                                  };
-                                  window.addEventListener('message', onMessage);
-                                }
-                              }}
-                              className={withCursorPointer("text-blue-600 hover:text-blue-800 underline bg-transparent border-none p-0")}
-                            >
-                              Melde dich an
-                            </button> oder 
-                            <button
-                              onClick={() => {
-                                // Open Auth0 signup in popup
-                                const w = 500;
-                                const h = 650;
-                                const dualScreenLeft = window.screenLeft !== undefined ? window.screenLeft : (window as any).screenX;
-                                const dualScreenTop = window.screenTop !== undefined ? window.screenTop : (window as any).screenY;
-                                const width = window.innerWidth ? window.innerWidth : document.documentElement.clientWidth ? document.documentElement.clientWidth : screen.width;
-                                const height = window.innerHeight ? window.innerHeight : document.documentElement.clientHeight ? document.documentElement.clientHeight : screen.height;
-                                const systemZoom = width / window.screen.availWidth;
-                                const left = (width - w) / 2 / systemZoom + dualScreenLeft;
-                                const top = (height - h) / 2 / systemZoom + dualScreenTop;
-
-                                // Get current page path for returnTo
-                                const currentPath = encodeURIComponent(window.location.pathname + window.location.search);
-                                const returnTo = encodeURIComponent('/auth/popup-complete?next=' + currentPath);
-
-                                const popup = window.open(
-                                  `/api/auth/login?screen_hint=signup&prompt=login&max_age=0&returnTo=${returnTo}`,
-                                  '_blank',
-                                  `scrollbars=yes, width=${w}, height=${h}, top=${top}, left=${left}`
-                                );
-
-                                // Fallback if popup was blocked
-                                if (!popup || popup.closed) {
-                                  window.location.assign(`/api/auth/login?screen_hint=signup&prompt=login&max_age=0&returnTo=${returnTo}`);
-                                  return;
-                                }
-
-                                if (popup) {
-                                  // Listen for completion message
-                                  const onMessage = async (event: MessageEvent) => {
-                                    if (event.origin !== window.location.origin) return;
-                                    if (event.data.type === 'auth:popup-complete') {
-                                      window.removeEventListener('message', onMessage);
-                                      // Refresh user data
-                                      window.location.reload();
-                                    }
-                                  };
-                                  window.addEventListener('message', onMessage);
-                                }
-                              }}
-                              className={withCursorPointer("text-blue-600 hover:text-blue-800 underline bg-transparent border-none p-0 ml-1")}
-                            >
-                              erstelle ein Konto
-                            </button> um Bonuspunkte für diese Bestellung zu erhalten
+                          <svg className="w-5 h-5 text-orange-600 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.732 16.5c-.77.833.192 2.5 1.732 2.5z" />
+                          </svg>
+                          <span className="text-sm text-orange-800 font-medium">
+                            Hinweis: Es kann nur eine Rabattart angewendet werden. Der höhere Rabatt wird automatisch verwendet.
                           </span>
                         </div>
                       </div>
@@ -571,17 +470,27 @@ export default function CartPage() {
                             <span className="text-sm text-yellow-800 font-medium">
                               Verfügbare Bonuspunkte: {availablePoints}
                             </span>
+                            {discountCents > 0 && (
+                              <span className="text-xs text-yellow-600 ml-2">
+                                
+                              </span>
+                            )}
                           </div>
                           <label className="flex items-center cursor-pointer">
                             <input
                               type="checkbox"
                               checked={redeemPoints}
                               onChange={(e) => {
-                                setRedeemPoints(e.target.checked);
-                                if (e.target.checked && selectedPointsToRedeem === 0) {
-                                  setSelectedPointsToRedeem(1000); // Standard: 1000 Punkte einlösen
-                                } else if (!e.target.checked) {
-                                  setSelectedPointsToRedeem(0);
+                                if (e.target.checked) {
+                                  const totalWithShipping = total + (total < 8000 ? 495 : 0);
+                                  const bestDiscount = getBestAvailableDiscount(availablePoints, totalWithShipping);
+                                  if (bestDiscount) {
+                                    setRedeemPoints(true, bestDiscount.points);
+                                  } else {
+                                    setRedeemPoints(true, 0);
+                                  }
+                                } else {
+                                  clearRedeemPoints();
                                 }
                               }}
                               className="sr-only"
@@ -596,16 +505,16 @@ export default function CartPage() {
                           </label>
                         </div>
                         
-                        {redeemPoints && selectedPointsToRedeem > 0 && (
+                        {redeemPoints && pointsToRedeem > 0 && (
                           <div className="mt-3 space-y-2">
                             <div className="text-sm text-yellow-800">
                               <div className="flex items-center gap-2">
-                                <span>Du löst {selectedPointsToRedeem} Punkte für {(pointsDiscountInCents / 100).toFixed(2)}€ ein</span>
+                                <span>Du löst {pointsToRedeem} Punkte für {(pointsDiscountInCents / 100).toFixed(2)}€ ein</span>
                                 <span className="text-xs bg-green-100 text-green-800 px-2 py-1 rounded-full">
                                   ✓ Optimaler Rabatt
                                 </span>
                               </div>
-                              {pointsDiscountInCents < getPointsDiscount(selectedPointsToRedeem, Infinity) && (
+                              {pointsDiscountInCents < getPointsDiscount(pointsToRedeem, Infinity) && (
                                 <div className="text-xs text-yellow-600 mt-1">
                                   ⚠️ Rabatt begrenzt - mindestens 0,01€ zu bezahlen (für Zahlungsabwicklung)
                                 </div>
@@ -640,6 +549,11 @@ export default function CartPage() {
                     <div className="mb-4">
                       <label className="block text-sm font-medium text-gray-700 mb-2">
                         Rabattcode
+                        {redeemPoints && (
+                          <span className="text-xs text-gray-500 ml-2">
+                            
+                          </span>
+                        )}
                       </label>
                       {user ? (
                         <ApplyDiscountInput
@@ -652,6 +566,7 @@ export default function CartPage() {
                           onCleared={async () => {
                             clearDiscount();
                           }}
+                          redeemPoints={redeemPoints}
                         />
                       ) : userLoading ? null : (
                         <div className="text-sm text-gray-600 bg-gray-50 border border-gray-200 rounded-md p-3">
@@ -660,11 +575,59 @@ export default function CartPage() {
                       )}
                     </div>
                     
-                    <div className="flex justify-between text-gray-600">
-                      <span>Versandkosten</span>
-                      <span className={shippingCosts > 0 ? "text-gray-600" : "text-green-600 font-medium"}>
-                        {shippingCosts > 0 ? `${(shippingCosts / 100).toFixed(2)} €` : "Kostenlos"}
-                      </span>
+                    {/* Modern Price Summary - wie in Checkout */}
+                    <div className="bg-gradient-to-r from-slate-50 to-blue-50 rounded-xl p-4 space-y-3">
+                      <div className="flex justify-between items-center">
+                        <span className="text-sm font-medium text-slate-600">Zwischensumme</span>
+                        <span className="text-sm font-semibold text-slate-800">€{(total / 100).toFixed(2)}</span>
+                      </div>
+                      
+                      {/* Rabattcode-Abzug */}
+                      {discountCents > 0 && (
+                        <div className="flex justify-between items-center">
+                          <span className="text-sm font-medium text-green-600">Rabatt{discountCode ? ` (${discountCode})` : ''}</span>
+                          <span className="text-sm font-semibold text-green-600">-€{(discountCents / 100).toFixed(2)}</span>
+                        </div>
+                      )}
+                      
+                      {/* Bonuspunkte-Rabatt */}
+                      {redeemPoints && pointsToRedeem > 0 && (
+                        <div className="flex justify-between items-center">
+                          <span className="text-sm font-medium text-green-600">Bonuspunkte-Rabatt ({pointsToRedeem} Punkte)</span>
+                          <span className="text-sm font-semibold text-green-600">-€{(pointsDiscountInCents / 100).toFixed(2)}</span>
+                        </div>
+                      )}
+                      
+                      <div className="flex justify-between items-center">
+                        <span className="text-sm font-medium text-slate-600">Versand</span>
+                        <span className={`text-sm font-semibold ${shippingCosts > 0 ? "text-slate-800" : "text-green-600"}`}>
+                          {shippingCosts > 0 ? `€${(shippingCosts / 100).toFixed(2)}` : "Kostenlos"}
+                        </span>
+                      </div>
+                      
+                      <div className="flex justify-between items-center">
+                        <div className="flex items-center">
+                          <div className="relative group">
+                            <svg className="w-4 h-4 mr-1 cursor-help text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                            </svg>
+                            {/* Tooltip */}
+                            <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-3 py-2 bg-gray-900 text-white text-xs rounded-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 z-10 max-w-[80vw] sm:max-w-xs whitespace-normal break-words text-center">
+                              Alle Preise sind Endpreise zzgl. Versandkosten. Gemäß § 19 UStG wird keine Umsatzsteuer erhoben und ausgewiesen.
+                              {/* Tooltip arrow */}
+                              <div className="absolute top-full left-1/2 transform -translate-x-1/2 border-4 border-transparent border-t-gray-900"></div>
+                            </div>
+                          </div>
+                          <span className="text-sm font-medium text-slate-600">Preisinformationen</span>
+                        </div>
+                      </div>
+                      
+                      <div className="border-t pt-3">
+                        <div className="flex justify-between items-center">
+                          <span className="text-lg font-bold text-slate-900">Gesamt</span>
+                          <span className="text-lg font-bold text-blue-600">€{(((total + (total < 8000 ? 495 : 0)) - Math.max(discountCents, pointsDiscountInCents)) / 100).toFixed(2)}</span>
+                        </div>
+                      </div>
                     </div>
                     
                     {/* Versandkosten-Hinweis */}
@@ -674,46 +637,61 @@ export default function CartPage() {
                       </div>
                     )}
                     
-                    {/* Rabattcode Anzeige */}
-                    {discountCents > 0 && (
-                      <div className="flex justify-between text-green-600">
-                        <span>Rabatt{discountCode ? ` (${discountCode})` : ''}</span>
-                        <span className="font-medium">-{(discountCents / 100).toFixed(2)} €</span>
-                      </div>
-                    )}
-
-                    {/* Bonuspunkte-Rabatt */}
-                    {redeemPoints && selectedPointsToRedeem > 0 && (
-                      <div className="flex justify-between text-green-600">
-                        <span>Bonuspunkte-Rabatt ({selectedPointsToRedeem} Punkte)</span>
-                        <span className="font-medium">-{(pointsDiscountInCents / 100).toFixed(2)} €</span>
-                      </div>
-                    )}
-                    
-                    <div className="border-t pt-4">
-                      <div className="flex justify-between items-center text-xl font-bold text-gray-900">
-                        <div className="flex items-center space-x-2">
-                          <span>Insgesamt</span>
-                          <div className="relative group">
-                            <svg className="w-5 h-5 text-gray-400 hover:text-gray-600 cursor-help" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    {/* Bonuspunkte Hinweis - nach der Preis-Zusammenfassung */}
+                    {user ? (
+                      <div className="bg-blue-50 rounded-lg p-3">
+                        <div className="flex items-center">
+                          <span className="text-sm text-blue-800 font-medium">
+                            Du erhältst {Math.floor(total / 100 * 3.5)} Bonuspunkte für diese Bestellung
+                          </span>
+                          <div className="relative group ml-2">
+                            <svg className="w-4 h-4 text-blue-600 cursor-help" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                             </svg>
-                            <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 w-64 bg-gray-900 text-white text-sm rounded-lg p-3 opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none z-10">
-                              <div className="text-center">
-                                Alle Preise sind Endpreise zzgl. Versandkosten. Gemäß § 19 UStG wird keine Umsatzsteuer erhoben und ausgewiesen.
-                              </div>
-                              <div className="absolute top-full left-1/2 transform -translate-x-1/2 w-0 h-0 border-l-4 border-r-4 border-t-4 border-transparent border-t-gray-900"></div>
+                            {/* Tooltip */}
+                            <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-3 py-2 bg-gray-900 text-white text-xs rounded-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 z-10 max-w-[80vw] sm:max-w-xs whitespace-normal break-words text-center">
+                              Du erhältst weitere Bonuspunkte für das Bewerten der Produkte nach der Lieferung
+                              {/* Tooltip arrow */}
+                              <div className="absolute top-full left-1/2 transform -translate-x-1/2 border-4 border-transparent border-t-gray-900"></div>
                             </div>
                           </div>
                         </div>
-                        <span>{(((total + (total < 8000 ? 495 : 0)) - discountCents - pointsDiscountInCents) / 100).toFixed(2)} €</span>
                       </div>
-                    </div>
+                    ) : userLoading ? null : (
+                      <div className="bg-blue-50 rounded-lg p-3">
+                        <div className="flex items-center">
+                          <span className="text-sm text-blue-800 font-medium">
+                            Melde dich an oder 
+                            <button
+                              onClick={() => {
+                                const returnTo = encodeURIComponent(window.location.pathname + window.location.search);
+                                const popup = window.open(`/api/auth/login?screen_hint=signup&prompt=login&max_age=0&returnTo=${returnTo}`, 'auth', 'width=500,height=600,scrollbars=yes,resizable=yes');
+                                if (!popup) {
+                                  window.location.assign(`/api/auth/login?screen_hint=signup&prompt=login&max_age=0&returnTo=${returnTo}`);
+                                  return;
+                                }
+                                const onMessage = async (event: MessageEvent) => {
+                                  if (event.origin !== window.location.origin) return;
+                                  if (event.data.type === 'auth:popup-complete') {
+                                    window.removeEventListener('message', onMessage);
+                                    window.location.reload();
+                                  }
+                                };
+                                window.addEventListener('message', onMessage);
+                              }}
+                              className={withCursorPointer("text-blue-600 hover:text-blue-800 underline bg-transparent border-none p-0 ml-1")}
+                            >
+                              erstelle ein Konto
+                            </button> um Bonuspunkte für diese Bestellung zu erhalten
+                          </span>
+                        </div>
+                      </div>
+                    )}
                   </div>
 
                   <div className="space-y-3">
                     <Link 
-                      href={`/checkout?redeemPoints=${redeemPoints}&pointsToRedeem=${selectedPointsToRedeem}`}
+                      href={`/checkout?redeemPoints=${redeemPoints}&pointsToRedeem=${pointsToRedeem}`}
                           className={withCursorPointer("w-full flex items-center justify-center px-6 py-3 bg-green-600 text-white font-medium rounded-lg hover:bg-green-700 transition-colors")}
                     >
                       <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">

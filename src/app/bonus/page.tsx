@@ -454,7 +454,7 @@ export default function BonusPointsPage() {
                             </div>
                             <div>
                               <div className="text-sm font-medium text-slate-700">
-                                {entry.kind === 'order' ? 'Bestellung' : entry.kind === 'review' ? 'Bewertung' : entry.kind === 'unfrozen' ? 'Freigegeben' : 'Rücksendung'}
+                                {entry.kind === 'order' ? 'Bestellung' : entry.kind === 'review' ? 'Bewertung' : entry.kind === 'unfrozen' ? 'Eingefrorene Punkte freigegeben' : 'Rücksendung'}
                                 {entry.orderNumber && (
                                   <span className="ml-2 text-slate-500">#{entry.orderNumber}</span>
                                 )}

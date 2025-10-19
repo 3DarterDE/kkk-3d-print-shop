@@ -2,9 +2,13 @@ import { NextRequest, NextResponse } from 'next/server';
 import { connectToDatabase } from '@/lib/mongodb';
 import Order from '@/lib/models/Order';
 import { Product } from '@/lib/models/Product';
+import type { ProductDocument } from '@/lib/models/Product';
 import { sendGuestOrderConfirmationEmail } from '@/lib/email';
 import { User } from '@/lib/models/User';
 import { generateUniqueOrderNumber } from '@/lib/generate-order-number';
+import { verifyCsrfFromRequest } from '@/lib/csrf';
+import { rateLimitRequest, getClientIP } from '@/lib/rate-limit';
+import { z } from 'zod';
 
 // Function to reduce stock for products and variations
 async function reduceStock(items: any[]) {
@@ -41,8 +45,40 @@ async function reduceStock(items: any[]) {
 
 export async function POST(request: NextRequest) {
   try {
+    const ip = getClientIP(request);
+    const rl = await rateLimitRequest(`orders:guest:${ip}`, 5, 60 * 1000);
+    if (!rl.success) {
+      const res = NextResponse.json({ error: 'Too many requests' }, { status: 429 });
+      res.headers.set('Retry-After', Math.max(0, Math.ceil((rl.resetTime - Date.now()) / 1000)).toString());
+      return res;
+    }
+
+    const csrfOk = await verifyCsrfFromRequest(request);
+    if (!csrfOk) {
+      return NextResponse.json({ error: 'Invalid CSRF token' }, { status: 403 });
+    }
+
     const body = await request.json();
-    const { items, shippingAddress, billingAddress, paymentMethod, email, firstName, lastName, newsletterSubscribed } = body;
+    const schema = z.object({
+      items: z.array(z.object({
+        productId: z.string().min(1),
+        price: z.number().int().nonnegative(),
+        quantity: z.number().int().positive(),
+        variations: z.record(z.string()).optional(),
+      })).min(1),
+      shippingAddress: z.any(),
+      billingAddress: z.any().optional(),
+      paymentMethod: z.enum(['card','paypal','bank']).optional(),
+      email: z.string().email(),
+      firstName: z.string().min(1),
+      lastName: z.string().min(1),
+      newsletterSubscribed: z.boolean().optional(),
+    });
+    const parsed = schema.safeParse(body);
+    if (!parsed.success) {
+      return NextResponse.json({ error: 'Invalid request body', details: parsed.error.flatten() }, { status: 400 });
+    }
+    const { items, shippingAddress, billingAddress, paymentMethod, email, firstName, lastName, newsletterSubscribed } = parsed.data as any;
 
     if (!items || !Array.isArray(items) || items.length === 0) {
       return NextResponse.json({ error: 'No items provided' }, { status: 400 });
@@ -77,7 +113,26 @@ export async function POST(request: NextRequest) {
     }
 
     // Calculate total (all in cents)
-    const subtotalCents = items.reduce((sum: number, item: any) => sum + (item.price * item.quantity), 0);
+    // Normalize items by fetching current product data (prevents client tampering and fills required fields)
+    const normalizedItems = [] as any[];
+    for (const item of items) {
+      const productDoc = await Product.findOne({ slug: item.productId }).lean<ProductDocument | null>();
+      if (!productDoc) {
+        return NextResponse.json({ error: `Produkt nicht gefunden: ${item.productId}` }, { status: 400 });
+      }
+      const safeName = productDoc.title || item.name || item.productId;
+      const safeImage = productDoc.images?.[0] || item.image || '';
+      normalizedItems.push({
+        productId: item.productId,
+        name: String(safeName),
+        price: Number(item.price),
+        quantity: Number(item.quantity),
+        image: safeImage,
+        variations: item.variations || undefined,
+      });
+    }
+
+    const subtotalCents = normalizedItems.reduce((sum: number, i: any) => sum + (i.price * i.quantity), 0);
 
     // Shipping in cents
     const shippingCents = subtotalCents < 8000 ? 495 : 0;
@@ -92,7 +147,7 @@ export async function POST(request: NextRequest) {
       userId: null, // Guest order
       guestEmail: email.toLowerCase(),
       guestName: `${firstName} ${lastName}`,
-      items: items,
+      items: normalizedItems,
       subtotal: subtotalCents / 100,
       shippingCosts: shippingCents,
       total: totalCents / 100,
@@ -124,7 +179,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Reduce stock for all items in the order
-    await reduceStock(items);
+    await reduceStock(normalizedItems);
 
     // Send guest order confirmation email
     let emailSent = false;
@@ -133,7 +188,7 @@ export async function POST(request: NextRequest) {
         email: email.toLowerCase(),
         name: `${firstName} ${lastName}`,
         orderNumber: orderNumber,
-        items: items,
+        items: normalizedItems,
         subtotal: subtotalCents / 100,
         shippingCosts: shippingCents,
         total: totalCents / 100,

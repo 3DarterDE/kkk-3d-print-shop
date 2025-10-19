@@ -6,6 +6,7 @@ import { useUserData } from "@/lib/contexts/UserDataContext";
 import { useSearchParams } from "next/navigation";
 import { useAuth } from "@/lib/hooks/useAuth";
 import { withCursorPointer } from '@/lib/cursor-utils';
+import ApplyDiscountInput from "@/components/ApplyDiscountInput";
 
 export type CheckoutFormData = {
   firstName: string;
@@ -63,8 +64,6 @@ export default function CheckoutClient({ initialIsLoggedIn, initialFormData, ini
   const [errorMessage, setErrorMessage] = useState('');
   const [fieldErrors, setFieldErrors] = useState<Record<string, boolean>>({});
   const [completedSteps, setCompletedSteps] = useState<number[]>([]);
-  const [redeemPoints, setRedeemPoints] = useState(false);
-  const [pointsToRedeem, setPointsToRedeem] = useState(0);
   const [emailExistsWarning, setEmailExistsWarning] = useState(false);
   const [agbAccepted, setAgbAccepted] = useState(false);
   const [privacyAccepted, setPrivacyAccepted] = useState(false);
@@ -78,6 +77,12 @@ export default function CheckoutClient({ initialIsLoggedIn, initialFormData, ini
   const { items, clear, validateItems } = useCartStore();
   const discountCode = useCartStore((s: any) => s.discountCode);
   const discountCents = useCartStore((s: any) => s.discountCents);
+  const setDiscount = useCartStore((s: any) => s.setDiscount);
+  const clearDiscount = useCartStore((s: any) => s.clearDiscount);
+  const redeemPoints = useCartStore((s: any) => s.redeemPoints);
+  const pointsToRedeem = useCartStore((s: any) => s.pointsToRedeem);
+  const setRedeemPoints = useCartStore((s: any) => s.setRedeemPoints);
+  const clearRedeemPoints = useCartStore((s: any) => s.clearRedeemPoints);
   
   const [formData, setFormData] = useState<CheckoutFormData>(initialFormData);
   const [useSameAddress, setUseSameAddress] = useState(initialFormData.useSameAddress);
@@ -187,7 +192,8 @@ export default function CheckoutClient({ initialIsLoggedIn, initialFormData, ini
   // Versandkosten berechnen: unter 80€ = 4,95€, ab 80€ kostenlos
   const shippingCosts = total < 8000 ? 495 : 0; // 8000 Cent = 80€, 495 Cent = 4,95€
   const subtotalAfterDiscount = Math.max(0, total - pointsDiscount);
-  const finalTotal = Math.max(0, totalWithShipping - discountCents - pointsDiscount);
+  // Entweder-oder Logik: Nur eine Rabattart kann angewendet werden
+  const finalTotal = Math.max(0, totalWithShipping - Math.max(discountCents, pointsDiscount));
 
   useEffect(() => {
     const calculatedTotal = items.reduce((sum, item) => sum + (item.price * item.quantity), 0);
@@ -200,8 +206,7 @@ export default function CheckoutClient({ initialIsLoggedIn, initialFormData, ini
     const pointsToRedeemParam = searchParams.get('pointsToRedeem');
     
     if (redeemPointsParam === 'true' && pointsToRedeemParam) {
-      setRedeemPoints(true);
-      setPointsToRedeem(parseInt(pointsToRedeemParam, 10));
+      setRedeemPoints(true, parseInt(pointsToRedeemParam, 10));
     }
   }, [searchParams]);
 
@@ -212,10 +217,17 @@ export default function CheckoutClient({ initialIsLoggedIn, initialFormData, ini
       const totalWithShipping = total + (total < 8000 ? 495 : 0);
       const bestDiscount = getBestAvailableDiscount(availablePoints, totalWithShipping);
       if (bestDiscount && pointsToRedeem !== bestDiscount.points) {
-        setPointsToRedeem(bestDiscount.points);
+        setRedeemPoints(true, bestDiscount.points);
       }
     }
   }, [redeemPoints, availablePoints, total]);
+
+  // Bonuspunkte deaktivieren wenn Benutzer sich ausloggt
+  useEffect(() => {
+    if (!isLoggedIn && redeemPoints) {
+      clearRedeemPoints();
+    }
+  }, [isLoggedIn, redeemPoints, clearRedeemPoints]);
 
   // Validate cart items once on mount to ensure prices are current
   // Note: CartValidationProvider also runs validation on mount, but this ensures
@@ -354,9 +366,10 @@ export default function CheckoutClient({ initialIsLoggedIn, initialFormData, ini
         useSameAddress: useSameAddress,
         paymentMethod: formData.paymentMethod
       };
+      const csrf = document.cookie.split('; ').find((c) => c.startsWith('csrf_token='))?.split('=')[1] || '';
       const response = await fetch('/api/profile/update', {
         method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', 'x-csrf-token': csrf },
         body: JSON.stringify(dataToSave),
       });
       if (!response.ok) {
@@ -436,9 +449,10 @@ export default function CheckoutClient({ initialIsLoggedIn, initialFormData, ini
       // Create order in database (for both logged-in users and guests)
       if (isLoggedIn) {
         // Logged-in user order
+        const csrf = document.cookie.split('; ').find((c) => c.startsWith('csrf_token='))?.split('=')[1] || '';
         const response = await fetch('/api/orders', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: { 'Content-Type': 'application/json', 'x-csrf-token': csrf },
           body: JSON.stringify(orderData),
         });
 
@@ -455,9 +469,10 @@ export default function CheckoutClient({ initialIsLoggedIn, initialFormData, ini
           lastName: formData.lastName,
         };
 
+        const csrf = document.cookie.split('; ').find((c) => c.startsWith('csrf_token='))?.split('=')[1] || '';
         const response = await fetch('/api/orders/guest', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: { 'Content-Type': 'application/json', 'x-csrf-token': csrf },
           body: JSON.stringify(guestOrderData),
         });
 
@@ -1937,9 +1952,178 @@ export default function CheckoutClient({ initialIsLoggedIn, initialFormData, ini
                   ))}
                 </div>
 
-                {/* Bonuspunkte: Anzeige der verdienten Punkte */}
+                </div>
+
+                {/* Gemeinsame Box für alle Checkout-Elemente */}
+                <div className="mt-6 bg-white border border-gray-200 rounded-xl p-4 space-y-4">
+                  {/* Warnung wenn beide Rabattarten aktiv sind */}
+                  {redeemPoints && discountCents > 0 && (
+                    <div className="p-4 bg-orange-50 border border-orange-200 rounded-xl">
+                    <div className="flex items-center">
+                      <svg className="w-5 h-5 text-orange-600 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.732 16.5c-.77.833.192 2.5 1.732 2.5z" />
+                      </svg>
+                      <span className="text-sm text-orange-800 font-medium">
+                        Hinweis: Es kann nur eine Rabattart angewendet werden. Der höhere Rabatt wird automatisch verwendet.
+                      </span>
+                    </div>
+                    </div>
+                  )}
+
+                  {/* Bonuspunkte im Checkout einlösen */}
+                  {isLoggedIn && availablePoints >= 1000 && (
+                    <div className="p-4 bg-yellow-50 border border-yellow-200 rounded-xl">
+                    <div className="flex items-start justify-between">
+                      <div className="flex items-start">
+                        <div>
+                          <p className="text-xs md:text-sm text-yellow-800 font-medium">Verfügbare Bonuspunkte: {availablePoints}</p>
+                        </div>
+                      </div>
+                      <label className={withCursorPointer("flex items-center ml-3")}>
+                        <input
+                          type="checkbox"
+                          checked={redeemPoints}
+                          onChange={(e) => {
+                            if (e.target.checked) {
+                              const best = getBestAvailableDiscount(availablePoints, totalWithShipping);
+                              setRedeemPoints(true, best ? best.points : 1000);
+                            } else {
+                              clearRedeemPoints();
+                            }
+                          }}
+                          className="sr-only"
+                        />
+                        <div className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+                          redeemPoints ? 'bg-yellow-600' : 'bg-gray-200'
+                        }`}>
+                          <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                            redeemPoints ? 'translate-x-6' : 'translate-x-1'
+                          }`} />
+                        </div>
+                      </label>
+                    </div>
+
+                    {redeemPoints && pointsToRedeem > 0 && (
+                      <div className="mt-3 space-y-2">
+                        <div className="text-xs md:text-sm text-yellow-800">
+                          <div className="flex items-center gap-2">
+                            <span>Du löst {pointsToRedeem} Punkte für {(pointsDiscount / 100).toFixed(2)}€ ein</span>
+                            <span className="text-xs bg-green-100 text-green-800 px-2 py-1 rounded-full">✓ Optimaler Rabatt</span>
+                          </div>
+                        </div>
+                        {(() => {
+                          const remainingInfo = getRemainingPointsInfo(availablePoints, totalWithShipping);
+                          return remainingInfo.hasMore && (
+                            <div className="p-2 bg-blue-50 rounded-lg border border-blue-200">
+                              <div className="flex items-start gap-2">
+                                <svg className="w-4 h-4 text-blue-600 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                </svg>
+                                <div className="text-xs text-blue-800">
+                                  <div className="font-medium mb-1">💡 Mehr sparen möglich!</div>
+                                  <div>{remainingInfo.message}</div>
+                                </div>
+                              </div>
+                            </div>
+                          );
+                        })()}
+                      </div>
+                    )}
+                  </div>
+                  )}
+
+                  {/* Rabattcode Eingabe */}
+                  {isLoggedIn ? (
+                    <div className="p-4 bg-gray-50 border border-gray-200 rounded-xl">
+                    <label className="block text-sm font-medium text-gray-700 mb-3">
+                      Rabattcode
+                      {redeemPoints && (
+                        <span className="text-xs text-gray-500 ml-2">
+                          
+                        </span>
+                      )}
+                    </label>
+                    <ApplyDiscountInput
+                      items={items}
+                      discountCode={discountCode}
+                      discountCents={discountCents}
+                      onApplied={async (code: string, cents: number) => {
+                        setDiscount(code, cents);
+                      }}
+                      onCleared={async () => {
+                        clearDiscount();
+                      }}
+                      redeemPoints={redeemPoints}
+                    />
+                    </div>
+                  ) : (
+                    <div className="p-4 bg-gray-50 border border-gray-200 rounded-xl">
+                      <div className="text-sm text-gray-600">
+                        Rabattcodes sind nur für angemeldete Kunden verfügbar. Bitte melden Sie sich an, um einen Rabattcode einzulösen.
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Modern Price Summary */}
+                  <div className="bg-gradient-to-r from-slate-50 to-blue-50 rounded-xl p-2 md:p-4 space-y-1 md:space-y-3">
+                  <div className="flex justify-between items-center">
+                    <span className="text-xs md:text-sm font-medium text-slate-600">Zwischensumme</span>
+                    <span className="text-xs md:text-sm font-semibold text-slate-800">€{(total / 100).toFixed(2)}</span>
+                  </div>
+                  
+                  {/* Rabattcode-Abzug */}
+                  {discountCents > 0 && (
+                    <div className="flex justify-between items-center">
+                      <span className="text-xs md:text-sm font-medium text-green-600">Rabatt{discountCode ? ` (${discountCode})` : ''}</span>
+                      <span className="text-xs md:text-sm font-semibold text-green-600">-€{(discountCents / 100).toFixed(2)}</span>
+                    </div>
+                  )}
+                  
+                  {/* Bonuspunkte-Rabatt */}
+                  {redeemPoints && pointsToRedeem > 0 && (
+                    <div className="flex justify-between items-center">
+                      <span className="text-xs md:text-sm font-medium text-green-600">Bonuspunkte-Rabatt ({pointsToRedeem} Punkte)</span>
+                      <span className="text-xs md:text-sm font-semibold text-green-600">-€{(pointsDiscount / 100).toFixed(2)}</span>
+                    </div>
+                  )}
+                  
+                  <div className="flex justify-between items-center">
+                    <span className="text-xs md:text-sm font-medium text-slate-600">Versand</span>
+                    <span className={`text-xs md:text-sm font-semibold ${shippingCosts > 0 ? "text-slate-800" : "text-green-600"}`}>
+                      {shippingCosts > 0 ? `€${(shippingCosts / 100).toFixed(2)}` : "Kostenlos"}
+                    </span>
+                  </div>
+                  
+                  <div className="flex justify-between items-center">
+                    <div className="flex items-center">
+                      <div className="relative group">
+                        <svg className="w-4 h-4 mr-1 cursor-help text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                        </svg>
+                        {/* Tooltip */}
+                        <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-3 py-2 bg-gray-900 text-white text-xs rounded-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 z-10 max-w-[80vw] sm:max-w-xs whitespace-normal break-words text-center">
+                          Alle Preise sind Endpreise zzgl. Versandkosten. Gemäß § 19 UStG wird keine Umsatzsteuer erhoben und ausgewiesen.
+                          {/* Tooltip arrow */}
+                          <div className="absolute top-full left-1/2 transform -translate-x-1/2 border-4 border-transparent border-t-gray-900"></div>
+                        </div>
+                      </div>
+                      <span className="text-xs md:text-sm font-medium text-slate-600">Preisinformationen</span>
+                    </div>
+                  </div>
+                  
+                  <div className="border-t border-slate-200 pt-2 md:pt-3">
+                    <div className="flex justify-between items-center">
+                      <span className="text-sm md:text-lg font-bold text-slate-800">Gesamt</span>
+                      <span className="text-base md:text-xl font-bold bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent">
+                        €{(finalTotal / 100).toFixed(2)}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+                
+                {/* Bonuspunkte: Anzeige der verdienten Punkte - nach der Gesamtpreis-Box */}
                 {isLoggedIn ? (
-                  <div className="mt-4 p-4 bg-blue-50 border border-blue-200 rounded-xl">
+                  <div className="p-4 bg-blue-50 border border-blue-200 rounded-xl">
                     <div className="flex items-center">
                       <span className="text-xs md:text-sm text-blue-800 font-medium">
                         Du erhältst {Math.floor(total / 100 * 3.5)} Bonuspunkte für diese Bestellung
@@ -1957,8 +2141,8 @@ export default function CheckoutClient({ initialIsLoggedIn, initialFormData, ini
                       </div>
                     </div>
                   </div>
-                ) : (authLoading || userLoading) ? null : (
-                  <div className="mt-4 p-4 bg-amber-50 border border-amber-200 rounded-xl">
+                  ) : (authLoading || userLoading) ? null : (
+                    <div className="p-4 bg-amber-50 border border-amber-200 rounded-xl">
                     <div className="flex items-center">
                       <span className="text-xs md:text-sm text-amber-800 font-medium">
                         <button
@@ -2056,133 +2240,12 @@ export default function CheckoutClient({ initialIsLoggedIn, initialFormData, ini
                       </span>
                     </div>
                   </div>
-                )}
-
-                {/* Bonuspunkte im Checkout einlösen (direkt unter der Anzeige) */}
-                {isLoggedIn && availablePoints >= 1000 && (
-                  <div className="mt-4 p-4 bg-yellow-50 border border-yellow-200 rounded-xl">
-                    <div className="flex items-start justify-between">
-                      <div className="flex items-start">
-                        <div>
-                          <p className="text-xs md:text-sm text-yellow-800 font-medium">Verfügbare Bonuspunkte: {availablePoints}</p>
-                        </div>
-                      </div>
-                      <label className={withCursorPointer("flex items-center ml-3")}>
-                        <input
-                          type="checkbox"
-                          checked={redeemPoints}
-                          onChange={(e) => {
-                            setRedeemPoints(e.target.checked);
-                            if (e.target.checked) {
-                              const best = getBestAvailableDiscount(availablePoints, totalWithShipping);
-                              setPointsToRedeem(best ? best.points : 1000);
-                            } else {
-                              setPointsToRedeem(0);
-                            }
-                          }}
-                          className="sr-only"
-                        />
-                        <div className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
-                          redeemPoints ? 'bg-yellow-600' : 'bg-gray-200'
-                        }`}>
-                          <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
-                            redeemPoints ? 'translate-x-6' : 'translate-x-1'
-                          }`} />
-                        </div>
-                      </label>
-                    </div>
-
-                    {redeemPoints && pointsToRedeem > 0 && (
-                      <div className="mt-3 space-y-2">
-                        <div className="text-xs md:text-sm text-yellow-800">
-                          <div className="flex items-center gap-2">
-                            <span>Du löst {pointsToRedeem} Punkte für {(pointsDiscount / 100).toFixed(2)}€ ein</span>
-                            <span className="text-xs bg-green-100 text-green-800 px-2 py-1 rounded-full">✓ Optimaler Rabatt</span>
-                          </div>
-                        </div>
-                        {(() => {
-                          const remainingInfo = getRemainingPointsInfo(availablePoints, totalWithShipping);
-                          return remainingInfo.hasMore && (
-                            <div className="p-2 bg-blue-50 rounded-lg border border-blue-200">
-                              <div className="flex items-start gap-2">
-                                <svg className="w-4 h-4 text-blue-600 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                                </svg>
-                                <div className="text-xs text-blue-800">
-                                  <div className="font-medium mb-1">💡 Mehr sparen möglich!</div>
-                                  <div>{remainingInfo.message}</div>
-                                </div>
-                              </div>
-                            </div>
-                          );
-                        })()}
-                      </div>
-                    )}
-                  </div>
-                )}
-
-                {/* Modern Price Summary */}
-                <div className="bg-gradient-to-r from-slate-50 to-blue-50 rounded-xl p-2 md:p-4 space-y-1 md:space-y-3">
-                  <div className="flex justify-between items-center">
-                    <span className="text-xs md:text-sm font-medium text-slate-600">Zwischensumme</span>
-                    <span className="text-xs md:text-sm font-semibold text-slate-800">€{(total / 100).toFixed(2)}</span>
-                  </div>
-                  
-                  {/* Rabattcode-Abzug */}
-                  {discountCents > 0 && (
-                    <div className="flex justify-between items-center">
-                      <span className="text-xs md:text-sm font-medium text-green-600">Rabatt{discountCode ? ` (${discountCode})` : ''}</span>
-                      <span className="text-xs md:text-sm font-semibold text-green-600">-€{(discountCents / 100).toFixed(2)}</span>
-                    </div>
                   )}
-                  
-                  {/* Bonuspunkte-Rabatt */}
-                  {redeemPoints && pointsToRedeem > 0 && (
-                    <div className="flex justify-between items-center">
-                      <span className="text-xs md:text-sm font-medium text-green-600">Bonuspunkte-Rabatt ({pointsToRedeem} Punkte)</span>
-                      <span className="text-xs md:text-sm font-semibold text-green-600">-€{(pointsDiscount / 100).toFixed(2)}</span>
-                    </div>
-                  )}
-                  
-                  <div className="flex justify-between items-center">
-                    <span className="text-xs md:text-sm font-medium text-slate-600">Versand</span>
-                    <span className={`text-xs md:text-sm font-semibold ${shippingCosts > 0 ? "text-slate-800" : "text-green-600"}`}>
-                      {shippingCosts > 0 ? `€${(shippingCosts / 100).toFixed(2)}` : "Kostenlos"}
-                    </span>
-                  </div>
-                  
-                  <div className="flex justify-between items-center">
-                    <div className="flex items-center">
-                      <div className="relative group">
-                        <svg className="w-4 h-4 mr-1 cursor-help text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                        </svg>
-                        {/* Tooltip */}
-                        <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-3 py-2 bg-gray-900 text-white text-xs rounded-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 z-10 max-w-[80vw] sm:max-w-xs whitespace-normal break-words text-center">
-                          Alle Preise sind Endpreise zzgl. Versandkosten. Gemäß § 19 UStG wird keine Umsatzsteuer erhoben und ausgewiesen.
-                          {/* Tooltip arrow */}
-                          <div className="absolute top-full left-1/2 transform -translate-x-1/2 border-4 border-transparent border-t-gray-900"></div>
-                        </div>
-                      </div>
-                      <span className="text-xs md:text-sm font-medium text-slate-600">Preisinformationen</span>
-                    </div>
-                    <span className="text-xs md:text-sm font-semibold text-slate-800">€0.00</span>
-                  </div>
-                  
-                  <div className="border-t border-slate-200 pt-2 md:pt-3">
-                    <div className="flex justify-between items-center">
-                      <span className="text-sm md:text-lg font-bold text-slate-800">Gesamt</span>
-                      <span className="text-base md:text-xl font-bold bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent">
-                        €{(finalTotal / 100).toFixed(2)}
-                      </span>
-                    </div>
-                  </div>
                 </div>
               </div>
             </div>
           </div>
         </div>
       </div>
-    </div>
   );
 }

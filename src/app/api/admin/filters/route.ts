@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { connectToDatabase } from '@/lib/mongodb';
 import { Filter } from '@/lib/models/Filter';
 import mongoose from 'mongoose';
+import { z } from 'zod';
 
 export async function GET() {
   try {
@@ -21,7 +22,13 @@ export async function GET() {
 export async function POST(request: NextRequest) {
   try {
     await connectToDatabase();
-    const data = await request.json();
+    const optionSchema = z.object({ name: z.string().min(1), value: z.string().min(1), sortOrder: z.number().int(), color: z.string().optional() });
+    const schema = z.object({ name: z.string().min(1), type: z.enum(['text','number','select','multiselect','range','color']), options: z.array(optionSchema).default([]), sortOrder: z.number().int().nonnegative().default(0) });
+    const parsed = schema.safeParse(await request.json());
+    if (!parsed.success) {
+      return NextResponse.json({ error: 'Invalid request body', details: parsed.error.flatten() }, { status: 400 });
+    }
+    const data = parsed.data as any;
     
     console.log('Received filter data:', JSON.stringify(data, null, 2));
     
@@ -42,8 +49,13 @@ export async function POST(request: NextRequest) {
 export async function PUT(request: NextRequest) {
   try {
     await connectToDatabase();
-    const data = await request.json();
-    const { _id, ...updateData } = data;
+    const optionSchema = z.object({ name: z.string().min(1), value: z.string().min(1), sortOrder: z.number().int(), color: z.string().optional() });
+    const schema = z.object({ _id: z.string().min(1), name: z.string().min(1).optional(), type: z.enum(['text','number','select','multiselect','range','color']).optional(), options: z.array(optionSchema).optional(), sortOrder: z.number().int().nonnegative().optional() });
+    const parsed = schema.safeParse(await request.json());
+    if (!parsed.success) {
+      return NextResponse.json({ error: 'Invalid request body', details: parsed.error.flatten() }, { status: 400 });
+    }
+    const { _id, ...updateData } = parsed.data as any;
     
     const result = await Filter.findByIdAndUpdate(
       _id,

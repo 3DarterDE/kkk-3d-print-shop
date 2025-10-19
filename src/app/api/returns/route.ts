@@ -138,6 +138,9 @@ export async function POST(request: NextRequest) {
 
     // Freeze bonus points for this return
     try {
+      console.log(`DEBUG: Starte Einfrieren der Bonuspunkte für Order ${order._id.toString()}`);
+      console.log(`DEBUG: Normalized Items:`, normalizedItems.map(item => ({ name: item.name, price: item.price, quantity: item.quantity, frozenPoints: item.frozenBonusPoints })));
+      
       await freezeBonusPointsForReturn(
         order._id.toString(),
         normalizedItems,
@@ -146,6 +149,7 @@ export async function POST(request: NextRequest) {
       console.log(`Bonuspunkte eingefroren für Rücksendung ${returnRequest._id}`);
     } catch (freezeError) {
       console.error('Fehler beim Einfrieren der Bonuspunkte:', freezeError);
+      console.error('Stack trace:', freezeError.stack);
       // Don't fail the return request if bonus points freezing fails
     }
 

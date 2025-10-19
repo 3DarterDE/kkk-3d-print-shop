@@ -12,6 +12,9 @@ import VerificationRedirect from "@/components/VerificationRedirect";
 import ScrollToTopButton from "@/components/ScrollToTopButton";
 import { UserDataProvider } from "@/lib/contexts/UserDataContext";
 import { ShopDataProvider } from "@/lib/contexts/ShopDataContext";
+import Script from "next/script";
+import { headers as nextHeaders } from "next/headers";
+import * as Sentry from "@sentry/nextjs";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -42,13 +45,28 @@ export const metadata: Metadata = {
   },
 };
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  const headers = await nextHeaders();
+  const nonce = headers.get('x-csp-nonce') || undefined;
+  
+  if (process.env.NEXT_PUBLIC_SENTRY_DSN && !Sentry.isInitialized()) {
+    Sentry.init({
+      dsn: process.env.NEXT_PUBLIC_SENTRY_DSN,
+      tracesSampleRate: 0.1,
+      replaysSessionSampleRate: 0.0,
+      replaysOnErrorSampleRate: 1.0,
+      debug: false,
+    });
+  }
   return (
     <html lang="en">
+      <head>
+        <Script id="init" nonce={nonce} dangerouslySetInnerHTML={{ __html: 'window.__INIT__=true' }} />
+      </head>
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
       >

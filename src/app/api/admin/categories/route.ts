@@ -3,6 +3,7 @@ import { connectToDatabase } from "@/lib/mongodb";
 import Category from "@/lib/models/Category";
 import { revalidatePath } from "next/cache";
 import { requireAdmin } from "@/lib/auth";
+import { z } from "zod";
 
 export async function GET() {
   const { response } = await requireAdmin();
@@ -54,7 +55,18 @@ export async function POST(request: NextRequest) {
   if (response) return response;
   try {
     await connectToDatabase();
-    const body = await request.json();
+    const schema = z.object({
+      name: z.string().min(1),
+      description: z.string().optional(),
+      isActive: z.boolean().optional(),
+      sortOrder: z.number().int().nonnegative().optional(),
+      parentId: z.string().nullable().optional(),
+    });
+    const parsed = schema.safeParse(await request.json());
+    if (!parsed.success) {
+      return NextResponse.json({ error: "Invalid request body", details: parsed.error.flatten() }, { status: 400 });
+    }
+    const body = parsed.data as any;
     
     // Generate slug from name
     const slug = body.name

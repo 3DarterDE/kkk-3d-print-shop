@@ -2,6 +2,7 @@
 
 import { useMemo } from 'react';
 import { marked } from 'marked';
+import createDOMPurify from 'isomorphic-dompurify';
 
 interface MarkdownRendererProps {
   content: string;
@@ -22,15 +23,8 @@ export default function MarkdownRenderer({ content, className = "" }: MarkdownRe
 
     // Convert markdown to HTML
     const rawHtml = marked(content);
-    
-    // Basic sanitization
-    const cleanHtml = rawHtml
-      .replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '')
-      .replace(/<iframe\b[^<]*(?:(?!<\/iframe>)<[^<]*)*<\/iframe>/gi, '')
-      .replace(/on\w+="[^"]*"/gi, '')
-      .replace(/javascript:/gi, '');
-    
-    return cleanHtml;
+    const DOMPurify = createDOMPurify();
+    return DOMPurify.sanitize(rawHtml, { USE_PROFILES: { html: true } });
   }, [content]);
 
   return (

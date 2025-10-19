@@ -4,9 +4,27 @@ import Category from '@/lib/models/Category';
 import sharp from 'sharp';
 import { writeFile, mkdir } from 'fs/promises';
 import path from 'path';
+import { requireAdmin } from '@/lib/auth';
+import { verifyCsrfFromRequest } from '@/lib/csrf';
+import { rateLimitRequest, getClientIP } from '@/lib/rate-limit';
 
 export async function POST(request: NextRequest) {
   try {
+    const { response } = await requireAdmin();
+    if (response) return response;
+
+    const ip = getClientIP(request);
+    const rl = await rateLimitRequest(`admin:upload:${ip}`, 20, 60 * 1000);
+    if (!rl.success) {
+      const res = NextResponse.json({ error: 'Too many requests' }, { status: 429 });
+      res.headers.set('Retry-After', Math.max(0, Math.ceil((rl.resetTime - Date.now()) / 1000)).toString());
+      return res;
+    }
+
+    const csrfOk = await verifyCsrfFromRequest(request);
+    if (!csrfOk) {
+      return NextResponse.json({ error: 'Invalid CSRF token' }, { status: 403 });
+    }
     const formData = await request.formData();
     const file = formData.get('image') as File;
     const categoryId = formData.get('categoryId') as string;

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { connectToDatabase } from '@/lib/mongodb';
 import Brand from '@/lib/models/Brand';
 import { requireAdmin } from '@/lib/auth';
+import { z } from 'zod';
 
 export async function GET() {
   try {
@@ -22,8 +23,18 @@ export async function POST(request: NextRequest) {
     const { response } = await requireAdmin();
     if (response) return response;
 
-    const body = await request.json();
-    const { name, description, image, imageSizes, sortOrder } = body;
+    const schema = z.object({
+      name: z.string().min(1),
+      description: z.string().optional(),
+      image: z.string().min(1).optional(),
+      imageSizes: z.object({ main: z.string().min(1).optional(), thumb: z.string().min(1).optional(), small: z.string().min(1).optional() }).partial().optional(),
+      sortOrder: z.number().int().nonnegative().optional()
+    });
+    const parsed = schema.safeParse(await request.json());
+    if (!parsed.success) {
+      return NextResponse.json({ error: 'Invalid request body', details: parsed.error.flatten() }, { status: 400 });
+    }
+    const { name, description, image, imageSizes, sortOrder } = parsed.data;
 
     // Generate slug from name
     const slug = name

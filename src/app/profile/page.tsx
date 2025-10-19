@@ -349,10 +349,12 @@ export default function ProfilePage() {
         paymentMethod: formData.paymentMethod
       };
 
+      const csrf = document.cookie.split('; ').find((c) => c.startsWith('csrf_token='))?.split('=')[1] || '';
       const response = await fetch('/api/profile/update', {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
+          'x-csrf-token': csrf,
         },
         body: JSON.stringify(updateData),
       });

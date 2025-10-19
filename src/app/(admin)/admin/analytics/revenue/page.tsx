@@ -34,6 +34,12 @@ interface RevenueData {
     redeemed: number;
     earnedValue: number | null;
     redeemedValue: number;
+    breakdown?: {
+      fromOrders: number;
+      unfrozen: number;
+      fromReviews: number;
+      creditedFromReturns: number;
+    };
   };
   paymentMethods: Array<{
     method: string;
@@ -275,6 +281,32 @@ export default function RevenueAnalyticsPage() {
                 <span className="text-gray-600">Verdiente Punkte:</span>
                 <span className="font-semibold text-green-600">{data.bonusPoints.earned.toLocaleString('de-DE')}</span>
               </div>
+              {data.bonusPoints.breakdown && (
+                <div className="ml-4 space-y-1 text-sm">
+                  <div className="flex justify-between items-center">
+                    <span className="text-gray-500">• Aus Bestellungen:</span>
+                    <span className="text-gray-700">{data.bonusPoints.breakdown.fromOrders.toLocaleString('de-DE')}</span>
+                  </div>
+                  {data.bonusPoints.breakdown.fromReviews > 0 && (
+                    <div className="flex justify-between items-center">
+                      <span className="text-gray-500">• Aus Bewertungen:</span>
+                      <span className="text-yellow-600">{data.bonusPoints.breakdown.fromReviews.toLocaleString('de-DE')}</span>
+                    </div>
+                  )}
+                  {data.bonusPoints.breakdown.unfrozen > 0 && (
+                    <div className="flex justify-between items-center">
+                      <span className="text-gray-500">• Freigegeben (nicht zurückgesendet):</span>
+                      <span className="text-blue-600">{data.bonusPoints.breakdown.unfrozen.toLocaleString('de-DE')}</span>
+                    </div>
+                  )}
+                  {data.bonusPoints.breakdown.creditedFromReturns > 0 && (
+                    <div className="flex justify-between items-center">
+                      <span className="text-gray-500">• Gutgeschrieben (Rücksendungen):</span>
+                      <span className="text-gray-400">{data.bonusPoints.breakdown.creditedFromReturns.toLocaleString('de-DE')} (nicht in Gesamtsumme)</span>
+                    </div>
+                  )}
+                </div>
+              )}
               <div className="flex justify-between items-center">
                 <span className="text-gray-600">Wert (verdient):</span>
                 <span className="font-semibold text-gray-500">Nicht berechenbar</span>
@@ -285,7 +317,7 @@ export default function RevenueAnalyticsPage() {
               </div>
               <div className="flex justify-between items-center">
                 <span className="text-gray-600">Wert (eingelöst):</span>
-                <span className="font-semibold">{formatCurrency(data.bonusPoints.redeemedValue)}</span>
+                <span className="font-semibold text-gray-500">Nicht berechenbar</span>
               </div>
             </div>
           </div>

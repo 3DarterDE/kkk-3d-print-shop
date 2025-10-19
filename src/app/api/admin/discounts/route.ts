@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { requireAdmin } from '@/lib/auth';
 import { connectToDatabase } from '@/lib/mongodb';
 import DiscountCode from '@/lib/models/DiscountCode';
+import { z } from 'zod';
 
 export async function GET(request: NextRequest) {
   try {
@@ -23,8 +24,21 @@ export async function POST(request: NextRequest) {
     if (!user) return response!;
     await connectToDatabase();
 
-    const body = await request.json();
-    const { code, type, value, startsAt, endsAt, active, oneTimeUse, maxGlobalUses } = body || {};
+    const schema = z.object({
+      code: z.string().min(1),
+      type: z.enum(['percent','fixed']),
+      value: z.number(),
+      startsAt: z.union([z.string(), z.number(), z.date()]).optional(),
+      endsAt: z.union([z.string(), z.number(), z.date()]).optional(),
+      active: z.boolean().optional(),
+      oneTimeUse: z.boolean().optional(),
+      maxGlobalUses: z.number().int().nonnegative().optional(),
+    });
+    const parsed = schema.safeParse(await request.json());
+    if (!parsed.success) {
+      return NextResponse.json({ error: 'Invalid request body', details: parsed.error.flatten() }, { status: 400 });
+    }
+    const { code, type, value, startsAt, endsAt, active, oneTimeUse, maxGlobalUses } = parsed.data as any;
 
     const toDate = (v: any) => {
       if (!v) return undefined;
@@ -80,8 +94,22 @@ export async function PATCH(request: NextRequest) {
     if (!user) return response!;
     await connectToDatabase();
 
-    const body = await request.json();
-    const { id, ...updates } = body || {};
+    const schema = z.object({
+      id: z.string().min(1),
+      code: z.string().min(1).optional(),
+      type: z.enum(['percent','fixed']).optional(),
+      value: z.number().optional(),
+      startsAt: z.union([z.string(), z.number(), z.date()]).optional(),
+      endsAt: z.union([z.string(), z.number(), z.date()]).optional(),
+      active: z.boolean().optional(),
+      oneTimeUse: z.boolean().optional(),
+      maxGlobalUses: z.number().int().nonnegative().optional(),
+    });
+    const parsed = schema.safeParse(await request.json());
+    if (!parsed.success) {
+      return NextResponse.json({ error: 'Invalid request body', details: parsed.error.flatten() }, { status: 400 });
+    }
+    const { id, ...updates } = parsed.data as any;
     if (!id) {
       return NextResponse.json({ error: 'id is required' }, { status: 400 });
     }

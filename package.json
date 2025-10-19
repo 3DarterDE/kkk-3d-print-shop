@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "next dev --turbopack",
+    "dev": "next dev",
     "build": "next build --turbopack",
     "start": "next start",
     "lint": "eslint",
@@ -12,6 +12,7 @@
     "cleanup-cache": "node scripts/cleanup-cache.js"
   },
   "dependencies": {
+    "@sentry/nextjs": "^8.29.0",
     "@auth0/nextjs-auth0": "^4.10.0",
     "@types/fluent-ffmpeg": "^2.1.27",
     "@types/next-auth": "^3.13.0",
@@ -23,20 +24,22 @@
     "gray-matter": "^4.0.3",
     "html2canvas": "^1.4.1",
     "jspdf": "^3.0.3",
+    "isomorphic-dompurify": "^2.13.0",
     "marked": "^16.3.0",
     "mongodb": "^6.19.0",
     "mongoose": "^8.18.0",
     "next": "^15.5.3",
     "next-auth": "^4.24.11",
     "next-sitemap": "^4.2.3",
-    "nodemailer": "^7.0.6",
+    "nodemailer": "^6.10.1",
     "react": "19.1.0",
     "react-dom": "19.1.0",
     "react-icons": "^5.5.0",
     "remark": "^15.0.1",
     "remark-html": "^16.0.1",
     "sharp": "^0.34.3",
-    "zustand": "^5.0.8"
+    "zustand": "^5.0.8",
+    "zod": "^3.23.8"
   },
   "devDependencies": {
     "@contentlayer/source-files": "^0.3.4",
